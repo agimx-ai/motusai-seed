@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "rootDir": "src",
+    "outDir": "dist/electron",
+    "types": ["node"],
+    "sourceMap": true
+  },
+  "include": ["src/main", "src/preload", "src/connector", "src/shared"],
+  "exclude": ["src/renderer", "**/*.test.ts"]
+}

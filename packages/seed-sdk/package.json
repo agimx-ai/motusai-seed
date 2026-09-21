@@ -1,0 +1,30 @@
+{
+  "name": "@motusai/seed-sdk",
+  "version": "0.2.0",
+  "description": "Public runtime types and lifecycle APIs for MotusAI Seed plugins",
+  "type": "commonjs",
+  "license": "UNLICENSED",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  }
+}

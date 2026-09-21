@@ -1,0 +1,3 @@
+interface:
+  display_name: "伙伴吉祥物维护"
+  short_description: "维护并验收 Bloub SVG 伙伴的状态、动画与品牌适配"

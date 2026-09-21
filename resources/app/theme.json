@@ -1,0 +1,18 @@
+{
+  "appIcon": {
+    "background": {
+      "light": "#F4F6F1",
+      "dark": "#242424"
+    },
+    "backgroundGradient": {
+      "light": ["#FCFDF9", "#E7EAE3"],
+      "dark": ["#343434", "#171717"]
+    },
+    "logoScale": 0.96,
+    "legacyLogoScale": 0.755
+  },
+  "mascot": {
+    "light": "#34322D",
+    "dark": "#FFFFFF"
+  }
+}

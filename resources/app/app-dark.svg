@@ -1,0 +1,16 @@
+<svg width="250" height="250" viewBox="-125 -125 250 250" role="img" aria-label="Bloub" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="0" cy="0" r="100" fill="#f9f9f9"/>
+  <g fill="#0a0a0c">
+    <g transform="translate(22 -43) rotate(-28)">
+      <rect class="eye" x="-9.3" y="-20.6" width="18.6" height="41.2" rx="9.3"/>
+    </g>
+    <g transform="translate(64 -53) rotate(-21)">
+      <rect class="eye eye-delay" x="-7.2" y="-20.6" width="14.4" height="41.2" rx="7.2"/>
+    </g>
+  </g>
+  <style>
+    .eye{transform-box:fill-box;transform-origin:center;animation:blink 2.967s infinite}
+    .eye-delay{animation-delay:.035s}
+    @keyframes blink{0%,46%,54%,100%{transform:scaleY(1)}49%,51%{transform:scaleY(.12)}}
+  </style>
+</svg>

@@ -1,0 +1,179 @@
+name: Release desktop clients
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions:
+  contents: read
+
+env:
+  MOTUSAI_SEED_CLOUD_URL: https://cloud.motusseed.com
+  MOTUSAI_DISTRIBUTION_KEY_ID: motusai-cloud-production-v1
+  MOTUSAI_DISTRIBUTION_PUBLIC_KEY: MCowBQYDK2VwAyEAGhcDBccJ1TtieZrAO1YFMs7sL7s7JuvtKPJFB7BheTc=
+  MOTUSAI_ALLOW_INSECURE_HTTP: 'false'
+  MOTUSAI_UPDATE_CHANNEL: stable
+
+jobs:
+  metadata:
+    name: Validate release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate tag and package version
+        id: release
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF#refs/tags/}"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $tag does not match package version $version." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: Build macOS ARM64
+    needs: metadata
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      MOTUSAI_RELEASE_PLATFORM: mac-arm64
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS package
+        run: |
+          npm run icons:generate
+          npm run build
+          npx electron-builder --config electron-builder.config.mjs --mac dmg zip --arm64 --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false
+
+      - name: Verify macOS release assets
+        shell: bash
+        run: |
+          version='${{ needs.metadata.outputs.version }}'
+          files=(
+            "release/latest-mac.yml"
+            "release/MotusAI-Seed-${version}-mac-arm64.dmg"
+            "release/MotusAI-Seed-${version}-mac-arm64.dmg.blockmap"
+            "release/MotusAI-Seed-${version}-mac-arm64.zip"
+            "release/MotusAI-Seed-${version}-mac-arm64.zip.blockmap"
+          )
+          for file in "${files[@]}"; do test -s "$file" || { echo "Missing $file" >&2; exit 1; }; done
+          grep -Fq "version: ${version}" release/latest-mac.yml
+
+      - name: Upload macOS release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-${{ needs.metadata.outputs.version }}
+          path: |
+            release/latest-mac.yml
+            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-mac-arm64.dmg
+            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-mac-arm64.dmg.blockmap
+            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-mac-arm64.zip
+            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-mac-arm64.zip.blockmap
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Build Windows x64
+    needs: metadata
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      MOTUSAI_RELEASE_PLATFORM: win-x64
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows package
+        run: |
+          npm run icons:generate
+          npm run build
+          npx electron-builder --config electron-builder.config.mjs --win nsis --x64 --publish never
+
+      - name: Verify Windows release assets
+        run: |
+          $version = '${{ needs.metadata.outputs.version }}'
+          $files = @(
+            'release/latest.yml',
+            "release/MotusAI-Seed-$version-win-x64.exe",
+            "release/MotusAI-Seed-$version-win-x64.exe.blockmap"
+          )
+          foreach ($file in $files) {
+            if (-not (Test-Path $file -PathType Leaf) -or (Get-Item $file).Length -eq 0) {
+              throw "Missing $file"
+            }
+          }
+          if (-not (Select-String -Path 'release/latest.yml' -SimpleMatch "version: $version" -Quiet)) {
+            throw 'latest.yml does not contain the release version.'
+          }
+
+      - name: Upload Windows release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-${{ needs.metadata.outputs.version }}
+          path: |
+            release/latest.yml
+            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-win-x64.exe
+            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-win-x64.exe.blockmap
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    needs: [metadata, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        shell: bash
+        run: |
+          gh release create "$RELEASE_VERSION" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "MotusAI Seed $RELEASE_VERSION" \
+            --generate-notes \
+            --verify-tag
