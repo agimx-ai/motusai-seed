@@ -51,6 +51,8 @@ type RareUiActivityGridProps = {
   showMonths?: boolean
   label: string
   className?: string
+  rangeStart?: string
+  rangeEnd?: string
 }
 
 const LEVELS = [0, 1, 2, 3, 4] as const
@@ -73,9 +75,15 @@ function toWeeks(contributions: ActivityContribution[]) {
   return weeks
 }
 
-function toMonthLabels(weeks: ActivityContribution[][], monthNames: string[]) {
+function toMonthLabels(weeks: ActivityContribution[][], monthNames: string[], rangeStart?: string, rangeEnd?: string) {
   const labels: Array<string | null> = weeks.map(() => null)
-  const monthAt = (index: number) => weeks[index]?.[0]?.date.slice(5, 7)
+  const monthAt = (index: number) => {
+    const week = weeks[index]
+    const day = rangeStart && rangeEnd
+      ? week?.find((item) => item.date >= rangeStart && item.date <= rangeEnd)
+      : week?.[0]
+    return day?.date.slice(5, 7)
+  }
   let start = 0
   for (let index = 1; index <= weeks.length; index += 1) {
     if (index < weeks.length && monthAt(index) === monthAt(start)) continue
@@ -137,6 +145,8 @@ export function RareUiActivityGrid({
   showMonths = true,
   label,
   className,
+  rangeStart,
+  rangeEnd,
 }: RareUiActivityGridProps) {
   const reduceMotion = useReducedMotion()
   const weeks = React.useMemo(() => toWeeks(contributions), [contributions])
@@ -177,7 +187,7 @@ export function RareUiActivityGrid({
       animate={{ opacity: 1, filter: 'blur(0px)' }}
       transition={{ ...LABEL_REVEAL, delay: reduceMotion ? 0 : sweepEnd }}
     >
-      {toMonthLabels(visible, monthNames).map((month, index) => <div className="relative h-3 min-w-0" key={index}>
+      {toMonthLabels(visible, monthNames, rangeStart, rangeEnd).map((month, index) => <div className="relative h-3 min-w-0" key={index}>
         {month && <span className="absolute left-0 top-0 whitespace-nowrap text-[10px] leading-none text-muted-foreground">{month}</span>}
       </div>)}
     </motion.div>}

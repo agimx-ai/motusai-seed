@@ -72,8 +72,8 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
     const storedDays = new Map(summary.days.map((day) => [day.date, day]))
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const start = new Date(today.getFullYear(), today.getMonth() - 11, 1)
-    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    const start = new Date(today.getFullYear(), 0, 1)
+    const end = new Date(today.getFullYear(), 11, 31)
     const days: UsageDay[] = []
     for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
       days.push(storedDays.get(localDateKey(cursor)) || {
@@ -88,7 +88,6 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
   }, [summary])
 
   const number = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 })
-  const date = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' })
   const fullDate = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' })
   const monthNames = Array.from({ length: 12 }, (_, month) => new Intl.DateTimeFormat(locale, { month: 'short' }).format(new Date(2024, month, 1)))
 
@@ -114,7 +113,7 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
   }, [usage])
 
   return <section className="mx-auto w-full max-w-[920px] animate-[rise_.25s_ease_both]">
-    <div className="mb-8">
+    <div className="mb-4">
       <div className="flex items-center justify-between gap-4">
         <h1 className="m-0 text-[24px] font-medium tracking-[-.02em]">{t('usage.title')}</h1>
         <ActionButton className="translate-y-1" icon={<Plus size={14} />} tone="primary" onClick={onAddCredits}>
@@ -148,7 +147,7 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
                   credits: number.format(usage.totalCredits), count: number.format(usage.paidCallCount),
                 })}</p>
               </div>
-              <span className="text-[11px] text-muted-foreground">{date.format(usage.start)} – {date.format(usage.end)}</span>
+              <span className="text-[11px] text-muted-foreground">{fullDate.formatRange(usage.start, usage.end)}</span>
             </div>
             <RareUiActivityGrid
               accent="var(--seed-accent)"
@@ -158,6 +157,8 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
               label={t('usage.activityChart')}
               monthNames={monthNames}
               months={12}
+              rangeEnd={localDateKey(usage.end)}
+              rangeStart={localDateKey(usage.start)}
             />
           </section>
 
