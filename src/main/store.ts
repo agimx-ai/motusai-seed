@@ -584,7 +584,7 @@ export class SeedStore {
     }
     const rows = await this.getDatabase().raw(`
       SELECT date(timestamp, 'localtime') AS date,
-        SUM(CAST(COALESCE(json_extract(diagnostic_details, '$.credit_charged_amount'), 0) AS INTEGER)) AS credits_charged,
+        ROUND(SUM(CAST(COALESCE(json_extract(diagnostic_details, '$.credit_charged_amount'), 0) AS REAL)), 2) AS credits_charged,
         SUM(CASE WHEN json_type(diagnostic_details, '$.credit_charged_amount') IN ('integer', 'real') THEN 1 ELSE 0 END) AS paid_call_count
       FROM observation_records
       WHERE timestamp >= ? AND evidence_origin = 'host'
@@ -598,7 +598,7 @@ export class SeedStore {
         MAX(json_extract(diagnostic_details, '$.plugin_name_zh_hans')) AS name_zh_hans,
         SUM(CASE WHEN visibility = 'activity'
           AND event_name IN ('capability.invoke', 'local_api.request') THEN 1 ELSE 0 END) AS call_count,
-        SUM(CAST(COALESCE(json_extract(diagnostic_details, '$.credit_charged_amount'), 0) AS INTEGER)) AS credits_charged
+        ROUND(SUM(CAST(COALESCE(json_extract(diagnostic_details, '$.credit_charged_amount'), 0) AS REAL)), 2) AS credits_charged
       FROM observation_records
       WHERE timestamp >= ? AND evidence_origin = 'host' AND outcome = 'allowed' AND plugin_id IS NOT NULL
         AND ((visibility = 'activity' AND event_name IN ('capability.invoke', 'local_api.request'))

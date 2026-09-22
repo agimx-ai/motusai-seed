@@ -57,7 +57,13 @@ export type PluginConfigurationOptionBadge = {
   tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'
   strikethrough?: boolean
 }
-export type PluginConfigurationOption = { value: string; label: string; badges?: PluginConfigurationOptionBadge[] }
+export type PluginConfigurationOption = {
+  value: string
+  label: string
+  badges?: PluginConfigurationOptionBadge[]
+  iconDataUrl?: string
+  iconDarkDataUrl?: string
+}
 export type QueryPluginConfigurationOptionsInput = {
   pluginId: string
   configurationId: string

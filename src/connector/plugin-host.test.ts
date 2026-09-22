@@ -704,7 +704,7 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
       "const text = { en_US: 'Source', zh_Hans: '来源' }",
       'export async function apply(context) {',
       "  context.effect(() => context.configuration.register({ id: 'source', schema_version: 1, renderer: 'seed.profiles', title: text, description: text, fields: [], profiles: { id_prefix: 'source', min_items: 1, max_items: 2, default_required: true, summary_fields: ['value'], fields: [{ key: 'kind', type: 'text', label: text }, { key: 'value', type: 'text', label: text, dynamic_options: { depends_on: ['kind'] } }], actions: { save: { label: text } } } }))",
-      "  context.effect(() => context.configuration.registerOptionsResolver('source', 'value', (values) => [{ value: `${values.kind}-one` }, { value: `${values.kind}-one` }, { value: 'two', label: 'Second', badges: [{ prefix: 'x', label: '1.00', suffix: '→ x0.50', tone: 'info', strikethrough: true }] }]))",
+      "  context.effect(() => context.configuration.registerOptionsResolver('source', 'value', (values) => [{ value: `${values.kind}-one` }, { value: `${values.kind}-one` }, { value: 'two', label: 'Second', icon_data_url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', icon_dark_data_url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', badges: [{ prefix: 'x', label: '1.00', suffix: '→ x0.50', tone: 'info', strikethrough: true }] }, { value: 'invalid-icon', icon_data_url: 'file:///tmp/logo.svg' }]))",
       '}',
     ].join('\n'))
     const nativePlugin: SeedPluginRuntimeDefinition = {
@@ -725,7 +725,8 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
       await host.start([nativePlugin])
       await expect(host.resolveConfigurationOptions(nativePlugin.package_id, 'source', 'value', { id: 'source-1', kind: 'remote', value: '' })).resolves.toEqual([
         { value: 'remote-one', label: 'remote-one' },
-        { value: 'two', label: 'Second', badges: [{ prefix: 'x', label: '1.00', suffix: '→ x0.50', tone: 'info', strikethrough: true }] },
+        { value: 'two', label: 'Second', iconDataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', iconDarkDataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', badges: [{ prefix: 'x', label: '1.00', suffix: '→ x0.50', tone: 'info', strikethrough: true }] },
+        { value: 'invalid-icon', label: 'invalid-icon' },
       ])
       await expect(host.resolveConfigurationOptions(nativePlugin.package_id, 'source', 'value', { unknown: 'value' })).rejects.toThrow('未声明字段')
     } finally {

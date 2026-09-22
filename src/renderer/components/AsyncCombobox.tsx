@@ -35,7 +35,7 @@ export function AsyncCombobox({ value, valueLabel, valueOption, options, placeho
   const listboxId = useId()
   const selectedOption = options.find((option) => option.value === value)
   const displayOption = selectedOption || (valueOption?.value === value ? valueOption : undefined)
-  const richDisplay = !typed && Boolean(displayOption?.badges?.length)
+  const richDisplay = !typed && Boolean(displayOption?.badges?.length || displayOption?.iconDataUrl)
   const displayValue = typed ? value : displayOption ? configurationOptionDisplayLabel(displayOption) : valueLabel || (resolvingValueLabel ? '' : value)
   const visibleOptions = useMemo(() => {
     const query = typed ? value.trim().toLocaleLowerCase() : ''

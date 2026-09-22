@@ -4,6 +4,12 @@ import { CreditBillingClient, relayBillingModelId } from './credit-billing'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('personal credit wallet', () => {
+  it('accepts a wallet balance with two decimal places', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ available: 999.99 })))
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    await expect(client.personalWallet()).resolves.toEqual({ available: 999.99 })
+  })
+
   it('loads only the personal wallet using the current Cloud access token', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ available: 2340 }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
@@ -79,6 +85,15 @@ describe('personal credit grants', () => {
 })
 
 describe('generic Cloud relay client', () => {
+  it('accepts a fractional settled charge from Cloud', async () => {
+    const callId = 'a9505c1e-9f5d-4658-a3e1-594a8bab2432'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({
+      billable: true, call_id: callId, amount: 0, charged_amount: 0.01, price_revision: 1, state: 'settled',
+    })))
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    await expect(client.status(callId)).resolves.toMatchObject({ charged_amount: 0.01 })
+  })
+
   it('uses payload.model for provider-cost billing only', () => {
     const payload = { model: 'mimo-v2.5-asr' }
     expect(relayBillingModelId('audio.transcribe', payload)).toBeUndefined()
@@ -87,7 +102,7 @@ describe('generic Cloud relay client', () => {
   })
 
   it('passes through real model reasoning metadata without a plugin-specific rule', async () => {
-    const catalog = [{ model_id: 'example/model', display_name: 'Example', badge: 'New', display_original_multiplier_basis_points: 10_000,
+    const catalog = [{ model_id: 'example/model', display_name: 'Example', badge: 'New', icon_data_url: null, display_original_multiplier_basis_points: 10_000,
       display_discounted_multiplier_basis_points: 3000, max_output_tokens: 4096,
       context_window: 128000, architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] }, supported_parameters: ['tools'],
       reasoning: { supported_efforts: ['low', 'high'], mandatory: false,

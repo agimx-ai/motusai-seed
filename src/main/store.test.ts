@@ -404,7 +404,7 @@ describe('SeedStore SQLite persistence', () => {
       level: 'info', source: 'plugin-host', event: 'capability.invoke', message: 'Capability invocation completed.',
       plugin_id: 'com.example.paid', request_id: 'paid-call', operation: 'example.run',
       trace_id: 'usage-credit-trace', span_id: 'usage-credit-span', phase: 'completed', duration_ms: 100,
-      details: { credit_charged_amount: 9, plugin_name_en_us: 'Paid Plugin', plugin_name_zh_hans: '付费插件' },
+      details: { credit_charged_amount: 9.25, plugin_name_en_us: 'Paid Plugin', plugin_name_zh_hans: '付费插件' },
     })
     reopened.observations.record({
       level: 'info', source: 'connector', event: 'local_api.request', message: 'Local plugin request started.',
@@ -421,17 +421,17 @@ describe('SeedStore SQLite persistence', () => {
     reopened.observations.record({
       level: 'info', source: 'main', event: 'credit.settled', message: 'Cloud relay credit settlement recorded.',
       plugin_id: 'com.example.local', operation: 'credit.settled',
-      details: { credit_charged_amount: 3, plugin_name_en_us: 'Local Plugin', plugin_name_zh_hans: '本地插件' },
+      details: { credit_charged_amount: 3.01, plugin_name_en_us: 'Local Plugin', plugin_name_zh_hans: '本地插件' },
     })
     const usage = await reopened.queryUsage()
     expect(usage.retentionDays).toBe(365)
     expect(usage.days).toEqual([expect.objectContaining({
-      creditsCharged: 12,
+      creditsCharged: 12.26,
       paidCallCount: 2,
     })])
     expect(usage.plugins).toEqual([
-      { pluginId: 'com.example.paid', nameEnUs: 'Paid Plugin', nameZhHans: '付费插件', callCount: 1, creditsCharged: 9 },
-      { pluginId: 'com.example.local', nameEnUs: 'Local Plugin', nameZhHans: '本地插件', callCount: 1, creditsCharged: 3 },
+      { pluginId: 'com.example.paid', nameEnUs: 'Paid Plugin', nameZhHans: '付费插件', callCount: 1, creditsCharged: 9.25 },
+      { pluginId: 'com.example.local', nameEnUs: 'Local Plugin', nameZhHans: '本地插件', callCount: 1, creditsCharged: 3.01 },
     ])
     await reopened.close()
   })

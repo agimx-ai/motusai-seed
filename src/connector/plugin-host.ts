@@ -11,6 +11,7 @@ import type { CapsPluginDescriptor, NativePluginRuntimeSnapshot, PluginConfigura
 import { resolveSeedLocalizedText, seedPluginConfigurationSchema, seedPluginManagementViewSchema, type SeedPluginConfiguration, type SeedPluginManagementView } from '../shared/plugin-manifest'
 import type { GlobalTaskActivityObserver } from './global-task-activity-observer'
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace'
+import { isCreditAmount } from '../shared/credit-amount'
 
 type MethodValidators = { input?: ValidateFunction; output?: ValidateFunction }
 type NativePluginRuntime = SeedPlugin
@@ -917,7 +918,17 @@ export class SeedPluginHost {
         }]
       }) : []
       seen.add(value)
-      options.push({ value, label: label || value, ...(badges.length ? { badges } : {}) })
+      const imageDataUrl = (candidate: unknown) => typeof candidate === 'string'
+        && candidate.length <= 350_000
+        && /^data:image\/(?:svg\+xml|png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(candidate)
+        ? candidate : undefined
+      const iconDataUrl = imageDataUrl(option.icon_data_url)
+      const iconDarkDataUrl = imageDataUrl(option.icon_dark_data_url)
+      options.push({
+        value, label: label || value, ...(badges.length ? { badges } : {}),
+        ...(iconDataUrl ? { iconDataUrl } : {}),
+        ...(iconDataUrl && iconDarkDataUrl ? { iconDarkDataUrl } : {}),
+      })
     }
     return options
   }
@@ -1236,7 +1247,7 @@ export class SeedPluginHost {
           error.code = 'credit_execution_unconfirmed'
           throw error
         }
-        if (Number.isInteger(settlement.charged_amount) && Number(settlement.charged_amount) >= 0) {
+        if (isCreditAmount(settlement.charged_amount) && settlement.charged_amount >= 0) {
           const trace = this.activeDiagnosticTrace()
           if (trace) trace.credit_charged_amount = Number(settlement.charged_amount)
         }

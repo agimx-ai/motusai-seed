@@ -1,19 +1,20 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { PersonalCreditGrantPage } from '../shared/contracts'
+import { isCreditAmount } from '../shared/credit-amount'
 
 const invocationSchema = z.discriminatedUnion('billable', [
   z.object({ billable: z.literal(false) }),
   z.object({
-    billable: z.literal(true), call_id: z.string().uuid(), amount: z.number().int().nonnegative(),
-    charged_amount: z.number().int().nonnegative().nullable().optional(),
+    billable: z.literal(true), call_id: z.string().uuid(), amount: z.number().nonnegative().refine(isCreditAmount),
+    charged_amount: z.number().nonnegative().refine(isCreditAmount).nullable().optional(),
     price_revision: z.number().int().positive(), state: z.enum(['prepared', 'executing', 'uncertain', 'settled', 'released']),
   }),
 ])
 
 export type BillingPreparation = z.infer<typeof invocationSchema>
 const personalWalletSchema = z.object({
-  available: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+  available: z.number().refine(isCreditAmount),
 })
 export type PersonalCreditWallet = z.infer<typeof personalWalletSchema>
 const personalCreditGrantPageSchema = z.object({
@@ -46,6 +47,7 @@ export function relayBillingModelId(billingProduct: unknown, payload: Record<str
 const relaySchema = z.object({ payload: z.unknown() })
 const relayModelsSchema = z.array(z.object({
   model_id: z.string(), display_name: z.string(), badge: z.string().nullable(),
+  icon_data_url: z.string().nullable(),
   display_original_multiplier_basis_points: z.number().int().nonnegative(),
   display_discounted_multiplier_basis_points: z.number().int().nonnegative(),
   max_output_tokens: z.number().int().positive(), context_window: z.number().int().positive(),

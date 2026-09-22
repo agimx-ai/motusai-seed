@@ -10,5 +10,37 @@
   "files.watcherExclude": {
     "**/node_modules/**": true
   },
-  "css.lint.unknownAtRules": "ignore"
+  "css.lint.unknownAtRules": "ignore",
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "Always generate Git commit messages in English."
+    },
+    {
+      "text": "Strictly follow the Conventional Commits format: <type>(<scope>): <subject>. If the scope cannot be determined, use <type>: <subject>."
+    },
+    {
+      "text": "The type must be one of: feat, fix, refactor, docs, test, chore, perf, build, ci, or style."
+    },
+    {
+      "text": "Use lowercase English for type and scope. Keep the scope short and omit it when no meaningful scope can be determined."
+    },
+    {
+      "text": "Write a concise subject that describes the purpose of the change and starts with a lowercase imperative verb, such as add, fix, update, remove, refactor, or bump."
+    },
+    {
+      "text": "Preserve the correct capitalization of proper nouns, product names, and acronyms, such as GitHub, JavaScript, OAuth, API, URL, and HTTP."
+    },
+    {
+      "text": "Do not list changed filenames or implementation details unless a filename is the actual subject of the change."
+    },
+    {
+      "text": "For a version-only change, prefer the format chore(release): bump version to <version>."
+    },
+    {
+      "text": "Output exactly one line. Do not use Markdown or add explanations, a body, or bullet points."
+    },
+    {
+      "text": "Keep the entire line within 72 characters and do not end it with a period."
+    }
+  ]
 }

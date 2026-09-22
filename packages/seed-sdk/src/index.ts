@@ -235,7 +235,13 @@ export type SeedConfigurationOptionBadge = {
   strikethrough?: boolean
 }
 
-export type SeedConfigurationOption = { value: string; label?: string; badges?: readonly SeedConfigurationOptionBadge[] }
+export type SeedConfigurationOption = {
+  value: string
+  label?: string
+  badges?: readonly SeedConfigurationOptionBadge[]
+  icon_data_url?: string
+  icon_dark_data_url?: string
+}
 
 export type SeedManagementRegistry = {
   /** Contributes a management view for this plugin Fiber. */

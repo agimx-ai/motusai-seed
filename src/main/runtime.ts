@@ -4,6 +4,7 @@ import { realpath } from 'node:fs/promises'
 import { app, BrowserWindow, powerSaveBlocker, shell } from 'electron'
 import { z } from 'zod'
 import { buildConfig } from '../shared/build-config.generated'
+import { isCreditAmount } from '../shared/credit-amount'
 import type { AppUpdateState, AuditQueryInput, LocalClientAuthorization, MascotState, PluginCapabilityApprovalRequest, SeedCatalogPage, SeedCatalogPlugin, SeedDistribution, SeedDistributionEvent, SeedEvent, SeedInstalledPlugin, SeedLanguagePreference, SeedPluginRuntimeDefinition, SeedSnapshot, SeedThemePreference, TerminalLogUploadProgress, TerminalLogUploadRange, TerminalUserProfile, UpdatePluginConfigurationInput, WorkerEvent } from '../shared/contracts'
 import { resolveSeedLocale } from './i18n/locale'
 import { pluginConfigurationKey } from '../shared/contracts'
@@ -1675,7 +1676,7 @@ export class SeedRuntime {
   private async recordRelaySettlement(callId: string, pluginId: string) {
     const settlement = await this.creditBilling.status(callId)
     if (!settlement.billable || settlement.state !== 'settled' ||
-      !Number.isInteger(settlement.charged_amount) || Number(settlement.charged_amount) < 0) return
+      !isCreditAmount(settlement.charged_amount) || settlement.charged_amount < 0) return
     const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === pluginId)
     this.diagnostics.record({
       level: 'info', source: 'main', event: 'credit.settled', message: 'Cloud relay credit settlement recorded.',
