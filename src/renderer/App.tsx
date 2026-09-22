@@ -291,7 +291,10 @@ export default function App() {
           onDownloadUpdate={() => void run('update-download', (api) => api.downloadUpdate())}
           onInstallUpdate={() => void run('update-install', (api) => api.installUpdate())}
         />}
-        {view === 'usage' && <UsagePage plugins={plugins} />}
+        {view === 'usage' && <UsagePage
+          plugins={plugins}
+          onAddCredits={() => void run('open-personal-wallet', (api) => api.openPersonalWallet())}
+        />}
       </main>
       </section>
     </div>

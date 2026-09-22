@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Plus } from 'lucide-react'
 import type { PersonalCreditGrant, SeedInstalledPlugin, UsageDay, UsageSummary } from '../../shared/contracts'
+import { ActionButton } from '../components/ActionButton'
 import { PluginIcon } from '../components/PluginIcon'
 import { RareUiActivityGrid, type ActivityContribution } from '../components/RareUiActivityGrid'
 import { useSeedI18n } from '../i18n'
@@ -35,7 +37,7 @@ function usageLevel(value: number, maximum: number) {
   return Math.min(4, Math.max(1, Math.ceil(value / maximum * 4)))
 }
 
-export function UsagePage({ plugins }: { plugins: SeedInstalledPlugin[] }) {
+export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlugin[]; onAddCredits: () => void }) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const [summary, setSummary] = useState<UsageSummary>()
@@ -141,7 +143,12 @@ export function UsagePage({ plugins }: { plugins: SeedInstalledPlugin[] }) {
 
   return <section className="mx-auto w-full max-w-[920px] animate-[rise_.25s_ease_both]">
     <div className="mb-8">
-      <h1 className="m-0 text-[24px] font-medium tracking-[-.02em]">{t('usage.title')}</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="m-0 text-[24px] font-medium tracking-[-.02em]">{t('usage.title')}</h1>
+        <ActionButton className="translate-y-1" icon={<Plus size={14} />} tone="primary" onClick={onAddCredits}>
+          {t('nav.addCredits')}
+        </ActionButton>
+      </div>
       <p className="mb-0 mt-1 text-[12px] text-muted-foreground">{t('usage.description')}</p>
     </div>
 
