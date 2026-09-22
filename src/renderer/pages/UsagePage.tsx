@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus } from 'lucide-react'
-import type { PersonalCreditGrant, SeedInstalledPlugin, UsageDay, UsageSummary } from '../../shared/contracts'
+import type { SeedInstalledPlugin, UsageDay, UsageSummary } from '../../shared/contracts'
 import { ActionButton } from '../components/ActionButton'
 import { PluginIcon } from '../components/PluginIcon'
 import { RareUiActivityGrid, type ActivityContribution } from '../components/RareUiActivityGrid'
@@ -42,12 +42,7 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
   const { locale } = useSeedI18n()
   const [summary, setSummary] = useState<UsageSummary>()
   const [error, setError] = useState(false)
-  const [grants, setGrants] = useState<PersonalCreditGrant[]>([])
-  const [grantCursor, setGrantCursor] = useState<string>()
-  const [grantLoading, setGrantLoading] = useState(true)
-  const [grantError, setGrantError] = useState(false)
   const usageRequest = useRef(0)
-  const grantRequest = useRef(0)
 
   const loadUsage = useCallback(async () => {
     const request = ++usageRequest.current
@@ -72,27 +67,6 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
     }
   }, [loadUsage])
 
-  const loadGrants = useCallback(async (cursor?: string) => {
-    const request = ++grantRequest.current
-    setGrantLoading(true)
-    setGrantError(false)
-    try {
-      const page = await window.motusSeed.personalCreditGrants(cursor)
-      if (request !== grantRequest.current) return
-      setGrants((current) => cursor ? [...current, ...page.items] : page.items)
-      setGrantCursor(page.nextCursor)
-    } catch {
-      if (request === grantRequest.current) setGrantError(true)
-    } finally {
-      if (request === grantRequest.current) setGrantLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadGrants()
-    return () => { grantRequest.current += 1 }
-  }, [loadGrants])
-
   const usage = useMemo(() => {
     if (!summary) return undefined
     const storedDays = new Map(summary.days.map((day) => [day.date, day]))
@@ -116,8 +90,6 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
   const number = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 })
   const date = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' })
   const fullDate = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' })
-  const grantDate = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' })
-  const creditNumber = new Intl.NumberFormat(locale)
   const monthNames = Array.from({ length: 12 }, (_, month) => new Intl.DateTimeFormat(locale, { month: 'short' }).format(new Date(2024, month, 1)))
 
   const contributions = useMemo<ActivityContribution[]>(() => {
@@ -208,44 +180,5 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
             </div> : <p className="mb-0 mt-3 text-[12px] text-muted-foreground">{t('usage.noPluginUsage')}</p>}
           </section>
         </>}
-
-    <section className="mt-10">
-      <h2 className="m-0 text-[16px] font-medium">{t('usage.grantRecords')}</h2>
-      {grantLoading && grants.length === 0
-        ? <div aria-label={t('usage.loadingGrantRecords')} className="mt-3 overflow-hidden rounded-[14px] border border-border bg-card" role="status">
-          {[0, 1, 2].map((item) => <div className="flex h-[58px] animate-pulse items-center justify-between border-b border-border px-4 last:border-b-0" key={item}>
-            <div className="h-3 w-36 rounded-full bg-muted" />
-            <div className="space-y-2">
-              <div className="ml-auto h-3 w-16 rounded-full bg-muted" />
-              <div className="ml-auto h-2.5 w-28 rounded-full bg-muted" />
-            </div>
-          </div>)}
-        </div>
-        : grantError && grants.length === 0
-          ? <div className="mt-3 flex min-h-11 items-center gap-3">
-            <span className="text-[12px] text-muted-foreground">{t('usage.grantRecordsUnavailable')}</span>
-            <button className="shrink-0 text-[12px] text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground" onClick={() => void loadGrants()} type="button">
-              {t('usage.retryGrantRecords')}
-            </button>
-          </div>
-          : grants.length === 0
-            ? <p className="mb-0 mt-3 text-[12px] text-muted-foreground">{t('usage.noGrantRecords')}</p>
-            : <div className="mt-3 overflow-hidden rounded-[14px] border border-border bg-card">
-              {grants.map((grant) => <div className="flex min-h-[58px] items-center justify-between gap-6 border-b border-border px-4 py-3 last:border-b-0" key={grant.id}>
-                <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{grant.reason}</span>
-                <div className="shrink-0 text-right">
-                  <div className="text-[13px] font-medium tabular-nums text-foreground">{t('usage.grantAmount', { count: creditNumber.format(grant.amount) })}</div>
-                  <time className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground" dateTime={grant.createdAt}>{grantDate.format(new Date(grant.createdAt))}</time>
-                </div>
-              </div>)}
-            </div>}
-      {grantError && grants.length > 0 ? <div className="mt-3 flex items-center gap-3 text-[12px] text-muted-foreground">
-        <span>{t('usage.grantRecordsUnavailable')}</span>
-        <button className="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground" onClick={() => void loadGrants(grantCursor)} type="button">{t('usage.retryGrantRecords')}</button>
-      </div> : null}
-      {grantCursor && !grantError ? <button className="mt-3 rounded-lg border border-border bg-card px-3 py-1.5 text-[12px] text-foreground hover:bg-muted disabled:cursor-wait disabled:opacity-60" disabled={grantLoading} onClick={() => void loadGrants(grantCursor)} type="button">
-        {t('usage.loadMoreGrantRecords')}
-      </button> : null}
-    </section>
   </section>
 }
