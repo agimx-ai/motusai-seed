@@ -596,8 +596,9 @@ export class SeedStore {
       SELECT plugin_id,
         MAX(json_extract(diagnostic_details, '$.plugin_name_en_us')) AS name_en_us,
         MAX(json_extract(diagnostic_details, '$.plugin_name_zh_hans')) AS name_zh_hans,
-        SUM(CASE WHEN visibility = 'activity'
-          AND event_name IN ('capability.invoke', 'local_api.request') THEN 1 ELSE 0 END) AS call_count,
+        SUM(CASE WHEN (visibility = 'activity'
+          AND event_name IN ('capability.invoke', 'local_api.request'))
+          OR event_name = 'credit.settled' THEN 1 ELSE 0 END) AS call_count,
         ROUND(SUM(CAST(COALESCE(json_extract(diagnostic_details, '$.credit_charged_amount'), 0) AS REAL)), 2) AS credits_charged
       FROM observation_records
       WHERE timestamp >= ? AND evidence_origin = 'host' AND outcome = 'allowed' AND plugin_id IS NOT NULL
@@ -606,7 +607,6 @@ export class SeedStore {
       GROUP BY plugin_id
       HAVING call_count > 0
       ORDER BY call_count DESC, credits_charged DESC, plugin_id ASC
-      LIMIT 10
     `, [cutoff.toISOString()]) as unknown as UsagePluginRow[]
     return {
       retentionDays,

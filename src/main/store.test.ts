@@ -430,10 +430,35 @@ describe('SeedStore SQLite persistence', () => {
       paidCallCount: 2,
     })])
     expect(usage.plugins).toEqual([
+      { pluginId: 'com.example.local', nameEnUs: 'Local Plugin', nameZhHans: '本地插件', callCount: 2, creditsCharged: 3.01 },
       { pluginId: 'com.example.paid', nameEnUs: 'Paid Plugin', nameZhHans: '付费插件', callCount: 1, creditsCharged: 9.25 },
-      { pluginId: 'com.example.local', nameEnUs: 'Local Plugin', nameZhHans: '本地插件', callCount: 1, creditsCharged: 3.01 },
     ])
     await reopened.close()
+  })
+
+  it('includes settled calls and every used plugin in usage statistics', async () => {
+    const directory = await temporaryDirectory()
+    const store = new SeedStore(directory, 'MotusAI Seed')
+    await store.load()
+    for (let index = 0; index < 11; index += 1) {
+      store.observations.record({
+        level: 'info', source: 'connector', event: 'local_api.request', message: 'Local plugin request completed.',
+        plugin_id: `com.example.plugin-${index}`, operation: 'POST /run',
+        span_id: `usage-plugin-${index}`, phase: 'completed',
+      })
+    }
+    store.observations.record({
+      level: 'info', source: 'main', event: 'credit.settled', message: 'Cloud relay credit settlement recorded.',
+      plugin_id: 'com.example.settled-only', operation: 'credit.settled',
+      details: { credit_charged_amount: 1.5 },
+    })
+
+    const usage = await store.queryUsage()
+    expect(usage.plugins).toHaveLength(12)
+    expect(usage.plugins).toContainEqual({
+      pluginId: 'com.example.settled-only', callCount: 1, creditsCharged: 1.5,
+    })
+    await store.close()
   })
 
   it('isolates encrypted plugin secrets and persists revocable delegated capability grants', async () => {

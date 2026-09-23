@@ -165,7 +165,7 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
           <section className="mt-10">
             <h2 className="m-0 text-[16px] font-medium">{t('usage.frequentPlugins')}</h2>
             {usage.plugins.length ? <div className="mt-3 grid grid-cols-2 gap-x-10 gap-y-1">
-              {usage.plugins.slice(0, 5).map((item) => {
+              {usage.plugins.map((item) => {
                 const installed = plugins.find((plugin) => plugin.id === item.pluginId)
                 const name = installed
                   ? (locale.toLowerCase().startsWith('en') ? installed.name.en_US : installed.name.zh_Hans)
