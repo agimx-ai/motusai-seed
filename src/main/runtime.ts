@@ -524,6 +524,7 @@ export class SeedRuntime {
     }, 60_000)
     if (this.user) this.configureWorker()
     this.updater.start()
+    void this.currentDistribution().catch(() => undefined)
     this.startupStatus = 'ready'
     await this.publishSnapshot()
     void this.refreshStartupCloudState(storedCloudSession).catch(() => undefined)
@@ -1066,6 +1067,7 @@ export class SeedRuntime {
   }
 
   async checkForUpdates() {
+    await this.currentDistribution()
     return await this.updater.check()
   }
 

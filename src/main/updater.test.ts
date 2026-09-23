@@ -22,6 +22,39 @@ import { macDmgDownloadUrl, SeedUpdater } from './updater'
 describe('SeedUpdater macOS manual downloads', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('activates manual and scheduled checks when configuration arrives after startup', async () => {
+    vi.useFakeTimers()
+    try {
+      const changed = vi.fn()
+      const updater = new SeedUpdater(changed, vi.fn(), { platform: 'darwin', openExternal })
+      updater.start()
+
+      expect(updater.snapshot().status).toBe('disabled')
+      expect(autoUpdater.on).toHaveBeenCalledWith('update-not-available', expect.any(Function))
+
+      updater.configure('https://downloads.example.test/stable/mac-arm64')
+      expect(updater.snapshot().status).toBe('idle')
+      expect(autoUpdater.setFeedURL).toHaveBeenCalledWith({
+        provider: 'generic',
+        url: 'https://downloads.example.test/stable/mac-arm64',
+        channel: 'latest',
+      })
+
+      const notAvailable = autoUpdater.on.mock.calls.find(([event]) => event === 'update-not-available')?.[1]
+      autoUpdater.checkForUpdates.mockImplementationOnce(async () => notAvailable?.())
+      await expect(updater.check()).resolves.toBe(true)
+      expect(updater.snapshot().status).toBe('up-to-date')
+
+      autoUpdater.checkForUpdates.mockClear()
+      autoUpdater.checkForUpdates.mockResolvedValueOnce(undefined)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(autoUpdater.checkForUpdates).toHaveBeenCalledOnce()
+      updater.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('resolves the DMG from macOS update metadata against the configured feed', () => {
     expect(macDmgDownloadUrl({
       version: '0.1.64',

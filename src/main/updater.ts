@@ -57,12 +57,19 @@ export class SeedUpdater {
     this.updateChannel = releaseChannel(this.updateUrl)
     if (!this.started || !app.isPackaged) return
     if (!this.updateUrl) {
+      this.clearCheckTimers()
+      this.manualDownloadUrl = null
       this.setState({ status: 'disabled' })
       return
     }
+    this.applyFeedConfiguration()
+    this.scheduleChecks()
+    if (this.state.status === 'disabled') this.setState({ status: 'idle' })
+  }
+
+  private applyFeedConfiguration() {
     autoUpdater.setFeedURL({ provider: 'generic', url: this.updateUrl, channel: this.updateChannel === 'stable' ? 'latest' : 'beta' })
     autoUpdater.allowPrerelease = this.updateChannel === 'beta'
-    if (this.state.status === 'disabled') this.setState({ status: 'idle' })
   }
 
   snapshot() {
@@ -72,15 +79,13 @@ export class SeedUpdater {
   start() {
     if (this.started) return
     this.started = true
-    if (!app.isPackaged || !this.updateUrl) {
+    if (!app.isPackaged) {
       this.setState({ status: 'disabled' })
       return
     }
 
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = false
-    autoUpdater.setFeedURL({ provider: 'generic', url: this.updateUrl, channel: this.updateChannel === 'stable' ? 'latest' : 'beta' })
-    autoUpdater.allowPrerelease = this.updateChannel === 'beta'
     autoUpdater.on('checking-for-update', () => this.setState({ status: 'checking', error: undefined }))
     autoUpdater.on('update-available', (info) => {
       this.manualDownloadUrl = this.platform === 'darwin' ? macDmgDownloadUrl(info, this.updateUrl) : null
@@ -105,11 +110,25 @@ export class SeedUpdater {
     }))
     autoUpdater.on('error', (error) => this.setState({ status: 'error', error: errorMessage(error) }))
 
+    if (!this.updateUrl) {
+      this.setState({ status: 'disabled' })
+      return
+    }
+    this.applyFeedConfiguration()
+    this.scheduleChecks()
+  }
+
+  private scheduleChecks() {
+    if (this.firstCheckTimer || this.recurringCheckTimer) return
     this.firstCheckTimer = setTimeout(() => void this.check().catch(() => undefined), firstCheckDelayMs)
     this.recurringCheckTimer = setInterval(() => void this.check().catch(() => undefined), recurringCheckDelayMs)
   }
 
   stop() {
+    this.clearCheckTimers()
+  }
+
+  private clearCheckTimers() {
     if (this.firstCheckTimer) clearTimeout(this.firstCheckTimer)
     if (this.recurringCheckTimer) clearInterval(this.recurringCheckTimer)
     this.firstCheckTimer = null
