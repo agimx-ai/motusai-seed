@@ -337,6 +337,15 @@ export class SeedPluginHost {
   }
 
   async start(plugins: SeedPluginRuntimeDefinition[]) {
+    const mcpNames = new Set<string>()
+    for (const plugin of plugins) for (const capability of plugin.capabilities) for (const method of capability.methods) {
+      if (method.annotations?.['mcp.tool'] !== true) continue
+      const name = method.annotations['mcp.tool_name'] ?? method.name
+      if (typeof name !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/.test(name) || mcpNames.has(name)) {
+        throw new Error(`MCP 工具名称无效或重复：${String(name)}`)
+      }
+      mcpNames.add(name)
+    }
     const configuration = this.runtime.configuration()
     const remoteConfigurationFingerprint = this.nativeExecution === 'remote' ? JSON.stringify({
       locale: configuration?.locale, pluginDataRoot: configuration?.pluginDataRoot,
@@ -1011,6 +1020,15 @@ export class SeedPluginHost {
         })),
       }]
     }))
+  }
+
+  mcpTools() {
+    return this.plugins.flatMap((plugin) => plugin.capabilities.flatMap((capability) => {
+      if (plugin.runtime_kind === 'native-host' && !this.nativeCapabilities.get(plugin.package_id)?.has(capability.id)) return []
+      return capability.methods.filter((method) => method.annotations?.['mcp.tool'] === true).map((method) => ({
+        name: String(method.annotations?.['mcp.tool_name'] ?? method.name), plugin, capability, method,
+      }))
+    })).sort((left, right) => left.name.localeCompare(right.name))
   }
 
   consumedCapabilitiesByPackage(packageId: string) {

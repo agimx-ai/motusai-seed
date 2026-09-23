@@ -508,6 +508,15 @@ export const seedCapabilityMethodSchema = z.object({
   output_schema: jsonSchema.optional(),
   annotations: z.record(identifier, z.unknown()).default({}),
 }).strict().superRefine((method, context) => {
+  if (method.annotations['mcp.tool'] === true) {
+    const name = method.annotations['mcp.tool_name'] ?? method.name
+    if (typeof name !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/.test(name)) {
+      context.addIssue({ code: 'custom', path: ['annotations', 'mcp.tool_name'], message: 'MCP 工具名称无效。' })
+    }
+    if (!method.description || !method.input_schema || method.input_schema.type !== 'object') {
+      context.addIssue({ code: 'custom', path: ['annotations', 'mcp.tool'], message: 'MCP 工具必须声明双语描述和对象类型的输入 Schema。' })
+    }
+  }
   const settlement = method.annotations['billing.settlement']
   const relayTemplate = method.annotations['billing.relay_template']
   const billingProduct = method.annotations['billing.product']

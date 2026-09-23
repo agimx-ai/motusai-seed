@@ -75,6 +75,8 @@
     "cancelling": "Cancelling…"
   },
   "plugins": {
+    "mcpToolsAvailable": "This plugin provides MCP tools",
+    "mcpTools": "MCP tools",
     "breadcrumb": "Plugin details",
     "refresh": "Refresh plugin catalog",
     "uninstall": "Uninstall",

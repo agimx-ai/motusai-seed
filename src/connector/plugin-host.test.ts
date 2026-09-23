@@ -50,6 +50,29 @@ const resourcePlugin: SeedPluginRuntimeDefinition = {
 }
 
 describe('SeedPluginHost protocol and Cordis runtime', () => {
+  it('exports only explicit MCP tools and rejects duplicate names', async () => {
+    const exported = { ...plugin, runtime_kind: 'native-host' as const,
+      entry_path: '/does-not-exist/native-entry.mjs', capabilities: plugin.capabilities.map((capability) => ({
+        ...capability, methods: capability.methods.map((method) => ({ ...method,
+          annotations: { 'mcp.tool': true, 'mcp.tool_name': 'read_probe' },
+        })),
+      })) }
+    const invoke_host = vi.fn(async (service: string) => {
+      if (service === 'seed.native.start') return { capabilities: ['probe'], configurations: [], managementViews: [], connections: [] }
+      if (service === 'seed.native.stop') return null
+      throw new Error(`Unexpected service: ${service}`)
+    })
+    const host = new SeedPluginHost({ configuration: () => null, invoke_host },
+      undefined, undefined, 'remote')
+    await host.start([exported])
+    expect(host.mcpTools().map((tool) => tool.name)).toEqual(['read_probe'])
+    await expect(host.start([exported, { ...exported, package_id: 'com.example.other' }]))
+      .rejects.toThrow('MCP 工具名称无效或重复')
+    await host.start([])
+    expect(host.mcpTools()).toEqual([])
+    await host.stop()
+  })
+
   it('intercepts paid capability calls in the host and requires trusted settlement before returning a result', async () => {
     const nativePlugin = {
       ...plugin,

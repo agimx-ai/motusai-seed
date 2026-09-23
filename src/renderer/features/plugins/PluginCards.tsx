@@ -7,9 +7,11 @@ import { CatalogPluginIcon, InstalledPluginIcon } from '../../components/PluginI
 import { ResourceCard } from '../../components/ResourceCard'
 import { Tooltip } from '../../components/Tooltip'
 import verifiedIconUrl from '../../assets/verified-light.svg'
+import mcpIconUrl from '../../assets/mcp.svg'
 import { cx } from '../../lib/display'
 import { useSeedI18n } from '../../i18n'
 import { isCatalogPluginInstallable } from './plugin-updates'
+import { pluginMcpTools } from './mcp-tools'
 
 export function OfficialMark({ appName }: { appName: string }) {
   const { t } = useTranslation()
@@ -18,6 +20,15 @@ export function OfficialMark({ appName }: { appName: string }) {
       <img className="h-4 w-4" src={verifiedIconUrl} alt="" aria-hidden="true" />
     </Tooltip>
   )
+}
+
+export function McpMark() {
+  const { t } = useTranslation()
+  return <Tooltip content={t('plugins.mcpToolsAvailable')}>
+    <span className="grid h-4 w-4 shrink-0 place-items-center" role="img" aria-label={t('plugins.mcpToolsAvailable')}>
+      <img className="h-3.5 w-3.5 dark:invert" src={mcpIconUrl} alt="" aria-hidden="true" />
+    </span>
+  </Tooltip>
 }
 
 function InstalledMark() {
@@ -56,7 +67,7 @@ export function PluginCard({ plugin, appName, onOpen }: { plugin: SeedInstalledP
   const incompatible = plugin.status === 'incompatible'
   return <ResourceCard
     icon={<PluginMark plugin={plugin} />}
-    title={<><span className="truncate">{name}</span>{plugin.publisherType === 'official' && <OfficialMark appName={appName} />}</>}
+    title={<><span className="truncate">{name}</span>{plugin.publisherType === 'official' && <OfficialMark appName={appName} />}{pluginMcpTools(plugin).length > 0 && <McpMark />}</>}
     description={resolveSeedLocalizedText(plugin.description, locale)}
     trailing={incompatible
       ? <ActionButton tone="muted" icon={<TriangleAlert size={13} />} disabled>{t('plugins.incompatible')}</ActionButton>
@@ -100,6 +111,7 @@ export function CatalogPluginCard({ plugin, appName, installedPlugin, installing
     title={<>
       <span className="truncate">{resolveSeedLocalizedText(plugin.name, locale)}</span>
       {plugin.publisherType === 'official' && <OfficialMark appName={appName} />}
+      {installedPlugin && pluginMcpTools(installedPlugin).length > 0 && <McpMark />}
       {plugin.visibility === 'organization' && plugin.organization && <span className="max-w-[112px] shrink-0 truncate rounded-full bg-info-soft px-2 py-0.5 text-[10px] font-medium text-info">
         {t('plugins.organizationExclusive', { name: plugin.organization.name })}
       </span>}

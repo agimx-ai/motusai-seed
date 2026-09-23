@@ -10,7 +10,8 @@ import { InfiniteScrollTrigger } from '../components/InfiniteScrollTrigger'
 import { Tooltip } from '../components/Tooltip'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { resourceCardGridClass } from '../components/ResourceCard'
-import { CatalogPluginCard, CatalogPluginMark, OfficialMark, PluginMark, PluginVersionTransition } from '../features/plugins/PluginCards'
+import { CatalogPluginCard, CatalogPluginMark, McpMark, OfficialMark, PluginMark, PluginVersionTransition } from '../features/plugins/PluginCards'
+import { pluginMcpTools } from '../features/plugins/mcp-tools'
 import { isCatalogPluginInstallable } from '../features/plugins/plugin-updates'
 import { PluginConfigurationPanel } from '../features/plugins/PluginConfigurationPanel'
 import { PluginConfigurationCatalogList, PluginConfigurationOptionList } from '../features/plugins/PluginConfigurationOptionList'
@@ -156,6 +157,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, pluginCapability
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           <h2 className="m-0 text-[20px] font-medium">{resolveSeedLocalizedText(selectedPlugin.name, locale)}</h2>
           {selectedPlugin.publisherType === 'official' && <OfficialMark appName={appName} />}
+          {selectedInstalledPlugin && pluginMcpTools(selectedInstalledPlugin).length > 0 && <McpMark />}
           {selectedCatalogPlugin?.visibility === 'organization' && selectedCatalogPlugin.organization && <span className="max-w-[140px] truncate rounded-full bg-info-soft px-2 py-0.5 text-[10px] font-medium text-info">
             {t('plugins.organizationExclusive', { name: selectedCatalogPlugin.organization.name })}
           </span>}
@@ -197,6 +199,10 @@ export function PluginsPage({ appName, plugins, catalogPlugins, pluginCapability
       : t('plugins.missingSeedVersion')}</p>}
     {!selectedInstalledPlugin && selectedCatalogPlugin?.readme && <section className="mt-2 rounded-[16px] border border-border bg-muted/20 px-6 py-5">
       <MarkdownContent>{resolveSeedLocalizedText(selectedCatalogPlugin.readme, locale)}</MarkdownContent>
+    </section>}
+    {selectedInstalledPlugin && pluginMcpTools(selectedInstalledPlugin).length > 0 && <section className="mt-2 rounded-[14px] border border-border px-4 py-3">
+      <h3 className="m-0 text-[14px] font-medium">{t('plugins.mcpTools')}</h3>
+      <p className="mb-0 mt-1 text-[12px] text-muted-foreground">{pluginMcpTools(selectedInstalledPlugin).join(' · ')}</p>
     </section>}
     {selectedInstalledPlugin?.detailPresentation && <PluginDetailPresentation presentation={selectedInstalledPlugin.detailPresentation} />}
     {selectedInstalledPlugin?.configurations.map((configuration) => {

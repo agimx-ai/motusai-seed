@@ -75,6 +75,8 @@
     "cancelling": "正在取消…"
   },
   "plugins": {
+    "mcpToolsAvailable": "此插件提供 MCP 工具",
+    "mcpTools": "MCP 工具",
     "breadcrumb": "插件详情路径",
     "refresh": "刷新插件目录",
     "uninstall": "卸载",

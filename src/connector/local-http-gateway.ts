@@ -5,9 +5,11 @@ import type { CapsRuntimeService } from './caps'
 import type { SeedPluginHost } from './plugin-host'
 import type { GlobalTaskActivityObserver } from './global-task-activity-observer'
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace'
+import { SeedLocalMcpServer } from './local-mcp-server'
 
 export const seedLocalApiPort = 43127
 const maxBodyBytes = 1024 * 1024 * 1024
+const maxMcpBodyBytes = 1024 * 1024
 const allowedMethods = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
 
 function json(status: number, value: unknown) {
@@ -39,13 +41,13 @@ function registeredRoute(registration: SeedLocalApiRegistration, method: string,
   ))
 }
 
-async function requestBody(request: IncomingMessage) {
+async function requestBody(request: IncomingMessage, limit = maxBodyBytes) {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of request) {
     const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += value.length
-    if (size > maxBodyBytes) throw Object.assign(new Error('Request body is too large.'), { code: 'body_too_large' })
+    if (size > limit) throw Object.assign(new Error('Request body is too large.'), { code: 'body_too_large' })
     chunks.push(value)
   }
   return chunks.length ? Buffer.concat(chunks) : undefined
@@ -79,6 +81,7 @@ export class SeedLocalHttpGateway {
   private listeningPort = 0
   private stateEvents = new SeedLocalEventStream<SeedLocalGatewayEvent>({ initialId: Date.now() * 1_000 })
   private readonly pluginStates = new Map<string, SeedLocalPluginRuntimeState>()
+  private mcp: SeedLocalMcpServer | null = null
 
   constructor(
     private readonly runtime: CapsRuntimeService,
@@ -90,6 +93,7 @@ export class SeedLocalHttpGateway {
 
   async start() {
     if (this.server) return
+    this.mcp = new SeedLocalMcpServer(this.pluginHost)
     const server = createServer((request, response) => void this.handle(request, response))
     this.server = server
     try {
@@ -100,6 +104,8 @@ export class SeedLocalHttpGateway {
     } catch (error) {
       this.server = null
       server.close()
+      await this.mcp.close()
+      this.mcp = null
       if (error && typeof error === 'object' && (error as { code?: unknown }).code === 'EADDRINUSE') {
         throw new Error(`Seed 本地 API 固定端口 ${this.requestedPort} 已被占用，请关闭占用该端口的程序后重试。`)
       }
@@ -126,6 +132,8 @@ export class SeedLocalHttpGateway {
       })
     }
     this.listeningPort = 0
+    await this.mcp?.close()
+    this.mcp = null
     this.pluginStates.clear()
     this.stateEvents = new SeedLocalEventStream<SeedLocalGatewayEvent>({ initialId: Date.now() * 1_000 })
   }
@@ -170,6 +178,27 @@ export class SeedLocalHttpGateway {
     let origin = String(request.headers.origin || '')
     try {
       const url = new URL(request.url || '/', 'http://127.0.0.1')
+      if (url.pathname === '/mcp') {
+        const host = String(request.headers.host || '')
+        if (host !== `127.0.0.1:${this.listeningPort}` && host !== `localhost:${this.listeningPort}`) {
+          return await this.writeResponse(request, response, failure(403, 'host_forbidden', 'Invalid local host.'), '')
+        }
+        if (origin && origin !== `http://127.0.0.1:${this.listeningPort}` && origin !== `http://localhost:${this.listeningPort}`) {
+          return await this.writeResponse(request, response, failure(403, 'origin_forbidden', 'Invalid local origin.'), '')
+        }
+        const method = String(request.method || 'GET').toUpperCase()
+        if (!['GET', 'POST', 'DELETE'].includes(method)) {
+          return await this.writeResponse(request, response, failure(405, 'method_not_allowed', 'Unsupported MCP method.'), origin)
+        }
+        const body = method === 'POST' ? await requestBody(request, maxMcpBodyBytes) : undefined
+        const abort = new AbortController()
+        response.once('close', () => abort.abort())
+        const mcpRequest = new Request(`http://127.0.0.1:${this.listeningPort}/mcp`, {
+          method, headers: requestHeaders(request),
+          ...(body ? { body: new Uint8Array(body) } : {}), signal: abort.signal,
+        })
+        return await this.writeResponse(request, response, await this.mcp!.handle(mcpRequest), origin)
+      }
       if (request.method === 'GET' && url.pathname === '/v1/status') {
         return await this.writeResponse(request, response, json(200, {
           running: true,

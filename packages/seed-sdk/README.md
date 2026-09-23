@@ -22,6 +22,8 @@ import type { SeedPlugin } from '@motusai/seed-sdk'
 
 官方 `native-host` 如需向已授权的本地应用提供 HTTP/SSE 接口，必须声明 `local.http-api`，并通过 `ctx.localApi.register()` 使用 Seed 的统一 loopback 网关。插件不得自行监听端口，也不会收到 Seed Local Gateway 的原始 Bearer Token。
 
+需要向 MCP 客户端提供的能力方法，可在能力声明中标注 `mcp.tool: true`，并提供双语描述和对象类型的 `input_schema`；可选 `mcp.tool_name` 指定工具名。Seed 统一在 `http://127.0.0.1:43127/mcp` 提供 Streamable HTTP 入口，插件仍只注册现有能力实现。
+
 通过统一网关提供 SSE 时，使用 `SeedLocalEventStream` 处理事件编号、短期回放、心跳和断连清理。插件只在 `localApi.register()` 的处理器中返回 `events.response()`，并在业务状态变化时调用 `events.publish()`。调用端可用 `after` 或 `Last-Event-ID` 续接事件。
 
 每条本地路由通过 `activity` 声明运行语义：省略或使用 `foreground` 的真实用户操作会进入活动记录并驱动全局忙碌状态；状态检查、列表同步和轮询使用 `background`，仅保留技术诊断；SSE 等长连接使用 `stream`，同样不进入活动记录或长期占用忙碌状态。后台路由中触发的嵌套能力与任务会继承该技术可见性。

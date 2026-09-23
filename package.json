@@ -36,6 +36,7 @@
     "package:dir": "npm run icons:generate && npm run build && electron-builder --config electron-builder.config.mjs --dir"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
     "@motusai/seed-sdk": "file:packages/seed-sdk",
     "@standard-schema/spec": "^1.1.0",
     "@tailwindcss/vite": "4.3.3",
@@ -63,6 +64,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/archiver": "^7.0.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",

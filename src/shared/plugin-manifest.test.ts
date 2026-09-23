@@ -23,6 +23,19 @@ describe('capability billing settlement annotation', () => {
   })
 })
 
+describe('MCP tool declaration', () => {
+  it('requires an explicit tool annotation with a description and object input schema', () => {
+    const method = { name: 'read_probe', risk: 'read', description: text('Read probe'),
+      input_schema: { type: 'object', properties: { value: { type: 'string' } } },
+      annotations: { 'mcp.tool': true } }
+    expect(seedCapabilityMethodSchema.safeParse(method).success).toBe(true)
+    expect(seedCapabilityMethodSchema.safeParse({ ...method, description: undefined }).success).toBe(false)
+    expect(seedCapabilityMethodSchema.safeParse({ ...method, input_schema: { type: 'string' } }).success).toBe(false)
+    expect(seedCapabilityMethodSchema.safeParse({ ...method, annotations: { 'mcp.tool': true,
+      'mcp.tool_name': 'Bad Name' } }).success).toBe(false)
+  })
+})
+
 describe('plugin detail presentation schema', () => {
   it('supports a framework-rendered route declared by the plugin', () => {
     const manifest = seedPluginManifestSchema.parse({

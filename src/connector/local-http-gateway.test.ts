@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import type { SeedLocalApiRegistration } from '@motusai/seed-sdk'
 import type { CapsRuntimeService } from './caps'
 import { SeedLocalHttpGateway } from './local-http-gateway'
@@ -38,6 +39,54 @@ describe('SeedLocalHttpGateway', () => {
   let gateway: SeedLocalHttpGateway | undefined
 
   afterEach(async () => gateway?.stop())
+
+  it('exposes only explicitly registered plugin tools over Streamable HTTP', async () => {
+    const invoke = vi.fn(async () => ({ answer: 42 }))
+    let available = true
+    const runtime = { configuration: () => null, invoke_host: vi.fn() } as unknown as CapsRuntimeService
+    const host = {
+      localApi: () => undefined,
+      mcpTools: () => available ? [{ name: 'read_probe', plugin: { package_id: 'com.example.probe' },
+        capability: { id: 'probe' }, method: { name: 'read_probe', risk: 'read',
+          description: { en_US: 'Read probe', zh_Hans: '读取探针' },
+          inputSchema: { type: 'object', properties: { value: { type: 'number' } }, required: ['value'] },
+        } }] : [],
+      invoke,
+    } as unknown as SeedPluginHost
+    gateway = new SeedLocalHttpGateway(runtime, () => host, 0)
+    await gateway.start()
+    const url = new URL(`http://127.0.0.1:${gateway.port()}/mcp`)
+    const client = new Client({ name: 'seed-test', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } })
+    try {
+      await client.connect(new StreamableHTTPClientTransport(url))
+      expect(client.getProtocolEra()).toBe('modern')
+      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(['read_probe'])
+      expect(await client.callTool({ name: 'read_probe', arguments: { value: 3 } })).toMatchObject({
+        content: [{ type: 'text', text: '{"answer":42}' }],
+      })
+      expect(invoke).toHaveBeenCalledWith('probe', 'read_probe', expect.objectContaining({
+        provider_plugin_id: 'com.example.probe', arguments: { value: 3 },
+      }))
+      expect(await client.callTool({ name: 'read_probe', arguments: { value: 'bad' } }))
+        .toMatchObject({ isError: true })
+      expect(invoke).toHaveBeenCalledTimes(1)
+      available = false
+      expect((await client.listTools()).tools).toEqual([])
+    } finally {
+      await client.close()
+    }
+  })
+
+  it('rejects foreign browser origins at the MCP entrance', async () => {
+    const runtime = { configuration: () => null, invoke_host: vi.fn() } as unknown as CapsRuntimeService
+    const host = { localApi: () => undefined, mcpTools: () => [] } as unknown as SeedPluginHost
+    gateway = new SeedLocalHttpGateway(runtime, () => host, 0)
+    await gateway.start()
+    const response = await fetch(`http://127.0.0.1:${gateway.port()}/mcp`, {
+      method: 'POST', headers: { Origin: 'https://other.example' }, body: '{}',
+    })
+    expect(response.status).toBe(403)
+  })
 
   it('can stop on account logout and restart after a later sign-in', async () => {
     const runtime = {
