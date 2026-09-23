@@ -80,7 +80,7 @@ function handleDeepLink(value: string) {
   if (request) handleNavigationRequest(request)
 }
 
-function appAsset(fileName: 'app-dark.svg' | 'app-light.svg' | 'app-icon.png' | 'tray-dark.png' | 'tray-light.png') {
+function appAsset(fileName: 'app-icon.png') {
   const relativePath = join('app', fileName)
   const resourcesDirectory = app.isPackaged
     ? process.resourcesPath
@@ -89,12 +89,9 @@ function appAsset(fileName: 'app-dark.svg' | 'app-light.svg' | 'app-icon.png' | 
 }
 
 function trayImage() {
-  const fileName = process.platform === 'darwin'
-    ? 'tray-light.png'
-    : nativeTheme.shouldUseDarkColors ? 'tray-dark.png' : 'tray-light.png'
-  const image = nativeImage.createFromPath(appAsset(fileName)).resize({ height: 18 })
-  if (image.isEmpty()) throw new Error(`Tray icon could not be loaded: ${appAsset(fileName)}`)
-  if (process.platform === 'darwin') image.setTemplateImage(true)
+  const iconPath = appAsset('app-icon.png')
+  const image = nativeImage.createFromPath(iconPath).resize({ height: 18 })
+  if (image.isEmpty()) throw new Error(`Tray icon could not be loaded: ${iconPath}`)
   return image
 }
 
@@ -189,7 +186,6 @@ function createTray() {
   tray.setToolTip(buildConfig.appName)
   updateTrayMenu()
   tray.on('click', () => mainWindow?.show())
-  nativeTheme.on('updated', () => tray?.setImage(trayImage()))
 }
 
 function createApplicationMenu() {

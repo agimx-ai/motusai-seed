@@ -201,15 +201,6 @@ async function generate() {
       window,
       iconComposerLogoSvg("dark"),
     );
-    const trayLightImage = await renderSvg(
-      window,
-      readFileSync(join(appDirectory, "app-light.svg"), "utf8"),
-    );
-    const trayDarkImage = await renderSvg(
-      window,
-      readFileSync(join(appDirectory, "app-dark.svg"), "utf8"),
-    );
-
     writeFileSync(join(appDirectory, "app-icon.png"), image.toPNG());
     writeIconComposerPackage(
       iconComposerBackgroundLightImage,
@@ -218,15 +209,6 @@ async function generate() {
       iconComposerLogoDarkImage,
       appDirectory,
     );
-    writeFileSync(
-      join(appDirectory, "tray-light.png"),
-      trayLightImage.resize({ width: 64, height: 64, quality: "best" }).toPNG(),
-    );
-    writeFileSync(
-      join(appDirectory, "tray-dark.png"),
-      trayDarkImage.resize({ width: 64, height: 64, quality: "best" }).toPNG(),
-    );
-
     if (process.platform === "darwin") {
       const temporaryDirectory = mkdtempSync(
         join(tmpdir(), "motusai-seed-icon-"),
@@ -250,7 +232,7 @@ async function generate() {
         rmSync(temporaryDirectory, { recursive: true, force: true });
       }
     }
-    console.log("Generated desktop and tray icons.");
+    console.log("Generated desktop icons.");
     if (process.platform !== "darwin") {
       console.warn(
         "Skipping ICNS generation because iconutil is only available on macOS.",

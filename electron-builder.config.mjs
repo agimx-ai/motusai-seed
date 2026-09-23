@@ -30,8 +30,8 @@ try {
 } catch {
   throw new Error('MOTUSAI_SEED_CLOUD_URL must be a valid HTTP or HTTPS URL before packaging.')
 }
-for (const asset of [appIconPng, `${appResources}/tray-light.png`, `${appResources}/tray-dark.png`]) {
-  if (!existsSync(resolve(import.meta.dirname, asset))) throw new Error(`Missing generated icon asset: ${asset}. Run npm run icons:generate.`)
+if (!existsSync(resolve(import.meta.dirname, appIconPng))) {
+  throw new Error(`Missing generated icon asset: ${appIconPng}. Run npm run icons:generate.`)
 }
 if (process.platform === 'darwin') {
   for (const asset of [appIconIcns, appIconComposer]) {
