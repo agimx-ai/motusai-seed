@@ -49,6 +49,8 @@ describe('SeedUpdater macOS manual downloads', () => {
       autoUpdater.checkForUpdates.mockResolvedValueOnce(undefined)
       await vi.advanceTimersByTimeAsync(10_000)
       expect(autoUpdater.checkForUpdates).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+      expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2)
       updater.stop()
     } finally {
       vi.useRealTimers()

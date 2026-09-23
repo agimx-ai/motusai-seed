@@ -3,7 +3,7 @@ import { autoUpdater, type ProgressInfo, type UpdateInfo } from 'electron-update
 import type { AppUpdateState } from '../shared/contracts'
 
 const firstCheckDelayMs = 10_000
-const recurringCheckDelayMs = 4 * 60 * 60 * 1000
+const recurringCheckDelayMs = 60 * 60 * 1000
 function releaseChannel(updateUrl: string): 'stable' | 'beta' {
   if (!updateUrl) return 'stable'
   try {
