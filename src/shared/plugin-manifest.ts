@@ -502,6 +502,7 @@ export const seedPluginManagementViewSchema = z.object({
 
 export const seedCapabilityMethodSchema = z.object({
   name: identifier,
+  platforms: z.array(z.enum(['darwin', 'linux', 'win32'])).min(1).max(3).optional(),
   description: seedLocalizedTextSchema(500).optional(),
   risk: z.enum(['read', 'write', 'control']),
   input_schema: jsonSchema.optional(),

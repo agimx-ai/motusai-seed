@@ -36,6 +36,16 @@ describe('MCP tool declaration', () => {
   })
 })
 
+describe('capability method platforms', () => {
+  const method = { name: 'run_command', risk: 'control' }
+
+  it('accepts supported desktop platforms and rejects unknown ones', () => {
+    expect(seedCapabilityMethodSchema.parse({ ...method, platforms: ['darwin', 'linux'] }).platforms).toEqual(['darwin', 'linux'])
+    expect(seedCapabilityMethodSchema.safeParse({ ...method, platforms: ['windows'] }).success).toBe(false)
+    expect(seedCapabilityMethodSchema.safeParse({ ...method, platforms: [] }).success).toBe(false)
+  })
+})
+
 describe('plugin detail presentation schema', () => {
   it('supports a framework-rendered route declared by the plugin', () => {
     const manifest = seedPluginManifestSchema.parse({

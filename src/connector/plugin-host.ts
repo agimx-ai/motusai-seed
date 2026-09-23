@@ -131,6 +131,10 @@ function isPluginConsumable(capability: CapsPluginDescriptor) {
   return capability.exposure !== 'local'
 }
 
+function isMethodAvailableOnThisPlatform(method: CapsPluginDescriptor['methods'][number]) {
+  return !method.platforms || method.platforms.some((platform) => platform === process.platform)
+}
+
 function dependsOnChangedCapability(
   consumer: SeedPluginRuntimeDefinition,
   capabilityId: string,
@@ -339,7 +343,7 @@ export class SeedPluginHost {
   async start(plugins: SeedPluginRuntimeDefinition[]) {
     const mcpNames = new Set<string>()
     for (const plugin of plugins) for (const capability of plugin.capabilities) for (const method of capability.methods) {
-      if (method.annotations?.['mcp.tool'] !== true) continue
+      if (!isMethodAvailableOnThisPlatform(method) || method.annotations?.['mcp.tool'] !== true) continue
       const name = method.annotations['mcp.tool_name'] ?? method.name
       if (typeof name !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/.test(name) || mcpNames.has(name)) {
         throw new Error(`MCP 工具名称无效或重复：${String(name)}`)
@@ -960,7 +964,7 @@ export class SeedPluginHost {
     return this.plugins.flatMap((plugin) => {
       const capability = plugin.capabilities.find((candidate) => candidate.id === capabilityId)
       const method = capability?.methods.find((candidate) => candidate.name === methodName)
-      return capability && method ? [{ plugin, capability, method }] : []
+      return capability && method && isMethodAvailableOnThisPlatform(method) ? [{ plugin, capability, method }] : []
     })
   }
 
@@ -994,7 +998,7 @@ export class SeedPluginHost {
   private consumedCapabilities(consumer: SeedPluginRuntimeDefinition) {
     return this.plugins.flatMap((provider) => provider.package_id === consumer.package_id ? [] : provider.capabilities.flatMap((capability) => {
       if (!isPluginConsumable(capability)) return []
-      const methods = capability.methods.filter((method) => canConsume(consumer, capability, method))
+      const methods = capability.methods.filter((method) => isMethodAvailableOnThisPlatform(method) && canConsume(consumer, capability, method))
       if (!methods.length) return []
       return [{
         id: capability.id,
@@ -1025,7 +1029,7 @@ export class SeedPluginHost {
   mcpTools() {
     return this.plugins.flatMap((plugin) => plugin.capabilities.flatMap((capability) => {
       if (plugin.runtime_kind === 'native-host' && !this.nativeCapabilities.get(plugin.package_id)?.has(capability.id)) return []
-      return capability.methods.filter((method) => method.annotations?.['mcp.tool'] === true).map((method) => ({
+      return capability.methods.filter((method) => isMethodAvailableOnThisPlatform(method) && method.annotations?.['mcp.tool'] === true).map((method) => ({
         name: String(method.annotations?.['mcp.tool_name'] ?? method.name), plugin, capability, method,
       }))
     })).sort((left, right) => left.name.localeCompare(right.name))

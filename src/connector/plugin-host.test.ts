@@ -50,6 +50,28 @@ const resourcePlugin: SeedPluginRuntimeDefinition = {
 }
 
 describe('SeedPluginHost protocol and Cordis runtime', () => {
+  it('lists and invokes only methods available on the current platform', async () => {
+    const otherPlatform = process.platform === 'win32' ? 'darwin' : 'win32'
+    const thisPlatform = process.platform === 'win32' ? 'win32' : process.platform === 'linux' ? 'linux' : 'darwin'
+    const provider: SeedPluginRuntimeDefinition = { ...plugin, capabilities: plugin.capabilities.map((capability) => ({
+      ...capability, methods: capability.methods.flatMap((method) => [
+        { ...method, platforms: [otherPlatform], annotations: { 'mcp.tool': true, 'mcp.tool_name': 'read_probe' } },
+        { ...method, name: 'echo_here', platforms: [thisPlatform], annotations: { 'mcp.tool': true, 'mcp.tool_name': 'read_probe' } },
+      ]),
+    })) }
+    const consumer: SeedPluginRuntimeDefinition = { ...plugin, package_id: 'com.example.consumer', capabilities: [],
+      consumes: [{ capability: 'probe', methods: ['echo', 'echo_here'] }] }
+    const host = new SeedPluginHost({ configuration: () => null, invoke_host: async () => null })
+    await host.start([provider, consumer])
+    expect(host.supports('probe', 'echo')).toBe(false)
+    expect(host.supports('probe', 'echo_here')).toBe(true)
+    expect(host.mcpTools().map((tool) => tool.name)).toEqual(['read_probe'])
+    expect(host.consumedCapabilitiesByPackage(consumer.package_id)[0]?.methods.map((method) => method.name)).toEqual(['echo_here'])
+    await expect(host.invoke('probe', 'echo', { request_id: 'wrong-platform', arguments: { value: 'x' } }))
+      .rejects.toMatchObject({ code: 'capability_unavailable' })
+    await host.stop()
+  })
+
   it('exports only explicit MCP tools and rejects duplicate names', async () => {
     const exported = { ...plugin, runtime_kind: 'native-host' as const,
       entry_path: '/does-not-exist/native-entry.mjs', capabilities: plugin.capabilities.map((capability) => ({
