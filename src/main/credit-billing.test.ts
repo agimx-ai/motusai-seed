@@ -135,6 +135,41 @@ describe('generic Cloud relay client', () => {
     const secondChunk = await client.nextRelayStream(input.plugin_id, stream_id)
     expect(Buffer.from(secondChunk.chunk!, 'base64').toString()).toBe(second)
     expect(await client.nextRelayStream(input.plugin_id, stream_id)).toEqual({ done: true })
+    expect(await client.nextRelayStream(input.plugin_id, stream_id)).toEqual({ done: true })
+    await expect(client.nextRelayStream('com.other.plugin', stream_id)).rejects.toThrow()
+    await client.closeAllRelayStreams()
+  })
+
+  it('treats concurrent reads that arrive at EOF as the same completed stream', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) { controller.close() },
+    }), { headers: { 'Content-Type': 'text/event-stream' } })))
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    const input = { call_id: 'a9505c1e-9f5d-4658-a3e1-594a8bab2432', plugin_id: 'com.example.plugin',
+      capability_id: 'hosted_models', method: 'complete', payload: { model: 'example/model', stream: true } }
+    const { stream_id } = await client.startRelayStream(input)
+
+    await expect(Promise.all([
+      client.nextRelayStream(input.plugin_id, stream_id),
+      client.nextRelayStream(input.plugin_id, stream_id),
+    ])).resolves.toEqual([{ done: true }, { done: true }])
+    await expect(client.nextRelayStream(input.plugin_id, stream_id)).resolves.toEqual({ done: true })
+    await client.closeAllRelayStreams()
+  })
+
+  it('makes close idempotent and treats a late owner read as completed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start() {},
+    }), { headers: { 'Content-Type': 'text/event-stream' } })))
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    const input = { call_id: 'a9505c1e-9f5d-4658-a3e1-594a8bab2432', plugin_id: 'com.example.plugin',
+      capability_id: 'hosted_models', method: 'complete', payload: { model: 'example/model', stream: true } }
+    const { stream_id } = await client.startRelayStream(input)
+
+    await expect(client.closeRelayStream(input.plugin_id, stream_id)).resolves.toEqual({ closed: true })
+    await expect(client.closeRelayStream(input.plugin_id, stream_id)).resolves.toEqual({ closed: false })
+    await expect(client.nextRelayStream(input.plugin_id, stream_id)).resolves.toEqual({ done: true })
+    await expect(client.nextRelayStream('com.other.plugin', stream_id)).rejects.toThrow()
     await client.closeAllRelayStreams()
   })
 

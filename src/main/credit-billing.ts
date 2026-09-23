@@ -45,6 +45,7 @@ export function relayBillingModelId(billingProduct: unknown, payload: Record<str
 }
 
 const relaySchema = z.object({ payload: z.unknown() })
+const RELAY_STREAM_TERMINAL_TTL_MS = 60_000
 const relayModelsSchema = z.array(z.object({
   model_id: z.string(), display_name: z.string(), badge: z.string().nullable(),
   icon_data_url: z.string().nullable(),
@@ -69,11 +70,47 @@ export class CreditBillingClient {
     packageId: string; reader: ReadableStreamDefaultReader<Uint8Array>;
     controller: AbortController; timer: ReturnType<typeof setTimeout>
   }>()
+  private readonly terminalRelayStreams = new Map<string, {
+    packageId: string; timer: ReturnType<typeof setTimeout>
+  }>()
 
   constructor(private readonly cloudUrl: string, private readonly accessToken: AccessTokenProvider) {}
 
   private shouldRefreshAccessToken(response: Response, body: Record<string, unknown> | null) {
     return response.status === 401 && body?.code === 'invalid_token'
+  }
+
+  private rememberTerminalRelayStream(packageId: string, streamId: string) {
+    const previous = this.terminalRelayStreams.get(streamId)
+    if (previous) clearTimeout(previous.timer)
+    const timer = setTimeout(() => { this.terminalRelayStreams.delete(streamId) }, RELAY_STREAM_TERMINAL_TTL_MS)
+    timer.unref()
+    this.terminalRelayStreams.set(streamId, { packageId, timer })
+  }
+
+  private terminalRelayStreamOwnedBy(packageId: string, streamId: string) {
+    const terminal = this.terminalRelayStreams.get(streamId)
+    if (!terminal) return false
+    if (terminal.packageId !== packageId) throw new Error('云转发流不存在或不属于该插件。')
+    return true
+  }
+
+  private completeRelayStream(packageId: string, streamId: string) {
+    const stream = this.relayStreams.get(streamId)
+    if (stream?.packageId === packageId) {
+      this.relayStreams.delete(streamId)
+      clearTimeout(stream.timer)
+    }
+    this.rememberTerminalRelayStream(packageId, streamId)
+  }
+
+  private async expireRelayStream(packageId: string, streamId: string) {
+    const stream = this.relayStreams.get(streamId)
+    if (!stream || stream.packageId !== packageId) return
+    this.relayStreams.delete(streamId)
+    clearTimeout(stream.timer)
+    stream.controller.abort()
+    await stream.reader.cancel().catch(() => undefined)
   }
 
   private async request<T>(path: string, schema: z.ZodType<T>, options: RequestInit = {}, timeoutMs = 15_000): Promise<T> {
@@ -157,18 +194,23 @@ export class CreditBillingClient {
       throw new Error('云转发没有返回事件流。')
     }
     const streamId = randomUUID()
-    const timer = setTimeout(() => { void this.closeRelayStream(input.plugin_id, streamId) }, 10 * 60_000)
+    const timer = setTimeout(() => { void this.expireRelayStream(input.plugin_id, streamId) }, 10 * 60_000)
+    timer.unref()
     this.relayStreams.set(streamId, { packageId: input.plugin_id, reader: response.body.getReader(), controller, timer })
     return { stream_id: streamId }
   }
 
   async nextRelayStream(packageId: string, streamId: string) {
     const stream = this.relayStreams.get(streamId)
-    if (!stream || stream.packageId !== packageId) throw new Error('云转发流不存在或不属于该插件。')
+    if (!stream) {
+      if (this.terminalRelayStreamOwnedBy(packageId, streamId)) return { done: true }
+      throw new Error('云转发流不存在或不属于该插件。')
+    }
+    if (stream.packageId !== packageId) throw new Error('云转发流不存在或不属于该插件。')
     try {
       const part = await stream.reader.read()
       if (part.done) {
-        await this.closeRelayStream(packageId, streamId)
+        this.completeRelayStream(packageId, streamId)
         return { done: true }
       }
       return { done: false, chunk: Buffer.from(part.value).toString('base64') }
@@ -180,9 +222,11 @@ export class CreditBillingClient {
 
   async closeRelayStream(packageId: string, streamId: string) {
     const stream = this.relayStreams.get(streamId)
-    if (!stream || stream.packageId !== packageId) return { closed: false }
+    if (!stream) return { closed: false }
+    if (stream.packageId !== packageId) return { closed: false }
     this.relayStreams.delete(streamId)
     clearTimeout(stream.timer)
+    this.rememberTerminalRelayStream(packageId, streamId)
     stream.controller.abort()
     await stream.reader.cancel().catch(() => undefined)
     return { closed: true }
@@ -190,6 +234,8 @@ export class CreditBillingClient {
 
   async closeAllRelayStreams() {
     await Promise.all([...this.relayStreams].map(([id, stream]) => this.closeRelayStream(stream.packageId, id)))
+    for (const terminal of this.terminalRelayStreams.values()) clearTimeout(terminal.timer)
+    this.terminalRelayStreams.clear()
   }
 
   models(input: { plugin_id: string; capability_id: string; method: string }) {
