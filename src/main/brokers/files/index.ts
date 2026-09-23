@@ -40,9 +40,29 @@ function withDisplayPaths(
   if (!root) return result
   const relativePath = typeof argumentsValue.path === 'string' ? argumentsValue.path : ''
   const destinationPath = typeof argumentsValue.destination_path === 'string' ? argumentsValue.destination_path : ''
+  const value = result as Record<string, unknown>
+  const absoluteItemPath = (item: unknown) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item
+    const record = item as Record<string, unknown>
+    return typeof record.path === 'string'
+      ? { ...record, path: resolve(root.rootPath, record.path) }
+      : item
+  }
   return {
     ...result,
     display_path: resolve(root.rootPath, relativePath),
+    ...(method === 'list' && Array.isArray(value.entries)
+      ? { entries: value.entries.map(absoluteItemPath) }
+      : {}),
+    ...(method === 'find' && Array.isArray(value.paths)
+      ? { paths: value.paths.map((path) => typeof path === 'string' ? resolve(root.rootPath, path) : path) }
+      : {}),
+    ...(method === 'search' && Array.isArray(value.results)
+      ? { results: value.results.map(absoluteItemPath) }
+      : {}),
+    ...(method === 'grep' && Array.isArray(value.matches)
+      ? { matches: value.matches.map(absoluteItemPath) }
+      : {}),
     ...(method === 'move' && destinationPath
       ? { destination_display_path: resolve(root.rootPath, destinationPath) }
       : {}),

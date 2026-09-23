@@ -31,7 +31,7 @@ Seed 是通用插件宿主，不是插件业务逻辑的集合。插件专属能
 
 ## Agent 工具命名门禁
 
-任何新增或修改 `agent.tool: true` 的能力方法，都必须同时审计 Agent 最终看到的名称、描述和参数。显式 `agent.tool_name` 必须使用小写稳定名称，采用“动作 + 明确对象”，例如 `read_file`、`search_file_contents`、`request_folder_access`；禁止使用脱离上下文后含义不清的 `read`、`search`、`run`、`roots` 等名称。工作区文件、临时附件、网页、Office 和 Skill 私有资源必须使用不同名称，不得让一个工具根据路径猜测资源类型。
+任何新增或修改 `agent.tool: true` 的能力方法，都必须同时审计 Agent 最终看到的名称、描述和参数。显式 `agent.tool_name` 必须使用小写稳定名称，采用“动作 + 明确对象”，例如 `read_file`、`search_file_contents`、`list_filesystem_roots`；禁止使用脱离上下文后含义不清的 `read`、`search`、`run`、`roots` 等名称。工作区文件、临时附件、网页、Office 和 Skill 私有资源必须使用不同名称，不得让一个工具根据路径猜测资源类型。
 
 最终工具名必须在所有已安装插件及 Agent 自身内置工具之间全局唯一。非法名称或重名必须在创建 Agent 运行时直接失败，不得静默改名、覆盖或保留旧名称 fallback。工具名变化后，必须同步提供方 capability annotation、消费方提示词、替代/路由规则、文档、测试和插件版本，并检查全仓旧名称残留。
 

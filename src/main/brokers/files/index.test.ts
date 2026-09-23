@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { SeedInvocation } from '@motusai/seed-sdk'
@@ -52,5 +52,37 @@ describe('FileBroker', () => {
     const result = await broker.invoke('read', invocation('notes.txt')) as Record<string, unknown>
 
     expect(result.display_path).toBe(join(root, 'notes.txt'))
+    expect(result.path).toBe(relative(filesystemRoots()[0]!.rootPath, join(root, 'notes.txt')))
+  })
+
+  it('returns absolute file paths from list and find for reuse by other tools', async () => {
+    await writeFile(join(root, '印刷企业进销存.xlsx'), 'test workbook')
+
+    const listed = await broker.invoke('list', invocation('')) as {
+      entries: Array<{ path: string }>
+    }
+    const found = await broker.invoke('find', {
+      ...invocation(''),
+      arguments: { ...invocation('').arguments, pattern: '*.xlsx' },
+    }) as { paths: string[] }
+
+    expect(listed.entries).toEqual([expect.objectContaining({
+      path: join(root, '印刷企业进销存.xlsx'),
+    })])
+    expect(found.paths).toEqual([join(root, '印刷企业进销存.xlsx')])
+  })
+
+  it('returns absolute paths for content-search matches too', async () => {
+    await writeFile(join(root, 'notes.txt'), '印刷企业进销存')
+    const canonicalPath = await realpath(join(root, 'notes.txt'))
+
+    const result = await broker.invoke('grep', {
+      ...invocation(''),
+      arguments: { ...invocation('').arguments, pattern: '印刷企业进销存', literal: true },
+    }) as { matches: Array<{ path: string }> }
+
+    expect(result.matches).toEqual([expect.objectContaining({
+      path: canonicalPath,
+    })])
   })
 })
