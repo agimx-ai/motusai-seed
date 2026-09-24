@@ -32,7 +32,6 @@ type Field = SeedPluginConfiguration['fields'][number]
 type Profile = Record<string, string> & { id: string }
 
 const configuredSecretMask = '••••••••••••••••••••••••'
-const inputClass = 'h-9 rounded-[10px] border border-input bg-card px-3 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/35'
 const fieldSpanClass: Record<Field['span'], string> = {
   small: 'flex-[0_1_calc(33.333%-0.5rem)] max-[760px]:flex-[1_1_100%]',
   default: 'flex-[1_1_calc(50%-0.375rem)] max-[760px]:flex-[1_1_100%]',
@@ -99,7 +98,7 @@ function ConfiguredSecretInput({ configured, field, required, value, onChange }:
   const [editing, setEditing] = useState(false)
   useEffect(() => { if (configured && !value) setEditing(false) }, [configured, value])
   return <input
-    className={inputClass}
+    className="seed-text-input"
     type="text"
     required={required && !configured}
     maxLength={field.maxLength}
@@ -256,7 +255,7 @@ function FieldControl({ pluginId, configurationId, field, fields, values, config
         />
       : field.type === 'textarea'
         ? <TextAreaControl required={required} maxLength={field.maxLength} value={values[field.key] || ''} placeholder={field.placeholder ? resolveSeedLocalizedText(field.placeholder, locale) : t('plugins.inputPlaceholder')} onChange={(event) => update(event.target.value)} />
-        : <input className={inputClass} type={field.type === 'url' ? 'url' : 'text'} required={required} maxLength={field.maxLength} value={values[field.key] || ''} placeholder={field.placeholder ? resolveSeedLocalizedText(field.placeholder, locale) : t('plugins.inputPlaceholder')} autoComplete="off" onChange={(event) => update(event.target.value)} />
+        : <input className="seed-text-input" type={field.type === 'url' ? 'url' : 'text'} required={required} maxLength={field.maxLength} value={values[field.key] || ''} placeholder={field.placeholder ? resolveSeedLocalizedText(field.placeholder, locale) : t('plugins.inputPlaceholder')} autoComplete="off" onChange={(event) => update(event.target.value)} />
   const renderedControl = bleedControl
     ? <div className="-mx-4 w-[calc(100%+2rem)] [&_button]:px-4 [&_input]:px-4 [&_textarea]:px-4">{control}</div>
     : control

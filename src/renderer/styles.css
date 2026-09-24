@@ -120,6 +120,13 @@
     --radius-control: 10px;
     --radius-card: 12px;
     --radius-panel: 16px;
+    --action-button-height: 30px;
+    --action-button-font-size: 14px;
+    --action-button-icon-size: 14px;
+    --action-button-pencil-scale: 0.7;
+    --text-input-height: 36px;
+    --text-input-font-size: 13px;
+    --text-input-padding-x: 12px;
 
     font-family: var(--app-font-sans);
     color: var(--color-text-primary);
@@ -496,6 +503,65 @@
 }
 
 @layer components {
+  .seed-text-input {
+    height: var(--text-input-height);
+    border: 1px solid var(--input);
+    border-radius: var(--radius-control);
+    background: var(--card);
+    padding-inline: var(--text-input-padding-x);
+    color: var(--foreground);
+    font-size: var(--text-input-font-size);
+    outline: none;
+    transition: border-color 150ms;
+  }
+
+  .seed-text-input:not(input) {
+    display: flex;
+    align-items: center;
+  }
+
+  .seed-text-input:focus-within {
+    border-color: var(--color-focus-ring);
+  }
+
+  .seed-text-input::placeholder,
+  .seed-text-input > input::placeholder {
+    color: var(--muted-foreground);
+  }
+
+  .seed-text-input > input {
+    height: 100%;
+    min-width: 0;
+    flex: 1;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    outline: none;
+  }
+
+  .seed-text-input > span {
+    margin-right: 4px;
+    color: var(--muted-foreground);
+  }
+
+  .seed-action-button {
+    height: var(--action-button-height);
+    border-radius: var(--radius-control);
+    font-size: var(--action-button-font-size);
+  }
+
+  .seed-action-button > svg {
+    width: var(--action-button-icon-size);
+    height: var(--action-button-icon-size);
+    flex: none;
+  }
+
+  .seed-action-button > .lucide-pencil {
+    transform: scale(var(--action-button-pencil-scale));
+  }
+
   .seedling-mascot-button {
     --bloub-size: clamp(176px, 22vw, 208px);
     display: inline-grid;

@@ -394,7 +394,7 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
         </FieldLabel>
         {field.type === 'textarea'
           ? <TextAreaControl rows={field.maxLength > 4_096 ? 14 : 4} maxLength={field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={dialogValues[field.key] || ''} onChange={(event) => setDialogValues((current) => ({ ...current, [field.key]: event.target.value }))} />
-          : <input className="h-9 rounded-[10px] border border-input bg-card px-3 text-[13px] outline-none transition focus:border-foreground/35" maxLength={field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={dialogValues[field.key] || ''} onChange={(event) => setDialogValues((current) => ({ ...current, [field.key]: event.target.value }))} />}
+          : <input className="seed-text-input" maxLength={field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={dialogValues[field.key] || ''} onChange={(event) => setDialogValues((current) => ({ ...current, [field.key]: event.target.value }))} />}
       </label>)}</div>}
     </ConfirmDialog>}
   </section>
