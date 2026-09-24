@@ -5,7 +5,7 @@ import { app, BrowserWindow, powerSaveBlocker, shell } from 'electron'
 import { z } from 'zod'
 import { buildConfig } from '../shared/build-config.generated'
 import { isCreditAmount } from '../shared/credit-amount'
-import type { AppUpdateState, AuditQueryInput, LocalClientAuthorization, MascotState, PluginCapabilityApprovalRequest, SeedCatalogPage, SeedCatalogPlugin, SeedDistribution, SeedDistributionEvent, SeedEvent, SeedInstalledPlugin, SeedLanguagePreference, SeedPluginRuntimeDefinition, SeedSnapshot, SeedThemePreference, TerminalLogUploadProgress, TerminalLogUploadRange, TerminalUserProfile, UpdatePluginConfigurationInput, WorkerEvent } from '../shared/contracts'
+import type { AppUpdateState, AuditQueryInput, LocalClientAuthorization, MascotState, PluginCapabilityApprovalRequest, SeedCatalogPage, SeedCatalogPlugin, SeedDistribution, SeedDistributionEvent, SeedEvent, SeedInstalledPlugin, SeedLanguagePreference, SeedPluginRuntimeDefinition, SeedSnapshot, SeedThemePreference, TerminalLogUploadProgress, TerminalLogUploadRange, TerminalUserProfile, UpdatePluginConfigurationInput, UpdateProfileInput, WorkerEvent } from '../shared/contracts'
 import { resolveSeedLocale } from './i18n/locale'
 import { pluginConfigurationKey } from '../shared/contracts'
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation'
@@ -18,9 +18,11 @@ import {
   exchangeCloudAuthorizationCode,
   openCloudAuthorization,
   parseCloudAuthorizationCallback,
+  readCloudUser,
   refreshCloudCredential,
   revokeCloudCredential,
   stateMatches,
+  updateCloudUser,
 } from './cloud-auth'
 import { FileBroker } from './brokers/files'
 import { AudioService } from './audio-service'
@@ -1101,6 +1103,39 @@ export class SeedRuntime {
 
   queryUsage() {
     return this.store.queryUsage()
+  }
+
+  async readProfile(): Promise<TerminalUserProfile> {
+    return this.requestProfile(readCloudUser)
+  }
+
+  async updateProfile(input: UpdateProfileInput): Promise<TerminalUserProfile> {
+    return this.requestProfile((distribution, accessToken) => updateCloudUser(distribution, accessToken, input))
+  }
+
+  private async requestProfile(request: (distribution: SeedDistribution, accessToken: string) => Promise<TerminalUserProfile>) {
+    const distribution = await this.currentDistribution()
+    const accessToken = await this.cloudAccessToken()
+    let user: TerminalUserProfile
+    try {
+      user = await request(distribution, accessToken)
+    } catch (error) {
+      if (!cloudSessionWasRejected(error)) throw error
+      user = await request(distribution, await this.cloudAccessToken(accessToken))
+    }
+    await this.rememberProfile(user)
+    return user
+  }
+
+  private async rememberProfile(user: TerminalUserProfile) {
+    const session = this.store.cloudSession()
+    if (!session || session.user.id !== user.id) throw new Error('登录会话已改变。')
+    if (session.user.displayName === user.displayName
+      && session.user.username === user.username
+      && session.user.avatarDataUrl === user.avatarDataUrl) return
+    await this.store.setCloudSession({ ...session, user })
+    this.user = user
+    await this.publishSnapshot()
   }
 
   async uploadLogs(input: TerminalLogUploadRange) {

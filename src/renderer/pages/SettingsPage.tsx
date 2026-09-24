@@ -73,8 +73,7 @@ export function SettingsPage({ snapshot, themePreference, resolvedTheme, onTheme
             {update.status === 'checking' ? t('settings.checkingUpdate') : t('settings.checkForUpdates')}
           </ActionButton>
 
-  return <section className="mx-auto w-full max-w-[730px] animate-[rise_.25s_ease_both]">
-    <h1 className="mb-8 mt-0 text-[24px] font-medium tracking-[-.02em]">{t('settings.title')}</h1>
+  return <section className="mx-auto w-full max-w-[730px] pt-7 animate-[rise_.25s_ease_both]">
     <section className="mb-12">
       <h2 className="mb-4 text-[16px] font-medium">{t('settings.connectionAndPermissions')}</h2>
       <div className="rounded-[14px] border border-border bg-card px-5">
@@ -83,7 +82,7 @@ export function SettingsPage({ snapshot, themePreference, resolvedTheme, onTheme
       </div>
     </section>
     <section>
-      <h2 className="mb-4 text-[16px] font-medium">{t('settings.general')}</h2>
+      <h2 className="mb-4 text-[16px] font-medium">{t('nav.general')}</h2>
       <div className="rounded-[14px] border border-border bg-card px-5">
         <SettingsRow title={t('settings.theme')} description={t('settings.currentTheme', { theme: resolvedTheme === 'dark' ? t('settings.themeDark') : t('settings.themeLight') })} action={<SegmentedControl value={themePreference} options={themeOptions} onValueChange={onThemeChange} label={t('settings.theme')} />} />
         <SettingsRow title={t('settings.language')} description={t('settings.languageDescription')} action={<SelectControl label={t('settings.language')} value={languagePreference} options={languageOptions} onValueChange={setLanguagePreference} />} />

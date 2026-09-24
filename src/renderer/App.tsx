@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import type { SeedCatalogPage } from '../shared/contracts'
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest'
 import { AppHeader } from './layouts/AppHeader'
+import { ProfileEditDialog } from './components/ProfileEditDialog'
 import { Sidebar } from './layouts/Sidebar'
 import { AppLogo } from './components/AppBrand'
 import { ShimmerIcon } from './components/Shimmer'
@@ -35,6 +36,7 @@ export default function App() {
   const presentationThemePreference = !snapshot?.user ? 'system' : themePreference
   const { resolvedTheme } = useTheme(presentationThemePreference)
   const [view, setView] = useState<View>('overview')
+  const [profileEditing, setProfileEditing] = useState(false)
   const [pluginQuery, setPluginQuery] = useState('')
   const [pluginSearchResults, setPluginSearchResults] = useState<SeedCatalogPage>()
   const [pluginSearchLoading, setPluginSearchLoading] = useState(false)
@@ -243,6 +245,8 @@ export default function App() {
         refreshing={busy === 'plugin-catalog-refresh'}
         onBackToPlugins={backToPlugins}
         onRefreshPlugins={() => void refreshPlugins(true)}
+        onEditProfile={() => setProfileEditing(true)}
+        onAddCredits={() => void run('open-personal-wallet', (api) => api.openPersonalWallet())}
         activityActions={view === 'activity' ? <ActivityActions
           uploading={busy === 'upload-logs'}
           uploadProgress={logUploadProgress}
@@ -251,7 +255,7 @@ export default function App() {
           onCancelUploadLogs={cancelLogUpload}
         /> : undefined}
       />
-      <main className={`h-full min-h-0 min-w-0 overflow-auto px-8 pb-16 max-[980px]:px-6 ${view === 'activity' || view === 'plugins' ? 'pt-0' : 'pt-4'}`}>
+      <main className={`h-full min-h-0 min-w-0 overflow-auto px-8 pb-16 max-[980px]:px-6 ${view === 'overview' ? 'pt-4' : 'pt-0'}`}>
         {view === 'overview' && <OverviewPage snapshot={snapshot} />}
         {view === 'plugins' && <PluginsPage
           appName={snapshot.appName}
@@ -293,12 +297,13 @@ export default function App() {
         />}
         {view === 'usage' && <UsagePage
           plugins={plugins}
-          onAddCredits={() => void run('open-personal-wallet', (api) => api.openPersonalWallet())}
+          user={snapshot.user}
         />}
       </main>
       </section>
     </div>
     {globalToaster}
     {capabilityAuthDialog}
+    {profileEditing && <ProfileEditDialog user={snapshot.user} onClose={() => setProfileEditing(false)} />}
   </>
 }

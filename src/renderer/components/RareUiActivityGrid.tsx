@@ -76,18 +76,16 @@ function toWeeks(contributions: ActivityContribution[]) {
 }
 
 function toMonthLabels(weeks: ActivityContribution[][], monthNames: string[], rangeStart?: string, rangeEnd?: string) {
-  const labels: Array<string | null> = weeks.map(() => null)
+  const labels: Array<{ label: string; start: number; span: number }> = []
   const monthAt = (index: number) => {
-    const week = weeks[index]
-    const day = rangeStart && rangeEnd
-      ? week?.find((item) => item.date >= rangeStart && item.date <= rangeEnd)
-      : week?.[0]
-    return day?.date.slice(5, 7)
+    const days = weeks[index]?.filter((day) => !rangeStart || !rangeEnd || (day.date >= rangeStart && day.date <= rangeEnd)) ?? []
+    return days[Math.floor(days.length / 2)]?.date.slice(5, 7)
   }
   let start = 0
   for (let index = 1; index <= weeks.length; index += 1) {
     if (index < weeks.length && monthAt(index) === monthAt(start)) continue
-    if (index - start >= MIN_LABEL_WEEKS) labels[start] = monthNames[Number(monthAt(start)) - 1] ?? null
+    const label = monthNames[Number(monthAt(start)) - 1]
+    if (index - start >= MIN_LABEL_WEEKS && label) labels.push({ label, start, span: index - start })
     start = index
   }
   return labels
@@ -187,9 +185,11 @@ export function RareUiActivityGrid({
       animate={{ opacity: 1, filter: 'blur(0px)' }}
       transition={{ ...LABEL_REVEAL, delay: reduceMotion ? 0 : sweepEnd }}
     >
-      {toMonthLabels(visible, monthNames, rangeStart, rangeEnd).map((month, index) => <div className="relative h-3 min-w-0" key={index}>
-        {month && <span className="absolute left-0 top-0 whitespace-nowrap text-[10px] leading-none text-muted-foreground">{month}</span>}
-      </div>)}
+      {toMonthLabels(visible, monthNames, rangeStart, rangeEnd).map(({ label: month, start, span }) => <span
+        className="h-3 min-w-0 whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground"
+        key={start}
+        style={{ gridColumn: `${start + 1} / span ${span}` }}
+      >{month}</span>)}
     </motion.div>}
 
     <AnimatePresence>

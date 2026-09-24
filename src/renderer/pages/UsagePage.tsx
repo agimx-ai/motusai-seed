@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus } from 'lucide-react'
-import type { SeedInstalledPlugin, UsageDay, UsageSummary } from '../../shared/contracts'
-import { ActionButton } from '../components/ActionButton'
+import type { SeedInstalledPlugin, TerminalUserProfile, UsageDay, UsageSummary } from '../../shared/contracts'
+import { UserAvatar } from '../components/UserAvatar'
 import { PluginIcon } from '../components/PluginIcon'
 import { RareUiActivityGrid, type ActivityContribution } from '../components/RareUiActivityGrid'
 import { useSeedI18n } from '../i18n'
@@ -37,12 +36,16 @@ function usageLevel(value: number, maximum: number) {
   return Math.min(4, Math.max(1, Math.ceil(value / maximum * 4)))
 }
 
-export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlugin[]; onAddCredits: () => void }) {
+export function UsagePage({ plugins, user }: { plugins: SeedInstalledPlugin[]; user: TerminalUserProfile }) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const [summary, setSummary] = useState<UsageSummary>()
   const [error, setError] = useState(false)
   const usageRequest = useRef(0)
+
+  useEffect(() => {
+    void window.motusSeed.readProfile().catch(() => undefined)
+  }, [user.id])
 
   const loadUsage = useCallback(async () => {
     const request = ++usageRequest.current
@@ -99,33 +102,21 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
       day.setDate(day.getDate() - leadingDays + index)
       return { date: localDateKey(day), count: 0, level: 0 as const }
     })
-    const trailingDays = 6 - usage.end.getDay()
-    const trailing = Array.from({ length: trailingDays }, (_, index) => {
-      const day = new Date(usage.end)
-      day.setDate(day.getDate() + index + 1)
-      return { date: localDateKey(day), count: 0, level: 0 as const }
-    })
     return [...empty, ...usage.days.map((day) => ({
       date: day.date,
       count: day.creditsCharged,
       level: usageLevel(day.creditsCharged, usage.peakCredits) as 0 | 1 | 2 | 3 | 4,
-    })), ...trailing]
+    }))]
   }, [usage])
 
-  return <section className="mx-auto w-full max-w-[920px] animate-[rise_.25s_ease_both]">
-    <div className="mb-4">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="m-0 text-[24px] font-medium tracking-[-.02em]">{t('usage.title')}</h1>
-        <ActionButton className="translate-y-1" icon={<Plus size={14} />} tone="primary" onClick={onAddCredits}>
-          {t('nav.addCredits')}
-        </ActionButton>
-      </div>
-      <p className="mb-0 mt-1 text-[12px] text-muted-foreground">{t('usage.description')}</p>
+  return <section className="mx-auto w-full max-w-[920px] pt-7 animate-[rise_.25s_ease_both]">
+    <div className="mb-9 flex flex-col items-center text-center">
+      <UserAvatar className="grid size-20 place-items-center overflow-hidden rounded-full bg-muted text-[25px] text-foreground" imageUrl={user.avatarDataUrl} name={user.displayName} />
+      <div className="mt-3 text-[22px] font-medium tracking-[-.02em]">{user.displayName}</div>
+      {user.username && <div className="mt-1 text-[13px] text-muted-foreground">@{user.username}</div>}
     </div>
-
     {error ? <div className="rounded-[14px] border border-border bg-card px-5 py-8 text-center text-[13px] text-muted-foreground">{t('usage.loadFailed')}</div>
-      : !usage ? <div className="h-[280px] animate-pulse rounded-[14px] bg-muted/60" />
-        : <>
+      : usage ? <>
           <div className="grid grid-cols-5 rounded-[14px] border border-border bg-card px-3 py-5">
             {[
               [number.format(usage.totalCredits), t('usage.totalCredits')],
@@ -180,6 +171,6 @@ export function UsagePage({ plugins, onAddCredits }: { plugins: SeedInstalledPlu
               })}
             </div> : <p className="mb-0 mt-3 text-[12px] text-muted-foreground">{t('usage.noPluginUsage')}</p>}
           </section>
-        </>}
+        </> : null}
   </section>
 }

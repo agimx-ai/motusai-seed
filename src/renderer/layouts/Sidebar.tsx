@@ -1,11 +1,12 @@
-import { ArrowLeft, Bell, Blocks, CircleGauge, CircleHelp, History, LoaderCircle, LogOut, Settings, Sprout, X } from 'lucide-react'
+import { ArrowLeft, Bell, Blocks, CircleGauge, CircleHelp, History, LoaderCircle, LogOut, Settings, Sprout, UserRound, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SeedSnapshot } from '../../shared/contracts'
 import { NavItem } from '../components/NavItem'
+import { UserAvatar } from '../components/UserAvatar'
 import { SidebarToggleButton } from '../components/SidebarToggleButton'
 import { Tooltip } from '../components/Tooltip'
-import { cx, initials, type View } from '../lib/display'
+import { cx, type View } from '../lib/display'
 
 const accountMenuSurfaceClass = 'seed-account-menu absolute bottom-[50px] left-3 right-3 origin-bottom overflow-hidden rounded-[12px] border p-1'
 
@@ -162,7 +163,7 @@ export function Sidebar({
         <span className="mb-2 px-1 text-[12px] font-medium text-muted-foreground">{t('nav.personal')}</span>
         <nav className="grid gap-0.5">
           <NavItem active={view === 'settings'} icon={<Settings size={17} strokeWidth={1.8} />} label={t('nav.general')} onClick={() => navigate('settings')} />
-          <NavItem active={view === 'usage'} icon={<CircleGauge size={17} strokeWidth={1.8} />} label={t('nav.usage')} onClick={() => navigate('usage')} />
+          <NavItem active={view === 'usage'} icon={<UserRound size={17} strokeWidth={1.8} />} label={t('nav.profile')} onClick={() => navigate('usage')} />
         </nav>
       </> : <>
         <nav className="grid gap-0.5">
@@ -189,7 +190,12 @@ export function Sidebar({
             </div>
           </div>}
           {accountMenuOpen && <div ref={accountMenuRef} id="account-menu" className={`${accountMenuSurfaceClass} animate-[rise_.12s_ease-out_both]`} role="menu">
-            <div className="flex h-8 items-center gap-2 border-b border-[var(--sidebar-menu-divider)] px-2 text-[11px]"><span className="grid h-5 w-5 place-items-center overflow-hidden rounded-full bg-[#8d9899] text-[8px] text-white dark:bg-[#718086]">{avatar ? <img className="h-full w-full object-cover" src={avatar} alt="" /> : initials(displayName)}</span><span className="truncate">{displayName}</span></div>
+            <div className="border-b border-[var(--sidebar-menu-divider)] pb-1">
+              <button className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[11px] text-foreground transition-colors hover:bg-[var(--sidebar-item-active)] focus-visible:bg-[var(--sidebar-item-active)] focus-visible:outline-none" type="button" role="menuitem" aria-label={`${displayName} · ${t('nav.profile')}`} onClick={() => navigate('usage')}>
+                <UserAvatar className="grid h-5 w-5 place-items-center overflow-hidden rounded-full bg-[#8d9899] text-[8px] text-white dark:bg-[#718086]" imageUrl={avatar} name={displayName} />
+                <span className="truncate">{displayName}</span>
+              </button>
+            </div>
             <div className="py-1">
               <button className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px] text-foreground transition hover:bg-[var(--sidebar-item-active)]" type="button" role="menuitem" onClick={() => navigate('usage')}>
                 <CircleGauge size={12} />
@@ -215,9 +221,7 @@ export function Sidebar({
               aria-controls="account-menu"
               aria-haspopup="menu"
             >
-              <span className="grid h-6 w-6 place-items-center overflow-hidden rounded-full bg-[#8d9899] text-[9px] font-medium text-white dark:bg-[#718086]" aria-hidden="true">
-                {avatar ? <img className="h-full w-full object-cover" src={avatar} alt="" /> : initials(displayName)}
-              </span>
+              <UserAvatar className="grid h-6 w-6 place-items-center overflow-hidden rounded-full bg-[#8d9899] text-[9px] font-medium text-white dark:bg-[#718086]" imageUrl={avatar} name={displayName} />
               <strong className="block truncate text-[13px] font-normal">{displayName}</strong>
             </button>
             <UpdateControl

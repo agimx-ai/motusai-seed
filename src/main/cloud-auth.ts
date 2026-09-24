@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { shell } from 'electron'
 import { z } from 'zod'
-import type { SeedDistribution, TerminalUserProfile } from '../shared/contracts'
+import type { SeedDistribution, TerminalUserProfile, UpdateProfileInput } from '../shared/contracts'
 
 const tokenResponseSchema = z.object({
   access_token: z.string().min(43),
@@ -70,6 +70,7 @@ function userProfile(value: z.infer<typeof userResponseSchema>): TerminalUserPro
   return {
     id: value.id,
     displayName: value.name,
+    username: value.username,
     ...(value.avatar ? { avatarDataUrl: value.avatar } : {}),
   }
 }
@@ -114,12 +115,30 @@ export async function openCloudAuthorization(start: CloudAuthorizationStart) {
   await shell.openExternal(start.authorizationUrl)
 }
 
-async function readCloudUser(distribution: SeedDistribution, accessToken: string): Promise<TerminalUserProfile> {
+async function cloudUserRequest(distribution: SeedDistribution, accessToken: string, body?: string): Promise<TerminalUserProfile> {
   const response = await fetch(distribution.auth.userinfo_endpoint, {
-    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    method: body ? 'PATCH' : 'GET',
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body } : {}),
     redirect: 'error',
   })
   return userProfile(userResponseSchema.parse(await responseJson(response)))
+}
+
+export function readCloudUser(distribution: SeedDistribution, accessToken: string): Promise<TerminalUserProfile> {
+  return cloudUserRequest(distribution, accessToken)
+}
+
+export async function updateCloudUser(
+  distribution: SeedDistribution,
+  accessToken: string,
+  input: UpdateProfileInput,
+): Promise<TerminalUserProfile> {
+  return cloudUserRequest(distribution, accessToken, JSON.stringify({
+    name: input.displayName,
+    username: input.username,
+    ...(input.avatarDataUrl ? { avatar_data_url: input.avatarDataUrl } : {}),
+  }))
 }
 
 async function tokenRequest(distribution: SeedDistribution, body: URLSearchParams) {

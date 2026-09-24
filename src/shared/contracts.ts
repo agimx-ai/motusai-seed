@@ -130,9 +130,12 @@ export type TerminalLogUploadProgress = {
 export type TerminalUserProfile = {
   id: string
   displayName: string
+  username?: string
   email?: string
   avatarDataUrl?: string
 }
+
+export type UpdateProfileInput = { displayName: string; username: string; avatarDataUrl?: string }
 
 export type AuditOutcome = 'allowed' | 'denied' | 'failed' | 'running' | 'interrupted'
 export type AuditCategory = 'all' | 'capabilities' | 'permissions' | 'plugins' | 'system'
@@ -400,6 +403,8 @@ export type SeedApi = {
   logout(): Promise<void>
   openWebsite(): Promise<void>
   openPersonalWallet(): Promise<void>
+  readProfile(): Promise<TerminalUserProfile>
+  updateProfile(input: UpdateProfileInput): Promise<TerminalUserProfile>
   revokePluginCapabilityGrant(id: string): Promise<void>
   respondPluginCapabilityApproval(requestId: string, allowed: boolean): Promise<void>
   setLaunchAtLogin(enabled: boolean): Promise<boolean>
@@ -447,6 +452,8 @@ export const ipcChannels = {
   logout: 'seed:account:logout',
   openWebsite: 'seed:distribution:open-website',
   openPersonalWallet: 'seed:credits:open-personal-wallet',
+  readProfile: 'seed:account:read-profile',
+  updateProfile: 'seed:account:update-profile',
   revokePluginCapabilityGrant: 'seed:plugins:revoke-capability-grant',
   respondPluginCapabilityApproval: 'seed:plugins:respond-capability-approval',
   launchAtLogin: 'seed:settings:launch-at-login',

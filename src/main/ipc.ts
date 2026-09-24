@@ -28,6 +28,12 @@ export function registerIpc(runtime: SeedRuntime) {
   handle(ipcChannels.logout, () => runtime.logout())
   handle(ipcChannels.openWebsite, () => runtime.openWebsite())
   handle(ipcChannels.openPersonalWallet, () => runtime.openPersonalWallet())
+  handle(ipcChannels.readProfile, () => runtime.readProfile())
+  handle(ipcChannels.updateProfile, (_event, input) => runtime.updateProfile(z.object({
+    displayName: z.string().trim().min(1).max(120),
+    username: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{2,79}$/),
+    avatarDataUrl: z.string().max(512_000).startsWith('data:image/webp;base64,').optional(),
+  }).strict().parse(input)))
   handle(ipcChannels.revokePluginCapabilityGrant, (_event, id) => runtime.revokePluginCapabilityGrant(z.string().uuid().parse(id)))
   handle(ipcChannels.respondPluginCapabilityApproval, (_event, requestId, allowed) => runtime.respondPluginCapabilityApproval(
     z.string().uuid().parse(requestId),
