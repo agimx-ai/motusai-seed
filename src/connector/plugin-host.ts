@@ -729,6 +729,14 @@ export class SeedPluginHost {
         dispose: () => registration.dispose(),
       }
     }
+    const listCapabilities = async () => this.nativeExecution === 'local' && this.runtimeChanged
+      ? await invokeRuntimeHost('seed.native.capabilities.list', {}) as Awaited<ReturnType<typeof this.consumedCapabilities>>
+      : this.consumedCapabilities(plugin)
+    const invokeCapability = async (invocation: SeedPluginCapabilityInvocation) => this.nativeExecution === 'local' && this.runtimeChanged
+      ? await invokeRuntimeHost('seed.native.capabilities.invoke', {
+        invocation: { ...invocation, signal: undefined }, chain: this.invocationChain.getStore() || [],
+      })
+      : this.invokeConsumedCapability(plugin, invocation)
     return {
       package: {
         package_id: plugin.package_id,
@@ -745,14 +753,31 @@ export class SeedPluginHost {
       },
       capabilities: {
         register: registerCapability,
-        list: async () => this.nativeExecution === 'local' && this.runtimeChanged
-          ? await invokeRuntimeHost('seed.native.capabilities.list', {}) as Awaited<ReturnType<typeof this.consumedCapabilities>>
-          : this.consumedCapabilities(plugin),
-        invoke: async (invocation) => this.nativeExecution === 'local' && this.runtimeChanged
-          ? await invokeRuntimeHost('seed.native.capabilities.invoke', {
-            invocation: { ...invocation, signal: undefined }, chain: this.invocationChain.getStore() || [],
-          })
-          : this.invokeConsumedCapability(plugin, invocation),
+        list: listCapabilities,
+        invoke: invokeCapability,
+        stream: async function* (invocation) {
+          const available = await listCapabilities()
+          const offered = available.filter((entry) => entry.id === invocation.capability
+            && (!invocation.provider_plugin_id || entry.provider_plugin_id === invocation.provider_plugin_id))
+          if (offered.length !== 1 || offered[0]?.methods.find((method) => method.name === invocation.method
+            && method.risk === 'read' && method.annotations?.['seed.stream'] === true) === undefined) {
+            throw Object.assign(new Error('能力未声明只读事件流方法。'), { code: 'capability_stream_unavailable' })
+          }
+          let after = 0
+          while (!invocation.signal?.aborted) {
+            const response = await invokeCapability({ ...invocation, arguments: {
+              ...invocation.arguments, after, wait_ms: 10_000,
+            } })
+            if (invocation.signal?.aborted) return
+            const page = response && typeof response === 'object' ? response as { events?: unknown; next?: unknown } : {}
+            if (!Array.isArray(page.events) || typeof page.next !== 'number' || page.next < after
+              || (page.events.length > 0 && page.next === after)) {
+              throw new Error('流式能力必须返回 { events, next } 游标结果。')
+            }
+            for (const event of page.events) yield event
+            after = page.next
+          }
+        },
       },
       configuration: {
         register: registerConfiguration,

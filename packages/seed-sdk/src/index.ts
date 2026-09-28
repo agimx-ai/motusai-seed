@@ -6,6 +6,7 @@ export {
 export {
   SeedLocalEventStream,
   type SeedLocalEventResponseOptions,
+  type SeedLocalEventWaitOptions,
   type SeedLocalEventPublishOptions,
   type SeedLocalEventStreamOptions,
 } from './local-event-stream.js'
@@ -168,6 +169,12 @@ export type SeedPluginCapabilityInvocation = {
 export type SeedPluginCapabilityService = {
   list(): Promise<SeedAvailableCapability[]>
   invoke(invocation: SeedPluginCapabilityInvocation): Promise<unknown>
+  /**
+   * Iterate a declared read method annotated `seed.stream: true`.
+   * The provider returns `{ events, next }` for `after` and `wait_ms` arguments;
+   * Seed transports those events unchanged and the consumer decides how to use them.
+   */
+  stream?(invocation: SeedPluginCapabilityInvocation): AsyncIterable<unknown>
 }
 
 export type SeedLocalApiRoute = {

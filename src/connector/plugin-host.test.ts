@@ -895,6 +895,45 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
     }
   })
 
+  it('streams only annotated read methods through the existing capability broker', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'seed-capability-stream-'))
+    const dataRoot = join(directory, 'plugin-data')
+    const providerEntry = join(directory, 'provider.mjs')
+    const consumerEntry = join(directory, 'consumer.mjs')
+    await writeFile(providerEntry, [
+      'export function apply(context) {',
+      "  context.effect(() => context.capabilities.register('probe', { invoke: async (method, call) => ({",
+      "    events: [{ id: 1, event: { type: 'assistant.delta', text: 'hello' } }], next: 1,",
+      '  }) }))',
+      '}',
+    ].join('\n'))
+    await writeFile(consumerEntry, [
+      "import { writeFile } from 'node:fs/promises'",
+      "import { join } from 'node:path'",
+      'export async function apply(context) {',
+      '  const received = []',
+      "  for await (const event of context.capabilities.stream({ provider_plugin_id: 'com.example.provider', capability: 'probe', method: 'events', arguments: {} })) { received.push(event); break }",
+      "  await writeFile(join(context.package.data_path, 'events.json'), JSON.stringify(received))",
+      '}',
+    ].join('\n'))
+    try {
+      const provider: SeedPluginRuntimeDefinition = { ...plugin, package_id: 'com.example.provider', runtime_kind: 'native-host',
+        entry_path: providerEntry, capabilities: [{ id: 'probe', version: 1, exposure: 'plugin', methods: [
+          { name: 'events', risk: 'read', annotations: { 'seed.stream': true } },
+        ] }] }
+      const consumer: SeedPluginRuntimeDefinition = { ...plugin, package_id: 'com.example.consumer', runtime_kind: 'native-host',
+        entry_path: consumerEntry, capabilities: [], consumes: [{ capability: 'probe', methods: ['events'] }] }
+      const host = new SeedPluginHost({ configuration: () => ({ type: 'configure', appVersion: '1.0.0', locale: 'en-US',
+        backupRoot: join(directory, 'backups'), pluginDataRoot: dataRoot, plugins: [] }), invoke_host: async () => null })
+      await host.start([provider, consumer])
+      expect(JSON.parse(await readFile(join(dataRoot, consumer.package_id, 'events.json'), 'utf8')))
+        .toEqual([{ id: 1, event: { type: 'assistant.delta', text: 'hello' } }])
+      await host.stop()
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('discovers interchangeable providers and requires an exact provider when their contracts overlap', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'seed-multiple-providers-'))
     const dataRoot = join(directory, 'plugin-data')

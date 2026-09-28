@@ -12,6 +12,13 @@ export type SeedLocalEventResponseOptions<T> = {
   ready?: unknown
 }
 
+export type SeedLocalEventWaitOptions<T> = {
+  after?: number
+  filter?: (data: T) => boolean
+  timeoutMs?: number
+  signal?: AbortSignal
+}
+
 export type SeedLocalEventPublishOptions = {
   replay?: boolean
   dropWhenBackpressured?: boolean
@@ -26,7 +33,9 @@ type SeedLocalEventSubscriber<T> = {
 
 export class SeedLocalEventStream<T = unknown> {
   private readonly subscribers = new Set<SeedLocalEventSubscriber<T>>()
+  private readonly listeners = new Set<(entry: SeedLocalEvent<T> | null) => void>()
   private readonly history: SeedLocalEvent<T>[] = []
+  private readonly transientHistory: SeedLocalEvent<T>[] = []
   private readonly encoder = new TextEncoder()
   private readonly historyLimit: number
   private readonly heartbeatIntervalMs: number
@@ -50,6 +59,11 @@ export class SeedLocalEventStream<T = unknown> {
     if (this.historyLimit > 0 && options.replay !== false) {
       this.history.push(entry)
       if (this.history.length > this.historyLimit) this.history.splice(0, this.history.length - this.historyLimit)
+    } else if (this.historyLimit > 0) {
+      // Keep a bounded cursor gap buffer for plugin readers without replaying
+      // transient deltas to reconnecting SSE clients.
+      this.transientHistory.push(entry)
+      if (this.transientHistory.length > this.historyLimit) this.transientHistory.shift()
     }
     for (const subscriber of this.subscribers) {
       if (!subscriber.filter || subscriber.filter(value)) {
@@ -62,7 +76,34 @@ export class SeedLocalEventStream<T = unknown> {
         }
       }
     }
+    for (const listener of this.listeners) listener(entry)
     return id
+  }
+
+  /** Read the same event envelopes used by SSE, waiting for a live event when replay has none. */
+  async waitFor(options: SeedLocalEventWaitOptions<T> = {}): Promise<Array<{ id: number; event: string; data: T }>> {
+    const after = Number.isFinite(options.after) ? Math.max(0, Number(options.after)) : 0
+    const available = [...this.history, ...this.transientHistory]
+      .filter((entry) => entry.id > after && (!options.filter || options.filter(entry.data)))
+      .sort((left, right) => left.id - right.id)
+    if (available.length || options.signal?.aborted) return available
+    return await new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const cleanup = () => {
+        if (timer) clearTimeout(timer)
+        this.listeners.delete(listener)
+        options.signal?.removeEventListener('abort', abort)
+      }
+      const listener = (entry: SeedLocalEvent<T> | null) => {
+        if (entry && (entry.id <= after || (options.filter && !options.filter(entry.data)))) return
+        cleanup()
+        resolve(entry ? [entry] : [])
+      }
+      const abort = () => listener(null)
+      this.listeners.add(listener)
+      options.signal?.addEventListener('abort', abort, { once: true })
+      timer = setTimeout(() => listener(null), Math.max(0, Math.min(30_000, options.timeoutMs ?? 15_000)))
+    })
   }
 
   response(signalOrOptions?: AbortSignal | SeedLocalEventResponseOptions<T>) {
@@ -114,6 +155,7 @@ export class SeedLocalEventStream<T = unknown> {
   }
 
   close() {
+    for (const listener of this.listeners) listener(null)
     for (const subscriber of this.subscribers) {
       clearInterval(subscriber.heartbeat)
       try { subscriber.controller.close() } catch { /* already closed */ }
@@ -127,6 +169,7 @@ export class SeedLocalEventStream<T = unknown> {
 
   clearHistory() {
     this.history.length = 0
+    this.transientHistory.length = 0
   }
 
   private enqueue(controller: ReadableStreamDefaultController<Uint8Array>, entry: SeedLocalEvent<T>) {

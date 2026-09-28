@@ -43,4 +43,22 @@ describe('SeedLocalEventStream', () => {
     await reader.cancel()
     events.close()
   })
+
+  it('delivers the same live event data to a capability reader without changing SSE replay', async () => {
+    const events = new SeedLocalEventStream<{ run_id: string; text: string }>({ heartbeatIntervalMs: 60_000 })
+    const waiting = events.waitFor({ after: 0, filter: (entry) => entry.run_id === 'run-1', timeoutMs: 1_000 })
+    events.publish({ run_id: 'other', text: 'ignore' }, 'assistant.delta', { replay: false })
+    events.publish({ run_id: 'run-1', text: 'hello' }, 'assistant.delta', { replay: false })
+    expect(await waiting).toEqual([{ id: 2, event: 'assistant.delta', data: { run_id: 'run-1', text: 'hello' } }])
+    events.publish({ run_id: 'run-1', text: ' world' }, 'assistant.delta', { replay: false })
+    expect(await events.waitFor({ after: 2, filter: (entry) => entry.run_id === 'run-1' }))
+      .toEqual([{ id: 3, event: 'assistant.delta', data: { run_id: 'run-1', text: ' world' } }])
+
+    const response = events.response()
+    const reader = response.body!.getReader()
+    const first = new TextDecoder().decode((await reader.read()).value)
+    expect(first).not.toContain('hello')
+    await reader.cancel()
+    events.close()
+  })
 })
