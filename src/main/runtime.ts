@@ -195,6 +195,7 @@ export class SeedRuntime {
     ['seed.shell.open-path', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.shell.open-path', argumentsValue)],
     ['seed.audio', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.audio', argumentsValue)],
     ['seed.configuration', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.configuration', argumentsValue)],
+    ['seed.management.text', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.management.text', argumentsValue)],
     ['seed.local-client.authorize', async (argumentsValue) => {
       const pluginId = String(argumentsValue.package_id || '')
       const clientId = String(argumentsValue.client_id || '')
@@ -1521,6 +1522,25 @@ export class SeedRuntime {
   }
 
   private async invokePluginBroker(packageId: string, service: string, argumentsValue: Record<string, unknown>): Promise<unknown> {
+    if (service === 'seed.management.text') {
+      const update = z.object({
+        view_id: z.string().min(1).max(100), value_path: z.string().min(1).max(200),
+        stream_id: z.string().min(1).max(200), operation: z.enum(['append', 'replace']),
+        text: z.string().max(1_048_576), offset: z.number().int().nonnegative().optional(),
+      }).strict().parse(Object.fromEntries(Object.entries(argumentsValue).filter(([key]) => key !== 'package_id')))
+      if (update.operation === 'append' && update.offset === undefined) throw new Error('增量文本缺少偏移量。')
+      const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)
+      const view = this.pluginContributions.get(packageId)?.managementViews.find((candidate) => candidate.id === update.view_id)
+      if (!plugin || !view || view.renderer !== 'seed.panel' || !Array.isArray(view.props.blocks) || !view.props.blocks.some((block: unknown) =>
+        Boolean(block && typeof block === 'object' && 'type' in block && block.type === 'markdown'
+          && 'value_path' in block && block.value_path === update.value_path))) {
+        throw new Error('插件只能更新自身已声明的 Markdown 区块。')
+      }
+      this.emit({ type: 'plugin.management.text', pluginId: packageId, viewId: update.view_id,
+        valuePath: update.value_path, streamId: update.stream_id, operation: update.operation,
+        text: update.text, offset: update.offset })
+      return null
+    }
     if (service === 'seed.cloud.relay' || service === 'seed.cloud.models' ||
       ['seed.cloud.relay.stream.start', 'seed.cloud.relay.stream.next', 'seed.cloud.relay.stream.close'].includes(service)) {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)

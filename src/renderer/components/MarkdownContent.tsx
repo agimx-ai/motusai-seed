@@ -1,9 +1,9 @@
-import ReactMarkdown from 'react-markdown'
+import { Streamdown } from 'streamdown'
 import { Tooltip } from './Tooltip'
 
-export function MarkdownContent({ children }: { children: string }) {
+export function MarkdownContent({ children, streaming = false }: { children: string; streaming?: boolean }) {
   return <div className="text-[13px] leading-6 text-foreground">
-    <ReactMarkdown components={{
+    <Streamdown mode={streaming ? 'streaming' : 'static'} components={{
       h1: ({ children }) => <h1 className="mb-3 mt-0 text-[20px] font-semibold">{children}</h1>,
       h2: ({ children }) => <h2 className="mb-2 mt-6 text-[16px] font-semibold">{children}</h2>,
       h3: ({ children }) => <h3 className="mb-2 mt-5 text-[14px] font-semibold">{children}</h3>,
@@ -18,6 +18,6 @@ export function MarkdownContent({ children }: { children: string }) {
           <span className="text-accent underline underline-offset-2">{children}</span>
         </Tooltip>
       ),
-    }}>{children}</ReactMarkdown>
+    }}>{children}</Streamdown>
   </div>
 }

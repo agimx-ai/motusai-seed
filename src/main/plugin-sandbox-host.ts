@@ -52,6 +52,7 @@ function requiredPermissions(service: string, argumentsValue: Record<string, unk
     return null
   }
   if (service === 'seed.configuration') return []
+  if (service === 'seed.management.text') return []
   if (service === 'seed.cloud.relay' || service === 'seed.cloud.models' ||
     ['seed.cloud.relay.stream.start', 'seed.cloud.relay.stream.next', 'seed.cloud.relay.stream.close'].includes(service)) return ['cloud.relay']
   if (service === 'seed.plugin.audit' || service === 'seed.plugin.diagnostic') return []

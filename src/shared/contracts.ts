@@ -373,6 +373,7 @@ export type PersonalCreditGrantPage = {
 export type SeedEvent =
   | { type: 'snapshot.changed'; snapshot: SeedSnapshot }
   | { type: 'logs.upload.progress'; progress: TerminalLogUploadProgress | null }
+  | { type: 'plugin.management.text'; pluginId: string; viewId: string; valuePath: string; streamId: string; operation: 'append' | 'replace'; text: string; offset?: number }
 
 export type SeedApi = {
   snapshot(): Promise<SeedSnapshot>

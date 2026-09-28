@@ -72,6 +72,7 @@ type CollectionProps = {
 type PanelProps = {
   blocks: Array<
     | { type: 'text'; value_path: string; label?: SeedLocalizedText }
+    | { type: 'markdown'; value_path: string; stream_id_path?: string; streaming_when?: { path: string; in: Array<string | number | boolean | null> }; label?: SeedLocalizedText }
     | { type: 'status'; state_path: string; label_path?: string; states: Record<string, SeedLocalizedText> }
     | { type: 'image' | 'qr'; data_url_path: string; alt?: SeedLocalizedText }
     | { type: 'progress'; value_path: string; max: number; label?: SeedLocalizedText }
@@ -82,6 +83,12 @@ function valueAt(value: unknown, path: string) {
   return path.split('.').filter(Boolean).reduce<unknown>((current, key) => (
     current && typeof current === 'object' && !Array.isArray(current) ? (current as Record<string, unknown>)[key] : undefined
   ), value)
+}
+
+function withValueAt(value: unknown, path: string, text: string): unknown {
+  const [head, ...tail] = path.split('.').filter(Boolean)
+  if (!head || !value || typeof value !== 'object' || Array.isArray(value)) return value
+  return { ...value, [head]: tail.length ? withValueAt((value as Record<string, unknown>)[head], tail.join('.'), text) : text }
 }
 
 function conditionMatches(condition: { path: string; in: Array<string | number | boolean | null> } | undefined, value: unknown) {
@@ -142,6 +149,9 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   const [previewMenuOpen, setPreviewMenuOpen] = useState(false)
   const [actionResult, setActionResult] = useState<{ action: ManagementAction; value: unknown }>()
   const previewPanelRef = useRef<HTMLDivElement>(null)
+  const loadRevisionRef = useRef(0)
+  const viewRef = useRef(view)
+  viewRef.current = view
   const dragDepthRef = useRef(0)
   const chooseInlineFileRef = useRef<(() => void) | null>(null)
   const previewMenuOpenRef = useRef(false)
@@ -149,13 +159,48 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   previewMenuOpenRef.current = previewMenuOpen
   dialogOpenRef.current = Boolean(dialogAction)
   const load = useCallback(async (quiet = false) => {
+    const revision = ++loadRevisionRef.current
     if (!quiet) setLoading(true)
     setError('')
-    try { setValue(await query({ pluginId, viewId: view.id })) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
-    finally { if (!quiet) setLoading(false) }
+    try {
+      const next = await query({ pluginId, viewId: view.id })
+      if (revision !== loadRevisionRef.current) return
+      setValue((previous: unknown) => {
+        const currentView = viewRef.current
+        if (currentView.renderer !== 'seed.panel') return next
+        let merged = next
+        for (const block of (currentView.props as PanelProps).blocks) {
+          if (block.type !== 'markdown' || !block.stream_id_path || !conditionMatches(block.streaming_when, next)) continue
+          if (valueAt(previous, block.stream_id_path) !== valueAt(next, block.stream_id_path)) continue
+          const current = valueAt(previous, block.value_path)
+          const snapshot = valueAt(next, block.value_path)
+          if (typeof current === 'string' && typeof snapshot === 'string' && current.startsWith(snapshot)) {
+            merged = withValueAt(merged, block.value_path, current)
+          }
+        }
+        return merged
+      })
+    }
+    catch (cause) { if (revision === loadRevisionRef.current) setError(cause instanceof Error ? cause.message : String(cause)) }
+    finally { if (revision === loadRevisionRef.current) setLoading(false) }
   }, [pluginId, query, view.id])
   useEffect(() => { void load() }, [load])
+  useEffect(() => window.motusSeed.subscribe((event) => {
+    const currentView = viewRef.current
+    if (event.type !== 'plugin.management.text' || event.pluginId !== pluginId || event.viewId !== currentView.id || currentView.renderer !== 'seed.panel') return
+    const block = (currentView.props as PanelProps).blocks.find((candidate) => candidate.type === 'markdown' && candidate.value_path === event.valuePath)
+    if (!block || block.type !== 'markdown' || !block.stream_id_path) return
+    setValue((previous: unknown) => {
+      if (valueAt(previous, block.stream_id_path!) !== event.streamId) return previous
+      const current = valueAt(previous, event.valuePath)
+      if (typeof current !== 'string') return previous
+      if (event.operation === 'replace') return withValueAt(previous, event.valuePath, event.text)
+      const offset = event.offset
+      if (offset === undefined || offset > current.length) return previous
+      if (offset < current.length) return previous
+      return withValueAt(previous, event.valuePath, current + event.text)
+    })
+  }), [pluginId, view.id])
   useEffect(() => { setInlineValues({}); setInlineFileError(''); setViewDragging(false); dragDepthRef.current = 0 }, [pluginId, view.id])
   useEffect(() => {
     if (!view.refreshIntervalMs) return
@@ -327,6 +372,14 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
       return <div className="py-3 first:pt-0 last:pb-0" key={index}>
         {block.label && <span className="block text-[11px] text-muted-foreground">{resolveSeedLocalizedText(block.label, locale)}</span>}
         <span className="mt-0.5 block whitespace-pre-wrap break-words text-[13px] text-foreground">{content}</span>
+      </div>
+    }
+    if (block.type === 'markdown') {
+      const content = String(valueAt(value, block.value_path) ?? '')
+      if (!content.trim()) return null
+      return <div className="py-3 first:pt-0 last:pb-0" key={index}>
+        {block.label && <span className="block text-[11px] text-muted-foreground">{resolveSeedLocalizedText(block.label, locale)}</span>}
+        <MarkdownContent streaming={Boolean(block.streaming_when && conditionMatches(block.streaming_when, value))}>{content}</MarkdownContent>
       </div>
     }
     if (block.type === 'status') {

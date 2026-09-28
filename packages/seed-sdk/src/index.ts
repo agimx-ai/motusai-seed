@@ -253,6 +253,8 @@ export type SeedConfigurationOption = {
 export type SeedManagementRegistry = {
   /** Contributes a management view for this plugin Fiber. */
   registerView(view: Record<string, unknown>): () => void | Promise<void>
+  /** Publishes an incremental text update for a declared Markdown block. */
+  publishText(update: { view_id: string; value_path: string; stream_id: string; operation: 'append' | 'replace'; text: string; offset?: number }): Promise<void>
 }
 
 export type SeedBackgroundTask = {

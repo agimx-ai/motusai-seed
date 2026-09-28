@@ -792,7 +792,18 @@ export class SeedPluginHost {
           })
         },
       },
-      management: { registerView: registerManagementView },
+      management: {
+        registerView: registerManagementView,
+        publishText: async (update) => {
+          const view = this.managementViews.get(plugin.package_id)?.get(update.view_id)
+          if (!view || view.renderer !== 'seed.panel' || !Array.isArray(view.props.blocks) || !view.props.blocks.some((block: unknown) =>
+            Boolean(block && typeof block === 'object' && 'type' in block && block.type === 'markdown'
+              && 'value_path' in block && block.value_path === update.value_path))) {
+            throw new Error('插件只能更新自身已声明的 Markdown 区块。')
+          }
+          await invokeRuntimeHost('seed.management.text', update)
+        },
+      },
       localApi: { register: registerLocalApi },
       tasks: {
         start: startTask,

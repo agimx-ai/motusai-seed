@@ -84,7 +84,10 @@ runtimeBridge.onConfigure(async (configuration: PluginConfiguration) => {
               get: async () => { throw new Error('配置贡献需要 native-host 运行时。') },
               registerOptionsResolver: () => { throw new Error('动态配置选项需要 native-host 运行时。') },
             },
-            management: { registerView: () => { throw new Error('管理视图贡献需要 native-host 运行时。') } },
+            management: {
+              registerView: () => { throw new Error('管理视图贡献需要 native-host 运行时。') },
+              publishText: async () => { throw new Error('管理视图贡献需要 native-host 运行时。') },
+            },
             localApi: { register: () => { throw new Error('本地 HTTP API 需要 native-host 运行时。') } },
             tasks: {
               start: startTask,

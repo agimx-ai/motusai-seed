@@ -131,6 +131,16 @@ export class NativePluginManager {
       return
     }
     if (event.type === 'host.invoke') {
+      if (event.service === 'seed.management.text') {
+        try {
+          const result = await this.invokeBroker(packageId, event.service, event.arguments)
+          if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: true, result } satisfies NativePluginCommand)
+        } catch (error) {
+          if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: false,
+            error: error instanceof Error ? error.message : String(error), errorCode: 'native_broker_error' } satisfies NativePluginCommand)
+        }
+        return
+      }
       const started = performance.now()
       const trace = { trace_id: event.trace?.trace_id || randomUUID(), span_id: randomUUID(),
         ...(event.trace ? { parent_span_id: event.trace.span_id } : {}) }

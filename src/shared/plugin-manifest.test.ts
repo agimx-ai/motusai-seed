@@ -209,6 +209,14 @@ describe('plugin dynamic configuration options schema', () => {
 })
 
 describe('plugin management view schema', () => {
+  it('accepts a generic streaming Markdown panel block', () => {
+    const view = seedPluginManagementViewSchema.parse({
+      id: 'report', renderer: 'seed.panel', title: text('Report'), description: text('Report'),
+      props: { blocks: [{ type: 'markdown', value_path: 'result', stream_id_path: 'run.id', streaming_when: { path: 'state', in: ['pending'] } }] },
+    })
+    expect(view.props.blocks).toMatchObject([{ type: 'markdown', value_path: 'result', stream_id_path: 'run.id' }])
+  })
+
   it('supports a generic inline form and view-level file drop target', () => {
     const panel = {
       id: 'draft', renderer: 'seed.panel', title: text('Draft'), description: text('Draft'),

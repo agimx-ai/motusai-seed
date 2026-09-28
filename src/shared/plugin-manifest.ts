@@ -461,6 +461,7 @@ const seedPluginCollectionPropsSchema = z.object({
 
 const seedPluginPanelBlockSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), value_path: z.string().min(1).max(200), label: seedLocalizedTextSchema(100).optional() }).strict(),
+  z.object({ type: z.literal('markdown'), value_path: z.string().min(1).max(200), stream_id_path: z.string().min(1).max(200).optional(), streaming_when: seedPluginManagementConditionSchema.optional(), label: seedLocalizedTextSchema(100).optional() }).strict(),
   z.object({ type: z.literal('status'), state_path: z.string().min(1).max(200), label_path: z.string().min(1).max(200).optional(), states: z.record(z.string(), seedLocalizedTextSchema(100)).default({}) }).strict(),
   z.object({ type: z.enum(['image', 'qr']), data_url_path: z.string().min(1).max(200), alt: seedLocalizedTextSchema(100).optional() }).strict(),
   z.object({ type: z.literal('progress'), value_path: z.string().min(1).max(200), max: z.number().positive().default(100), label: seedLocalizedTextSchema(100).optional() }).strict(),
