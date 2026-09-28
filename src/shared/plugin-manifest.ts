@@ -342,19 +342,31 @@ const seedPluginManagementConditionSchema = z.object({
 
 const seedPluginManagementInputFieldSchema = z.object({
   key: identifier,
-  type: z.enum(['text', 'textarea']),
+  type: z.enum(['text', 'textarea', 'password', 'email', 'url', 'number', 'date', 'select', 'checkbox', 'file', 'files']),
   label: seedLocalizedTextSchema(100),
   description: seedLocalizedTextSchema(300).optional(),
   help_url: z.string().url().max(2_048).regex(/^https:\/\//, '帮助链接必须使用 HTTPS。').optional(),
   placeholder: seedLocalizedTextSchema(200).optional(),
   required: z.boolean().default(false),
   max_length: z.number().int().min(1).max(65_536).default(2_048),
+  min_value: z.number().finite().optional(),
+  max_value: z.number().finite().optional(),
+  options: z.array(z.object({ value: z.string().min(1).max(200), label: seedLocalizedTextSchema(100) }).strict()).min(1).max(32).optional(),
+  accept: z.array(z.string().regex(/^\.[a-zA-Z0-9]+$/)).min(1).max(16).optional(),
   initial_value_path: z.string().min(1).max(200).optional(),
 }).strict().superRefine((field, context) => {
   if (field.help_url && !field.description) context.addIssue({ code: 'custom', path: ['help_url'], message: '帮助链接必须同时声明字段说明。' })
-}).transform(({ max_length, help_url, initial_value_path, ...field }) => ({
+  if (field.type === 'select' && !field.options?.length) context.addIssue({ code: 'custom', path: ['options'], message: '选择字段必须声明选项。' })
+  if (field.type !== 'select' && field.options) context.addIssue({ code: 'custom', path: ['options'], message: '只有选择字段可以声明选项。' })
+  if (field.type !== 'file' && field.type !== 'files' && field.accept) context.addIssue({ code: 'custom', path: ['accept'], message: '只有文件字段可以声明扩展名。' })
+  if (field.type !== 'number' && (field.min_value !== undefined || field.max_value !== undefined)) context.addIssue({ code: 'custom', path: ['min_value'], message: '只有数字字段可以声明数值范围。' })
+  if (field.min_value !== undefined && field.max_value !== undefined && field.min_value > field.max_value) context.addIssue({ code: 'custom', path: ['max_value'], message: '最大值不能小于最小值。' })
+  if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) context.addIssue({ code: 'custom', path: ['options'], message: '选择字段不能有重复选项。' })
+}).transform(({ max_length, min_value, max_value, help_url, initial_value_path, ...field }) => ({
   ...field,
   maxLength: max_length,
+  minValue: min_value,
+  maxValue: max_value,
   helpUrl: help_url,
   initialValuePath: initial_value_path,
 }))

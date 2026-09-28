@@ -1,7 +1,7 @@
 {
   "name": "motusai-seed",
   "productName": "MotusAI Seed",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -11,6 +11,7 @@
   "main": "dist/electron/main/index.js",
   "scripts": {
     "icons:generate": "electron scripts/generate-icons.cjs",
+    "python:prepare": "node scripts/prepare-python-runtime.mjs",
     "version:client": "node scripts/update-client-version.mjs",
     "config:dev": "node scripts/generate-build-config.mjs development",
     "config:build": "node scripts/generate-build-config.mjs production",
@@ -30,10 +31,10 @@
     "smoke:plugin-host": "npm run build && electron scripts/smoke-plugin-host.mjs",
     "smoke:native-isolation": "npm run build && electron scripts/smoke-native-isolation.mjs",
     "clean": "node scripts/clean.mjs",
-    "package": "npm run icons:generate && npm run build && electron-builder --config electron-builder.config.mjs",
-    "package:mac": "npm run icons:generate && npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.config.mjs --mac --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false && node scripts/create-update-feed.mjs",
-    "package:win": "npm run icons:generate && npm run build && electron-builder --config electron-builder.config.mjs --win --publish never && node scripts/create-update-feed.mjs",
-    "package:dir": "npm run icons:generate && npm run build && electron-builder --config electron-builder.config.mjs --dir"
+    "package": "npm run icons:generate && npm run python:prepare && npm run build && electron-builder --config electron-builder.config.mjs",
+    "package:mac": "npm run icons:generate && npm run python:prepare && npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.config.mjs --mac --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false && node scripts/create-update-feed.mjs",
+    "package:win": "npm run icons:generate && npm run python:prepare && npm run build && electron-builder --config electron-builder.config.mjs --win --publish never && node scripts/create-update-feed.mjs",
+    "package:dir": "npm run icons:generate && npm run python:prepare && npm run build && electron-builder --config electron-builder.config.mjs --dir"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

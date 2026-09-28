@@ -209,6 +209,31 @@ describe('plugin dynamic configuration options schema', () => {
 })
 
 describe('plugin management view schema', () => {
+  it('accepts common typed action fields and rejects mismatched field metadata', () => {
+    const view = {
+      id: 'form', renderer: 'seed.collection', title: text('Form'), description: text('Form'),
+      toolbar: [{ type: 'action', action_id: 'submit' }],
+      actions: [{ id: 'submit', label: text('Submit'), target: { capability: 'form', method: 'submit' }, input: {
+        title: text('Submit'), confirm_label: text('Submit'), fields: [
+          { key: 'email', type: 'email', label: text('Email'), required: true },
+          { key: 'count', type: 'number', label: text('Count'), min_value: 1, max_value: 10 },
+          { key: 'mode', type: 'select', label: text('Mode'), options: [{ value: 'one', label: text('One') }] },
+          { key: 'agree', type: 'checkbox', label: text('Agree') },
+          { key: 'document', type: 'file', label: text('Document'), accept: ['.pdf', '.docx'] },
+        ],
+      } }],
+    }
+    expect(seedPluginManagementViewSchema.parse(view).actions[0]?.input?.fields).toMatchObject([
+      { type: 'email' }, { type: 'number', minValue: 1, maxValue: 10 }, { type: 'select' }, { type: 'checkbox' }, { type: 'file', accept: ['.pdf', '.docx'] },
+    ])
+    const invalid = structuredClone(view)
+    invalid.actions[0]!.input.fields[2]!.options = []
+    expect(seedPluginManagementViewSchema.safeParse(invalid).success).toBe(false)
+    invalid.actions[0]!.input.fields[2]!.options = [{ value: 'one', label: text('One') }]
+    invalid.actions[0]!.input.fields[0]!.accept = ['.pdf']
+    expect(seedPluginManagementViewSchema.safeParse(invalid).success).toBe(false)
+  })
+
   it('parses plugin-defined actions, input fields and refresh behavior', () => {
     const view = seedPluginManagementViewSchema.parse({
       id: 'workflow',

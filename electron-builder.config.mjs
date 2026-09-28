@@ -33,6 +33,9 @@ try {
 if (!existsSync(resolve(import.meta.dirname, appIconPng))) {
   throw new Error(`Missing generated icon asset: ${appIconPng}. Run npm run icons:generate.`)
 }
+if (!existsSync(resolve(import.meta.dirname, 'resources/python'))) {
+  throw new Error('Missing bundled Python runtime. Run npm run python:prepare before packaging.')
+}
 if (process.platform === 'darwin') {
   for (const asset of [appIconIcns, appIconComposer]) {
     if (!existsSync(resolve(import.meta.dirname, asset))) {
@@ -54,6 +57,7 @@ export default {
   ],
   extraResources: [
     { from: appResources, to: 'app' },
+    { from: 'resources/python', to: 'python' },
   ],
   publish: [{ provider: 'generic', url: updateUrl, channel: publishChannel }],
   mac: {

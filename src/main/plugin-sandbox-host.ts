@@ -58,6 +58,7 @@ function requiredPermissions(service: string, argumentsValue: Record<string, unk
   if (service === 'seed.plugin-secret') return []
   if (service === 'seed.shell.open-path') return ['shell.open-path']
   if (service === 'seed.process') return ['process.sidecar']
+  if (service === 'seed.python') return ['process.python']
   if (service === 'seed.audio') {
     const operation = String(argumentsValue.operation || '')
     if (['capture.start', 'capture.pause', 'capture.resume', 'capture.segment', 'capture.stop', 'capture.cancel', 'capture.interrupt', 'capture.status', 'capture.consume', 'capture.sessions', 'capture.read', 'capture.ack', 'capture.discard'].includes(operation)) {

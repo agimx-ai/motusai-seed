@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from 'lucide-react'
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { cx } from '../lib/display'
 
 export type SelectControlOption<Value extends string> = {
@@ -15,6 +16,8 @@ type SelectControlProps<Value extends string> = {
   label: string
   className?: string
   disabled?: boolean
+  portal?: boolean
+  variant?: 'compact' | 'form'
 }
 
 export function SelectControl<Value extends string>({
@@ -24,10 +27,13 @@ export function SelectControl<Value extends string>({
   label,
   className,
   disabled = false,
+  portal = false,
+  variant = 'compact',
 }: SelectControlProps<Value>) {
   const [open, setOpen] = useState(false)
   const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom')
   const [availableHeight, setAvailableHeight] = useState<number>()
+  const [portalPosition, setPortalPosition] = useState<{ left: number; top: number; width: number; maxHeight: number }>()
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value))
   const [activeIndex, setActiveIndex] = useState(selectedIndex)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -51,6 +57,15 @@ export function SelectControl<Value extends string>({
       const nextPlacement = listbox.scrollHeight <= spaceBelow || spaceBelow >= spaceAbove ? 'bottom' : 'top'
       setPlacement(nextPlacement)
       setAvailableHeight(Math.floor(nextPlacement === 'bottom' ? spaceBelow : spaceAbove))
+      if (portal) {
+        const maxHeight = Math.floor(nextPlacement === 'bottom' ? spaceBelow : spaceAbove)
+        const width = Math.min(Math.max(triggerRect.width, listbox.scrollWidth), window.innerWidth - 16)
+        const left = Math.max(8, Math.min(triggerRect.left, window.innerWidth - width - 8))
+        const top = nextPlacement === 'top'
+          ? triggerRect.top - gap - Math.min(listbox.scrollHeight, maxHeight)
+          : triggerRect.bottom + gap
+        setPortalPosition({ left, top, width, maxHeight })
+      }
     }
 
     updatePlacement()
@@ -60,12 +75,12 @@ export function SelectControl<Value extends string>({
       window.removeEventListener('resize', updatePlacement)
       window.removeEventListener('scroll', updatePlacement, true)
     }
-  }, [open, options.length])
+  }, [open, options.length, portal])
 
   useEffect(() => {
     if (!open) return
     const dismiss = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      if (!rootRef.current?.contains(event.target as Node) && !listboxRef.current?.contains(event.target as Node)) setOpen(false)
     }
     document.addEventListener('pointerdown', dismiss)
     return () => document.removeEventListener('pointerdown', dismiss)
@@ -94,36 +109,76 @@ export function SelectControl<Value extends string>({
     requestAnimationFrame(() => triggerRef.current?.focus())
   }
 
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (!open) return
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      setOpen(false)
+      if (event.key === 'Escape' || (event.key === 'Tab' && portal)) {
+        event.preventDefault()
+        event.stopPropagation()
+        triggerRef.current?.focus()
+      }
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      move(event.key === 'ArrowDown' ? 1 : -1)
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      const indexes = options.map((_, index) => index).filter((index) => !options[index]?.disabled)
+      setActiveIndex(event.key === 'Home' ? indexes[0]! : indexes.at(-1)!)
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      choose(activeIndex)
+    }
+  }
+
+  const listbox = open && <div
+    ref={listboxRef}
+    id={listboxId}
+    className={cx(
+      'z-[110] overflow-y-auto rounded-[10px] border border-border bg-card p-1 shadow-[0_8px_24px_rgba(0,0,0,.10)]',
+      portal ? 'fixed' : 'absolute right-0 min-w-full',
+      !portal && (placement === 'top' ? 'bottom-[calc(100%+5px)] origin-bottom' : 'top-[calc(100%+5px)] origin-top'),
+    )}
+    style={portal ? { ...portalPosition, visibility: portalPosition ? 'visible' : 'hidden' } : { maxHeight: availableHeight }}
+    role="listbox"
+    aria-label={label}
+  >
+    {options.map((option, index) => <button
+      ref={(node) => { optionRefs.current[index] = node }}
+      key={option.value}
+      type="button"
+      className={cx(
+        'flex h-7 w-full items-center justify-between gap-3 whitespace-nowrap rounded-[7px] px-2 text-left text-[13px] outline-none transition-colors disabled:cursor-default disabled:opacity-45',
+        index === activeIndex ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+      )}
+      role="option"
+      aria-selected={option.value === value}
+      disabled={option.disabled}
+      tabIndex={index === activeIndex ? 0 : -1}
+      onPointerMove={() => !option.disabled && setActiveIndex(index)}
+      onClick={() => choose(index)}
+    >
+      <span>{option.label}</span>
+      {option.value === value && <Check size={13} strokeWidth={1.9} aria-hidden="true" />}
+    </button>)}
+  </div>
+
   return <div
     ref={rootRef}
     className={cx('relative inline-flex shrink-0', className)}
-    onKeyDown={(event) => {
-      if (!open) return
-      if (event.key === 'Escape' || event.key === 'Tab') {
-        setOpen(false)
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          triggerRef.current?.focus()
-        }
-        return
-      }
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        move(event.key === 'ArrowDown' ? 1 : -1)
-      } else if (event.key === 'Home' || event.key === 'End') {
-        event.preventDefault()
-        const indexes = options.map((_, index) => index).filter((index) => !options[index]?.disabled)
-        setActiveIndex(event.key === 'Home' ? indexes[0]! : indexes.at(-1)!)
-      } else if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault()
-        choose(activeIndex)
-      }
-    }}
+    onKeyDown={handleKeyDown}
   >
     <button
       ref={triggerRef}
       type="button"
-      className="inline-flex h-[30px] w-fit items-center justify-between gap-3 rounded-[10px] border border-border bg-card px-2.5 text-[13px] font-normal text-foreground outline-none transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50"
+      className={cx(
+        'inline-flex items-center justify-between gap-3 rounded-[var(--radius-control)] border bg-card font-normal text-foreground outline-none transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50',
+        variant === 'form'
+          ? 'h-[var(--text-input-height)] w-full border-input px-[var(--text-input-padding-x)] text-[var(--text-input-font-size)]'
+          : 'h-[30px] w-fit border-border px-2.5 text-[13px]',
+      )}
       aria-label={label}
       aria-haspopup="listbox"
       aria-expanded={open}
@@ -143,35 +198,6 @@ export function SelectControl<Value extends string>({
       <span className="truncate">{selected?.label}</span>
       <ChevronDown className={cx('shrink-0 text-muted-foreground transition-transform duration-150', open && 'rotate-180')} size={14} strokeWidth={1.8} aria-hidden="true" />
     </button>
-    {open && <div
-      ref={listboxRef}
-      id={listboxId}
-      className={cx(
-        'absolute right-0 z-50 min-w-full overflow-y-auto rounded-[10px] border border-border bg-card p-1 shadow-[0_8px_24px_rgba(0,0,0,.10)]',
-        placement === 'top' ? 'bottom-[calc(100%+5px)] origin-bottom' : 'top-[calc(100%+5px)] origin-top',
-      )}
-      style={{ maxHeight: availableHeight }}
-      role="listbox"
-      aria-label={label}
-    >
-      {options.map((option, index) => <button
-        ref={(node) => { optionRefs.current[index] = node }}
-        key={option.value}
-        type="button"
-        className={cx(
-          'flex h-7 w-full items-center justify-between gap-3 whitespace-nowrap rounded-[7px] px-2 text-left text-[13px] outline-none transition-colors disabled:cursor-default disabled:opacity-45',
-          index === activeIndex ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-        )}
-        role="option"
-        aria-selected={option.value === value}
-        disabled={option.disabled}
-        tabIndex={index === activeIndex ? 0 : -1}
-        onPointerMove={() => !option.disabled && setActiveIndex(index)}
-        onClick={() => choose(index)}
-      >
-        <span>{option.label}</span>
-        {option.value === value && <Check size={13} strokeWidth={1.9} aria-hidden="true" />}
-      </button>)}
-    </div>}
+    {portal ? listbox && createPortal(listbox, document.body) : listbox}
   </div>
 }

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { AuditQueryInput, InvokePluginManagementActionInput, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, QueryPluginManagementViewInput, ReconnectPluginConfigurationProfileInput, SeedApi, SeedEvent, SeedLanguagePreference, SeedThemePreference, SeedWindowApi, TerminalLogUploadRange, UpdatePluginConfigurationInput } from '../shared/contracts'
 
 const ipcChannels = {
@@ -80,6 +80,7 @@ const api: SeedApi = {
 
 const windowApi: SeedWindowApi = {
   platform: process.platform,
+  getPathForFile: (file) => webUtils.getPathForFile(file),
   reportDiagnostic: (input) => ipcRenderer.send('seed:diagnostic:renderer', input),
   minimize: () => ipcRenderer.invoke(ipcChannels.windowMinimize),
   toggleMaximize: () => ipcRenderer.invoke(ipcChannels.windowToggleMaximize),

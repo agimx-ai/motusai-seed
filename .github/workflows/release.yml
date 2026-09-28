@@ -70,6 +70,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: '0.11.14'
+
+      - name: Bundle Python runtime
+        run: npm run python:prepare
+
       - name: Build macOS package
         run: |
           npm run icons:generate
@@ -129,6 +137,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: '0.11.14'
+
+      - name: Bundle Python runtime
+        run: npm run python:prepare
 
       - name: Build Windows package
         run: |

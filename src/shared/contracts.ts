@@ -435,6 +435,7 @@ export type SeedApi = {
 
 export type SeedWindowApi = {
   platform: NodeJS.Platform
+  getPathForFile(file: File): string
   reportDiagnostic(input: { event: string; message: string; error_stack?: string; error_name?: string }): void
   minimize(): Promise<void>
   toggleMaximize(): Promise<boolean>

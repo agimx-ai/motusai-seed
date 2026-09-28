@@ -1,6 +1,7 @@
 node_modules/
 dist/
 release/
+resources/python/
 .build/
 .DS_Store
 *.log

@@ -4,14 +4,20 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { SeedPluginManagementView, SeedLocalizedText } from '../../../shared/plugin-manifest'
 import { resolveSeedLocalizedText } from '../../../shared/plugin-manifest'
+import { invalidManagementInput, managementFormArguments, type ManagementFormValues } from '../../../shared/plugin-management-form'
 import { ActionButton } from '../../components/ActionButton'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { DateInputControl } from '../../components/DateInputControl'
+import { FileInputControl } from '../../components/FileInputControl'
 import { IconButton } from '../../components/IconButton'
 import { AdaptiveIcon, ResourceCard, resourceCardGridClass } from '../../components/ResourceCard'
 import { TextAreaControl } from '../../components/TextAreaControl'
 import { Tooltip } from '../../components/Tooltip'
 import { FieldLabel } from '../../components/FieldLabel'
 import { MarkdownContent } from '../../components/MarkdownContent'
+import { SelectControl } from '../../components/SelectControl'
+import { TextInputControl } from '../../components/TextInputControl'
+import { ToggleSwitch } from '../../components/ToggleSwitch'
 import { useSeedI18n } from '../../i18n'
 
 type View = SeedPluginManagementView
@@ -124,7 +130,7 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   const [loading, setLoading] = useState(false)
   const [busyAction, setBusyAction] = useState('')
   const [dialogAction, setDialogAction] = useState<ManagementAction>()
-  const [dialogValues, setDialogValues] = useState<Record<string, string>>({})
+  const [dialogValues, setDialogValues] = useState<ManagementFormValues>({})
   const [dialogArguments, setDialogArguments] = useState<Record<string, unknown>>({})
   const [previewItem, setPreviewItem] = useState<Record<string, unknown>>()
   const [previewValue, setPreviewValue] = useState<unknown>()
@@ -195,7 +201,7 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   const statusVisible = Boolean(props.status && (!props.status.visible_states || props.status.visible_states.some((candidate) => Object.is(candidate, statusState))))
   const statusPresentation = props.status?.states?.[String(statusState ?? '')]
   const documentVisible = Boolean(props.document && props.document.visible_states.some((candidate) => Object.is(candidate, valueAt(value, props.document!.state_path))))
-  const dialogValid = useMemo(() => !dialogAction?.input || dialogAction.input.fields.every((field) => !field.required || dialogValues[field.key]?.trim()), [dialogAction, dialogValues])
+  const dialogValid = useMemo(() => !dialogAction?.input || !invalidManagementInput(dialogAction.input.fields, managementFormArguments(dialogAction.input.fields, dialogValues)), [dialogAction, dialogValues])
   const viewTitle = resolveSeedLocalizedText(view.title, locale)
 
   const run = async (action: ManagementAction, argumentsValue: Record<string, unknown> = {}) => {
@@ -222,7 +228,12 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
     const argumentsValue = itemArguments(action, item)
     if (!action.input && !action.confirmation) return void run(action, argumentsValue)
     setDialogArguments(argumentsValue)
-    setDialogValues(Object.fromEntries((action.input?.fields || []).map((field) => [field.key, String(field.initialValuePath ? valueAt(item || value, field.initialValuePath) ?? '' : '')])))
+    setDialogValues(Object.fromEntries((action.input?.fields || []).map((field) => {
+      const initial = field.initialValuePath ? valueAt(item || value, field.initialValuePath) : undefined
+      return [field.key, field.type === 'checkbox' ? initial === true
+        : field.type === 'files' ? (Array.isArray(initial) ? initial.filter((value): value is string => typeof value === 'string') : [])
+          : String(initial ?? '')]
+    })))
     setDialogAction(action)
   }
   const openPreview = async (item: Record<string, unknown>) => {
@@ -386,16 +397,40 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
       busy={busyAction === dialogAction.id}
       confirmDisabled={!dialogValid}
       onCancel={() => setDialogAction(undefined)}
-      onConfirm={() => void run(dialogAction, { ...dialogArguments, ...dialogValues })}
+      onConfirm={() => void run(dialogAction, { ...dialogArguments, ...managementFormArguments(dialogAction.input?.fields || [], dialogValues) })}
     >
-      {dialogAction.input && <div className="grid gap-4">{dialogAction.input.fields.map((field) => <label className="grid gap-1.5" key={field.key}>
-        <FieldLabel description={resolveSeedLocalizedText(field.description, locale)} helpUrl={field.helpUrl} className="text-[12px] font-medium">
-          {resolveSeedLocalizedText(field.label, locale)}
-        </FieldLabel>
-        {field.type === 'textarea'
-          ? <TextAreaControl rows={field.maxLength > 4_096 ? 14 : 4} maxLength={field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={dialogValues[field.key] || ''} onChange={(event) => setDialogValues((current) => ({ ...current, [field.key]: event.target.value }))} />
-          : <input className="seed-text-input" maxLength={field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={dialogValues[field.key] || ''} onChange={(event) => setDialogValues((current) => ({ ...current, [field.key]: event.target.value }))} />}
-      </label>)}</div>}
+      {dialogAction.input && <div className="grid max-h-[min(55vh,480px)] gap-4 overflow-y-auto">{dialogAction.input.fields.map((field) => {
+        const label = resolveSeedLocalizedText(field.label, locale)
+        const raw = dialogValues[field.key]
+        const current = typeof raw === 'string' ? raw : ''
+        const update = (next: string | string[] | boolean) => setDialogValues((values) => ({ ...values, [field.key]: next }))
+        return <div className="grid min-w-0 gap-1.5" key={field.key}>
+          {field.type !== 'checkbox' && <FieldLabel description={resolveSeedLocalizedText(field.description, locale)} helpUrl={field.helpUrl} className="text-[12px] font-medium">{label}</FieldLabel>}
+          {field.type === 'textarea'
+            ? <TextAreaControl aria-label={label} rows={field.maxLength > 4_096 ? 14 : 4} maxLength={field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={current} onChange={(event) => update(event.target.value)} />
+            : field.type === 'select'
+              ? <SelectControl portal variant="form" className="w-full" label={label} value={current}
+                  options={[{ value: '', label: resolveSeedLocalizedText(field.placeholder, locale) || t('plugins.managementSelect') }, ...(field.options || []).map((option) => ({ value: option.value, label: resolveSeedLocalizedText(option.label, locale) }))]}
+                  onValueChange={update} />
+              : field.type === 'checkbox'
+                ? <div className="flex items-start gap-2"><ToggleSwitch checked={raw === true} label={label} onClick={() => update(raw !== true)} />
+                    <span className="text-[12px] text-foreground"><span className="font-medium">{label}</span>{field.description && <span className="mt-0.5 block text-muted-foreground">{resolveSeedLocalizedText(field.description, locale)}</span>}</span></div>
+                : field.type === 'date'
+                  ? <DateInputControl label={label} locale={locale} value={current} onChange={update}
+                      placeholder={resolveSeedLocalizedText(field.placeholder, locale) || t('plugins.managementDatePlaceholder')}
+                      previousMonthLabel={t('plugins.managementDatePreviousMonth')} nextMonthLabel={t('plugins.managementDateNextMonth')}
+                      todayLabel={t('plugins.managementDateToday')} clearLabel={t('plugins.managementDateClear')} />
+                : field.type === 'file' || field.type === 'files'
+                  ? <FileInputControl label={label} value={field.type === 'files' ? (Array.isArray(raw) ? raw : []) : current} multiple={field.type === 'files'} accept={field.accept} onChange={update} getPathForFile={window.motusWindow.getPathForFile}
+                      chooseLabel={t(field.type === 'files' ? 'plugins.managementFilesChoose' : 'plugins.managementFileChoose')}
+                      dropLabel={t(field.type === 'files' ? 'plugins.managementFilesDrop' : 'plugins.managementFileDrop')}
+                      clearLabel={t('plugins.managementFileClear')}
+                      singleFileError={t('plugins.managementFileSingle')} tooManyFilesError={t('plugins.managementFilesMax')}
+                      localFileError={t('plugins.managementFileLocal')} fileTypeError={t('plugins.managementFileType')} />
+                  : <TextInputControl className="w-full" type={field.type} aria-label={label} min={field.type === 'number' ? field.minValue : undefined} max={field.type === 'number' ? field.maxValue : undefined}
+                      maxLength={field.type === 'number' ? undefined : field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={current} autoComplete="off" onChange={(event) => update(event.target.value)} />}
+        </div>
+      })}</div>}
     </ConfirmDialog>}
   </section>
 }

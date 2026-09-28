@@ -18,6 +18,8 @@ import type { SeedPlugin } from '@motusai/seed-sdk'
 
 原生工具通过 Manifest `sidecars` 声明，并由插件调用通用 `seed.process`。读写用户文件时，调用必须提供声明的 Sidecar ID、文件系统 `root_id`、相对工作目录和参数数组；纯计算工具可使用 `cwd_scope: package`，以插件包为工作目录处理插件私有资源，并且只接受 `access: read` 语义。不得自行拼接 shell 命令。平台/架构二进制、命令语义与读写方法拆分属于插件，进程与文件边界属于 Core。
 
+需要运行插件内置 Skill 的 Python 脚本时，声明 `process.python`。每个 Skill 放在 `skills/<skill-id>/`，由它自己包含 `SKILL.md`、`scripts/*.py`、`pyproject.toml` 和 `uv.lock`；打包时用 `uv export --locked` 生成带哈希的 `requirements.txt`，并将目标平台的 wheel 放入同一 Skill 的 `wheels/`。调用 `ctx.invokeHost('seed.python', { operation: 'run', request_id, script: './skills/<skill-id>/scripts/example.py', args: [] })`。Seed 优先使用宿主机兼容的 Python 3.12，否则使用随客户端打包的 Python 3.12；每个插件版本的每个 Skill 在宿主机拥有独立虚拟环境，首次运行由随客户端打包的 uv 只从该 Skill 的 wheel 离线安装。也可用 `{ operation: 'prepare', skill_id: '<skill-id>' }` 提前准备，或按 `request_id` 调用 `operation: 'cancel'` 终止运行中的脚本。虚拟环境隔离 Python 包，**不是操作系统沙箱**；插件打包时必须准备完整的目标平台 wheel，运行时不下载依赖。
+
 官方 `native-host` 主动联网时按目标范围声明 `network.connect.internet`、`network.connect.lan` 或 `network.connect.loopback`，不得使用带业务名称的网络权限。HTTP、WebSocket、TCP、MQTT 等协议、地址、认证、心跳、重连和限流都由插件实现，Seed 不代理流量，也不理解连接业务。长连接通过 `ctx.connections.register()` 登记使用的权限、传输类型和状态；插件 Fiber 卸载、重载或 Seed 退出时，框架先终止 `signal`，再调用插件提供的 `close()`。连接本身不是全局任务，不应使用 `ctx.tasks.start()` 长期占用忙碌状态。
 
 官方 `native-host` 如需向已授权的本地应用提供 HTTP/SSE 接口，必须声明 `local.http-api`，并通过 `ctx.localApi.register()` 使用 Seed 的统一 loopback 网关。插件不得自行监听端口，也不会收到 Seed Local Gateway 的原始 Bearer Token。
@@ -31,6 +33,8 @@ import type { SeedPlugin } from '@motusai/seed-sdk'
 插件在 `apply` 中通过 `ctx.configuration.register()` 贡献配置声明，并通过 `renderer` 选择 Seed 提供的声明式元渲染器；字段、布局、动作、条件和文案均由插件定义。`seed.profiles` 渲染可展开的配置档案；`seed.option-list` 把一个无需依赖其他字段的动态选项源渲染为单选列表，并把选中项保存为该配置唯一的默认档案；`seed.catalog-list` 使用相同的动态数据来源只展示目录，不保存选择或默认项。注册后使用 `ctx.configuration.get()` 读取当前值。`secret` 值只进入 Seed 安全存储，只有声明 `secret_access: owner` 的所属插件可读取自己的完整配置。
 
 插件详情中的运行时数据通过 `ctx.management.registerView()` 贡献。每个视图声明通用 renderer，并可把 `source.capability` 与 `source.method` 指向本插件的只读能力方法；Seed 在内部能力通道调用该方法，不会要求插件监听额外端口。视图还可声明 `actions`，由插件定义按钮位置、状态条件、确认表单及目标能力方法；Seed 只负责通用渲染、调用边界和审计，不解释插件业务。视图、动作与能力随 Cordis Fiber 一起装载和注销。`seed.collection` 用于插件拥有的动态集合；客户端不得按插件 ID 增加业务分支。
+
+管理动作的 `input.fields` 支持 `text`、`textarea`、`password`、`email`、`url`、`number`、`date`、`select`、`checkbox`、`file`、`files`。`select` 使用 `options: [{ value, label }]`；`number` 可声明 `min_value`、`max_value`；`file` 和 `files` 可用 `accept: ['.pdf', '.xlsx']` 限定扩展名。用户可以选择或拖入本地文件；`file` 提交一个绝对路径字符串，`files` 提交最多 32 个绝对路径的数组，均不提交文件内容。插件要读取文件时仍使用已有的宿主文件能力。数字和勾选字段分别提交为 number 和 boolean，其余非文件字段提交为 string。
 
 能力和方法可通过 `annotations` 声明可选宿主投影及 Agent 工具语义。Seed 只识别通用注解，不按能力 ID 或插件 ID 推断行为；同一包可在一个 Fiber 中注册多个能力，调用时可从 `SeedInvocation.capability` 取得当前能力 ID。
 

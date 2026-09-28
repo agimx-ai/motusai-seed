@@ -1,6 +1,6 @@
-import { isAbsolute, join, relative, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { realpath } from 'node:fs/promises'
+import { realpath, stat } from 'node:fs/promises'
 import { app, BrowserWindow, powerSaveBlocker, shell } from 'electron'
 import { z } from 'zod'
 import { buildConfig } from '../shared/build-config.generated'
@@ -11,6 +11,7 @@ import { pluginConfigurationKey } from '../shared/contracts'
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation'
 import { pluginCapabilityGrantIsDeclared } from '../shared/plugin-capabilities'
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest'
+import { invalidManagementInput } from '../shared/plugin-management-form'
 import { ConnectorManager } from './connector-manager'
 import {
   createCloudAuthorization,
@@ -38,6 +39,7 @@ import { CreditBillingClient, relayBillingModelId } from './credit-billing'
 import { ObservationStore, errorDetails } from './observation-store'
 import { carriesLocalClientCapabilityApproval, validateLocalClientCapabilityApproval } from './local-client-capability-approval'
 import { SidecarProcessService } from './sidecar-process-service'
+import { PythonEnvironmentService } from './python-environment-service'
 import { discoverDistribution } from './distribution-discovery'
 import { SeedDistributionEvents } from './distribution-events'
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization'
@@ -99,6 +101,7 @@ export class SeedRuntime {
   private readonly fileBroker: FileBroker
   private readonly audioService: AudioService
   private readonly sidecarProcessService: SidecarProcessService
+  private readonly pythonEnvironmentService: PythonEnvironmentService
   private readonly sandboxHost: SeedPluginSandboxSupervisor
   private readonly nativeHost: NativePluginManager
   private readonly updater: SeedUpdater
@@ -418,9 +421,19 @@ export class SeedRuntime {
       (packageId, event, message, details) => this.diagnostics.record({
         level: event === 'sidecar.stderr' ? 'warn' : 'error', source: 'sidecar', event, message, plugin_id: packageId, details,
       }))
+    this.pythonEnvironmentService = new PythonEnvironmentService(
+      () => this.runtimePlugins,
+      join(app.getPath('userData'), 'python-environments'),
+      app.isPackaged ? join(process.resourcesPath, 'python') : resolve(__dirname, '../../../resources/python'),
+    )
     this.hostServices.set('seed.process', async (argumentsValue) => await this.invokePluginBroker(
       String(argumentsValue.package_id || ''),
       'seed.process',
+      argumentsValue,
+    ))
+    this.hostServices.set('seed.python', async (argumentsValue) => await this.invokePluginBroker(
+      String(argumentsValue.package_id || ''),
+      'seed.python',
       argumentsValue,
     ))
     this.audioService = new AudioService(() => {
@@ -1053,6 +1066,14 @@ export class SeedRuntime {
       ...(action.input?.fields.map((field) => field.key) || []),
     ])
     if (Object.keys(input.arguments).some((key) => !allowedArguments.has(key))) throw new Error('插件管理动作参数无效。')
+    const invalidField = action.input && invalidManagementInput(action.input.fields, input.arguments)
+    if (invalidField) throw new Error(`插件管理字段无效：${invalidField}`)
+    for (const field of action.input?.fields || []) {
+      if (field.type !== 'file' || !input.arguments[field.key]) continue
+      const path = input.arguments[field.key] as string
+      const file = await realpath(path).then((resolved) => stat(resolved), () => null)
+      if (!file?.isFile()) throw new Error(`所选文件不存在或不是普通文件：${field.key}`)
+    }
     const capability = plugin.capabilities.find((candidate) => candidate.id === action.target.capability)
     const method = capability?.methods.find((candidate) => candidate.name === action.target.method)
     if (!method) throw new Error('插件管理动作引用的能力不可用。')
@@ -1523,6 +1544,7 @@ export class SeedRuntime {
       await this.store.removePluginCapabilityGrants(plugin.id)
       this.localClients = await this.store.localClients()
       await this.reloadPlugins()
+      await this.pythonEnvironmentService.remove(plugin.id)
       this.configureWorker()
       uninstalledSummary = `已卸载 ${plugin.name.zh_Hans}（${plugin.version}）。`
       uninstalledMetadata = { plugin_id: plugin.id, plugin_version: plugin.version, plugin_name_en_us: plugin.name.en_US, plugin_name_zh_hans: plugin.name.zh_Hans }
@@ -1689,6 +1711,9 @@ export class SeedRuntime {
     if (service === 'seed.process') {
       return await this.sidecarProcessService.invoke(packageId, argumentsValue)
     }
+    if (service === 'seed.python') {
+      return await this.pythonEnvironmentService.invoke(packageId, argumentsValue)
+    }
     if (service === 'seed.audio') {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)
       if (!plugin?.permissions.includes('device.audio.capture')) throw Object.assign(new Error('插件未声明麦克风采集权限。'), { code: 'broker_permission_denied' })
@@ -1749,6 +1774,7 @@ export class SeedRuntime {
     this.billedRelayStreams.clear()
     await this.connector.stop()
     await this.sidecarProcessService.stop()
+    await this.pythonEnvironmentService.stop()
     await this.audioService.destroy()
     this.sandboxHost.destroy()
     await this.store.close()
