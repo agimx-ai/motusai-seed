@@ -353,22 +353,25 @@ const seedPluginManagementInputFieldSchema = z.object({
   max_value: z.number().finite().optional(),
   options: z.array(z.object({ value: z.string().min(1).max(200), label: seedLocalizedTextSchema(100) }).strict()).min(1).max(32).optional(),
   accept: z.array(z.string().regex(/^\.[a-zA-Z0-9]+$/)).min(1).max(16).optional(),
+  choose_label: seedLocalizedTextSchema(100).optional(),
   initial_value_path: z.string().min(1).max(200).optional(),
 }).strict().superRefine((field, context) => {
   if (field.help_url && !field.description) context.addIssue({ code: 'custom', path: ['help_url'], message: '帮助链接必须同时声明字段说明。' })
   if (field.type === 'select' && !field.options?.length) context.addIssue({ code: 'custom', path: ['options'], message: '选择字段必须声明选项。' })
   if (field.type !== 'select' && field.options) context.addIssue({ code: 'custom', path: ['options'], message: '只有选择字段可以声明选项。' })
   if (field.type !== 'file' && field.type !== 'files' && field.accept) context.addIssue({ code: 'custom', path: ['accept'], message: '只有文件字段可以声明扩展名。' })
+  if (field.type !== 'file' && field.type !== 'files' && field.choose_label) context.addIssue({ code: 'custom', path: ['choose_label'], message: '只有文件字段可以声明选择按钮文案。' })
   if (field.type !== 'number' && (field.min_value !== undefined || field.max_value !== undefined)) context.addIssue({ code: 'custom', path: ['min_value'], message: '只有数字字段可以声明数值范围。' })
   if (field.min_value !== undefined && field.max_value !== undefined && field.min_value > field.max_value) context.addIssue({ code: 'custom', path: ['max_value'], message: '最大值不能小于最小值。' })
   if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) context.addIssue({ code: 'custom', path: ['options'], message: '选择字段不能有重复选项。' })
-}).transform(({ max_length, min_value, max_value, help_url, initial_value_path, ...field }) => ({
+}).transform(({ max_length, min_value, max_value, help_url, initial_value_path, choose_label, ...field }) => ({
   ...field,
   maxLength: max_length,
   minValue: min_value,
   maxValue: max_value,
   helpUrl: help_url,
   initialValuePath: initial_value_path,
+  chooseLabel: choose_label,
 }))
 
 const seedPluginManagementActionSchema = z.object({
@@ -382,11 +385,20 @@ const seedPluginManagementActionSchema = z.object({
   argument_bindings: z.record(identifier, z.string().min(1).max(200)).default({}),
   visible_when: seedPluginManagementConditionSchema.optional(),
   input: z.object({
-    title: seedLocalizedTextSchema(100),
+    mode: z.enum(['dialog', 'inline']).default('dialog'),
+    drop_target: identifier.optional(),
+    title: seedLocalizedTextSchema(100).optional(),
     description: seedLocalizedTextSchema(500).optional(),
-    confirm_label: seedLocalizedTextSchema(100),
+    confirm_label: seedLocalizedTextSchema(100).optional(),
     fields: z.array(seedPluginManagementInputFieldSchema).min(1).max(8),
-  }).strict().transform(({ confirm_label, ...input }) => ({ ...input, confirmLabel: confirm_label })).optional(),
+  }).strict().superRefine((input, context) => {
+    if (input.mode === 'dialog' && (!input.title || !input.confirm_label)) {
+      context.addIssue({ code: 'custom', path: ['title'], message: '弹窗输入动作必须声明标题和确认文案。' })
+    }
+    if (input.drop_target && (input.mode !== 'inline' || !input.fields.some((field) => field.key === input.drop_target && (field.type === 'file' || field.type === 'files')))) {
+      context.addIssue({ code: 'custom', path: ['drop_target'], message: '页内拖放目标必须是页内文件字段。' })
+    }
+  }).transform(({ confirm_label, drop_target, ...input }) => ({ ...input, confirmLabel: confirm_label, dropTarget: drop_target })).optional(),
   confirmation: z.object({
     title: seedLocalizedTextSchema(100),
     description: seedLocalizedTextSchema(500).optional(),
@@ -402,6 +414,7 @@ const seedPluginManagementActionSchema = z.object({
 
 const seedPluginManagementToolbarItemSchema = z.union([
   z.object({ type: z.literal('refresh') }).strict(),
+  z.object({ type: z.literal('file_input') }).strict(),
   z.object({ type: z.literal('action'), action_id: identifier }).strict().transform(({ action_id, ...item }) => ({ ...item, actionId: action_id })),
 ])
 
@@ -472,9 +485,15 @@ export const seedPluginManagementViewSchema = z.object({
   const actions = new Map(view.actions.map((action) => [action.id, action]))
   const toolbarEntries = new Set<string>()
   for (const [index, item] of view.toolbar.entries()) {
-    const key = item.type === 'refresh' ? 'refresh' : `action:${item.actionId}`
+    const key = item.type === 'action' ? `action:${item.actionId}` : item.type
     if (toolbarEntries.has(key)) context.addIssue({ code: 'custom', path: ['toolbar', index], message: '工具栏项目不能重复。' })
     toolbarEntries.add(key)
+    if (item.type === 'file_input') {
+      if (view.renderer !== 'seed.panel' || !view.actions.some((action) => action.input?.mode === 'inline' && action.input.dropTarget && action.input.fields.some((field) => field.key === action.input?.dropTarget && (field.type === 'file' || field.type === 'files')))) {
+        context.addIssue({ code: 'custom', path: ['toolbar', index], message: '文件选择按钮必须关联面板的页内文件字段。' })
+      }
+      continue
+    }
     if (item.type !== 'action') continue
     const action = actions.get(item.actionId)
     if (!action) context.addIssue({ code: 'custom', path: ['toolbar', index, 'action_id'], message: `工具栏引用了不存在的动作：${item.actionId}` })
@@ -488,7 +507,16 @@ export const seedPluginManagementViewSchema = z.object({
   if (view.renderer === 'seed.panel') {
     const props = seedPluginPanelPropsSchema.safeParse(view.props)
     if (!props.success) context.addIssue({ code: 'custom', path: ['props'], message: '通用面板 props 无效。' })
+    if (view.actions.filter((action) => action.input?.mode === 'inline').length > 1) {
+      context.addIssue({ code: 'custom', path: ['actions'], message: '通用面板只能声明一个页内输入动作。' })
+    }
+    if (view.actions.some((action) => action.input?.mode === 'inline' && action.placement !== 'toolbar')) {
+      context.addIssue({ code: 'custom', path: ['actions'], message: '页内输入动作必须位于工具栏。' })
+    }
     return
+  }
+  if (view.actions.some((action) => action.input?.mode === 'inline')) {
+    context.addIssue({ code: 'custom', path: ['actions'], message: '页内输入动作只能用于通用面板。' })
   }
   if (view.renderer !== 'seed.collection') return
   const props = seedPluginCollectionPropsSchema.safeParse(view.props)

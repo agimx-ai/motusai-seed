@@ -1,14 +1,14 @@
-import { Check, CircleDot, FolderOpen, MoreHorizontal, Pause, Play, RefreshCw, Save, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Check, CircleDot, FileUp, FolderOpen, MoreHorizontal, Pause, Play, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { SeedPluginManagementView, SeedLocalizedText } from '../../../shared/plugin-manifest'
 import { resolveSeedLocalizedText } from '../../../shared/plugin-manifest'
-import { invalidManagementInput, managementFormArguments, type ManagementFormValues } from '../../../shared/plugin-management-form'
+import { invalidManagementInput, managementFormArguments, type ManagementFormValues, type ManagementInputField } from '../../../shared/plugin-management-form'
 import { ActionButton } from '../../components/ActionButton'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { DateInputControl } from '../../components/DateInputControl'
-import { FileInputControl } from '../../components/FileInputControl'
+import { FileInputControl, selectLocalFiles } from '../../components/FileInputControl'
 import { IconButton } from '../../components/IconButton'
 import { AdaptiveIcon, ResourceCard, resourceCardGridClass } from '../../components/ResourceCard'
 import { TextAreaControl } from '../../components/TextAreaControl'
@@ -131,6 +131,9 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   const [busyAction, setBusyAction] = useState('')
   const [dialogAction, setDialogAction] = useState<ManagementAction>()
   const [dialogValues, setDialogValues] = useState<ManagementFormValues>({})
+  const [inlineValues, setInlineValues] = useState<ManagementFormValues>({})
+  const [inlineFileError, setInlineFileError] = useState('')
+  const [viewDragging, setViewDragging] = useState(false)
   const [dialogArguments, setDialogArguments] = useState<Record<string, unknown>>({})
   const [previewItem, setPreviewItem] = useState<Record<string, unknown>>()
   const [previewValue, setPreviewValue] = useState<unknown>()
@@ -139,6 +142,8 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   const [previewMenuOpen, setPreviewMenuOpen] = useState(false)
   const [actionResult, setActionResult] = useState<{ action: ManagementAction; value: unknown }>()
   const previewPanelRef = useRef<HTMLDivElement>(null)
+  const dragDepthRef = useRef(0)
+  const chooseInlineFileRef = useRef<(() => void) | null>(null)
   const previewMenuOpenRef = useRef(false)
   const dialogOpenRef = useRef(false)
   previewMenuOpenRef.current = previewMenuOpen
@@ -151,6 +156,7 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
     finally { if (!quiet) setLoading(false) }
   }, [pluginId, query, view.id])
   useEffect(() => { void load() }, [load])
+  useEffect(() => { setInlineValues({}); setInlineFileError(''); setViewDragging(false); dragDepthRef.current = 0 }, [pluginId, view.id])
   useEffect(() => {
     if (!view.refreshIntervalMs) return
     const timer = window.setInterval(() => void load(true), view.refreshIntervalMs)
@@ -202,6 +208,9 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   const statusPresentation = props.status?.states?.[String(statusState ?? '')]
   const documentVisible = Boolean(props.document && props.document.visible_states.some((candidate) => Object.is(candidate, valueAt(value, props.document!.state_path))))
   const dialogValid = useMemo(() => !dialogAction?.input || !invalidManagementInput(dialogAction.input.fields, managementFormArguments(dialogAction.input.fields, dialogValues)), [dialogAction, dialogValues])
+  const inlineAction = view.renderer === 'seed.panel' ? view.actions.find((action) => action.input?.mode === 'inline') : undefined
+  const inlineValid = !inlineAction?.input || !invalidManagementInput(inlineAction.input.fields, managementFormArguments(inlineAction.input.fields, inlineValues))
+  const dropField = inlineAction?.input?.fields.find((field) => field.key === inlineAction.input?.dropTarget)
   const viewTitle = resolveSeedLocalizedText(view.title, locale)
 
   const run = async (action: ManagementAction, argumentsValue: Record<string, unknown> = {}) => {
@@ -226,6 +235,10 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
     : {}
   const selectAction = (action: ManagementAction, item?: Record<string, unknown>) => {
     const argumentsValue = itemArguments(action, item)
+    if (action.input?.mode === 'inline') {
+      if (!inlineValid) return
+      return void run(action, { ...argumentsValue, ...managementFormArguments(action.input.fields, inlineValues) })
+    }
     if (!action.input && !action.confirmation) return void run(action, argumentsValue)
     setDialogArguments(argumentsValue)
     setDialogValues(Object.fromEntries((action.input?.fields || []).map((field) => {
@@ -251,39 +264,112 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   const actionControl = (action: ManagementAction, key: string, item?: Record<string, unknown>) => {
     const Icon = action.icon ? actionIcons[action.icon] : undefined
     const label = resolveSeedLocalizedText(action.label, locale)
-    if (action.display === 'icon') return <IconButton key={key} label={label} tone={action.tone} icon={Icon ? <Icon size={16} /> : null} busy={busyAction === action.id} onClick={() => selectAction(action, item)} />
-    return <ActionButton key={key} aria-label={label} tone={action.tone} icon={Icon ? <Icon size={14} /> : undefined} busy={busyAction === action.id} onClick={() => selectAction(action, item)}>{label}</ActionButton>
+    const disabled = action.input?.mode === 'inline' && !inlineValid
+    if (action.display === 'icon') return <IconButton key={key} label={label} tone={action.tone} icon={Icon ? <Icon size={16} /> : null} busy={busyAction === action.id} disabled={disabled} onClick={() => selectAction(action, item)} />
+    return <ActionButton key={key} aria-label={label} tone={action.tone} icon={Icon ? <Icon size={14} /> : undefined} busy={busyAction === action.id} disabled={disabled} onClick={() => selectAction(action, item)}>{label}</ActionButton>
   }
   const actions = (entries: ManagementAction[]) => entries.map((action) => actionControl(action, action.id))
   const toolbar = view.toolbar.map((item, index) => {
     if (item.type === 'refresh') return <IconButton key="refresh" label={t('plugins.refreshManagementView', { title: viewTitle })} icon={<RefreshCw size={16} />} busy={loading} onClick={() => void load()} />
+    if (item.type === 'file_input') {
+      const label = dropField?.chooseLabel ? resolveSeedLocalizedText(dropField.chooseLabel, locale) : t('plugins.managementFilesChoose')
+      return <ActionButton key="file_input" aria-label={label} icon={<FileUp size={14} />} onClick={() => chooseInlineFileRef.current?.()}>{label}</ActionButton>
+    }
     const action = view.actions.find((candidate) => candidate.id === item.actionId)
     if (!action || !visible(action, value)) return null
     return actionControl(action, `${item.actionId}-${index}`)
   })
-  const panel = view.renderer === 'seed.panel' ? <div className="mt-3 grid gap-3">
-    {panelProps.blocks.map((block, index) => {
-      if (block.type === 'text') return <div className="rounded-[12px] bg-muted/55 px-4 py-3" key={index}>
+  const inputFields = (fields: ManagementInputField[], values: ManagementFormValues, setValues: Dispatch<SetStateAction<ManagementFormValues>>, inline = false) => {
+    const onlyField = fields.length === 1 ? fields[0] : undefined
+    const onlyValue = onlyField ? values[onlyField.key] : undefined
+    const emptyToolbarOnlyField = inline && Boolean(onlyField) && onlyField?.key === dropField?.key && view.toolbar.some((item) => item.type === 'file_input')
+      && (Array.isArray(onlyValue) ? onlyValue.length === 0 : !onlyValue)
+    return <div className={emptyToolbarOnlyField ? 'contents' : 'grid gap-4'}>{fields.map((field) => {
+    const label = resolveSeedLocalizedText(field.label, locale)
+    const raw = values[field.key]
+    const current = typeof raw === 'string' ? raw : ''
+    const update = (next: string | string[] | boolean) => setValues((previous) => ({ ...previous, [field.key]: next }))
+    const toolbarFileField = inline && field.key === dropField?.key && view.toolbar.some((item) => item.type === 'file_input')
+    const emptyToolbarFileField = toolbarFileField && (Array.isArray(raw) ? raw.length === 0 : !current)
+    return <div className={emptyToolbarFileField ? 'contents' : 'grid min-w-0 gap-1.5'} key={field.key}>
+      {field.type !== 'checkbox' && !emptyToolbarFileField && <FieldLabel description={resolveSeedLocalizedText(field.description, locale)} helpUrl={field.helpUrl} className="text-[12px] font-medium">{label}</FieldLabel>}
+      {field.type === 'textarea'
+        ? <TextAreaControl aria-label={label} rows={field.maxLength > 4_096 ? 14 : 4} maxLength={field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={current} onChange={(event) => update(event.target.value)} />
+        : field.type === 'select'
+          ? <SelectControl portal variant="form" className="w-full" label={label} value={current}
+              options={[{ value: '', label: resolveSeedLocalizedText(field.placeholder, locale) || t('plugins.managementSelect') }, ...(field.options || []).map((option) => ({ value: option.value, label: resolveSeedLocalizedText(option.label, locale) }))]}
+              onValueChange={update} />
+          : field.type === 'checkbox'
+            ? <div className="flex items-start gap-2"><ToggleSwitch checked={raw === true} label={label} onClick={() => update(raw !== true)} />
+                <span className="text-[12px] text-foreground"><span className="font-medium">{label}</span>{field.description && <span className="mt-0.5 block text-muted-foreground">{resolveSeedLocalizedText(field.description, locale)}</span>}</span></div>
+            : field.type === 'date'
+              ? <DateInputControl label={label} locale={locale} value={current} onChange={update}
+                  placeholder={resolveSeedLocalizedText(field.placeholder, locale) || t('plugins.managementDatePlaceholder')}
+                  previousMonthLabel={t('plugins.managementDatePreviousMonth')} nextMonthLabel={t('plugins.managementDateNextMonth')}
+                  todayLabel={t('plugins.managementDateToday')} clearLabel={t('plugins.managementDateClear')} />
+            : field.type === 'file' || field.type === 'files'
+              ? <FileInputControl label={label} value={field.type === 'files' ? (Array.isArray(raw) ? raw : []) : current} multiple={field.type === 'files'} accept={field.accept} onChange={update} getPathForFile={window.motusWindow.getPathForFile}
+                  chooseRef={toolbarFileField ? chooseInlineFileRef : undefined}
+                  chooseLabel={field.chooseLabel ? resolveSeedLocalizedText(field.chooseLabel, locale) : t(field.type === 'files' ? 'plugins.managementFilesChoose' : 'plugins.managementFileChoose')}
+                  dropLabel={t(field.type === 'files' ? 'plugins.managementFilesDrop' : 'plugins.managementFileDrop')}
+                  clearLabel={t('plugins.managementFileClear')}
+                  singleFileError={t('plugins.managementFileSingle')} tooManyFilesError={t('plugins.managementFilesMax')}
+                  localFileError={t('plugins.managementFileLocal')} fileTypeError={t('plugins.managementFileType')} />
+              : <TextInputControl className="w-full" type={field.type} aria-label={label} min={field.type === 'number' ? field.minValue : undefined} max={field.type === 'number' ? field.maxValue : undefined}
+                  maxLength={field.type === 'number' ? undefined : field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={current} autoComplete="off" onChange={(event) => update(event.target.value)} />}
+    </div>
+    })}</div>
+  }
+  const panelBlocks = view.renderer === 'seed.panel' ? panelProps.blocks.map((block, index) => {
+    if (block.type === 'text') {
+      const content = String(valueAt(value, block.value_path) ?? '')
+      if (!content.trim()) return null
+      return <div className="py-3 first:pt-0 last:pb-0" key={index}>
         {block.label && <span className="block text-[11px] text-muted-foreground">{resolveSeedLocalizedText(block.label, locale)}</span>}
-        <span className="mt-0.5 block whitespace-pre-wrap text-[13px] text-foreground">{String(valueAt(value, block.value_path) ?? '')}</span>
+        <span className="mt-0.5 block whitespace-pre-wrap break-words text-[13px] text-foreground">{content}</span>
       </div>
-      if (block.type === 'status') {
-        const state = String(valueAt(value, block.state_path) ?? '')
-        const label = block.states[state] ? resolveSeedLocalizedText(block.states[state]!, locale) : String(valueAt(value, block.label_path || '') ?? state)
-        return <div className="flex items-center gap-3 rounded-[12px] bg-muted/55 px-4 py-3" key={index}><span className={`h-2.5 w-2.5 rounded-full ${state === 'connected' || state === 'ready' ? 'bg-[var(--seed-success)]' : state === 'connecting' || state === 'pending' ? 'animate-pulse bg-accent' : 'bg-muted-foreground/55'}`} /><span className="text-[13px]">{label}</span></div>
-      }
-      if (block.type === 'image' || block.type === 'qr') {
-        const source = safeImageDataUrl(String(valueAt(value, block.data_url_path) ?? ''))
-        return source ? <div className="grid place-items-center rounded-[12px] bg-muted/45 p-4" key={index}><img className={block.type === 'qr' ? 'h-56 w-56 rounded-lg bg-white p-2 [image-rendering:pixelated]' : 'max-h-[360px] max-w-full rounded-lg'} src={source} alt={resolveSeedLocalizedText(block.alt, locale)} /></div> : null
-      }
-      if (block.type !== 'progress') return null
-      const maximum = Math.max(1, Number(block.max || 100))
-      const current = Math.min(maximum, Math.max(0, Number(valueAt(value, block.value_path) || 0)))
-      return <div className="rounded-[12px] bg-muted/55 px-4 py-3" key={index}>{block.label && <span className="mb-2 block text-[11px] text-muted-foreground">{resolveSeedLocalizedText(block.label, locale)}</span>}<div className="h-2 overflow-hidden rounded-full bg-border"><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${current / maximum * 100}%` }} /></div></div>
-    })}
+    }
+    if (block.type === 'status') {
+      const state = String(valueAt(value, block.state_path) ?? '')
+      const label = block.states[state] ? resolveSeedLocalizedText(block.states[state]!, locale) : String(valueAt(value, block.label_path || '') ?? state)
+      return <div className="flex min-h-6 items-center gap-3 py-3 first:pt-0 last:pb-0" key={index}><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${state === 'connected' || state === 'ready' ? 'bg-[var(--seed-success)]' : state === 'connecting' || state === 'pending' ? 'animate-pulse bg-info' : state === 'error' ? 'bg-danger' : 'bg-muted-foreground/55'}`} /><span className="text-[13px]">{label}</span></div>
+    }
+    if (block.type === 'image' || block.type === 'qr') {
+      const source = safeImageDataUrl(String(valueAt(value, block.data_url_path) ?? ''))
+      return source ? <div className="grid place-items-center py-3 first:pt-0 last:pb-0" key={index}><img className={block.type === 'qr' ? 'h-56 w-56 rounded-lg bg-white p-2 [image-rendering:pixelated]' : 'max-h-[360px] max-w-full rounded-lg'} src={source} alt={resolveSeedLocalizedText(block.alt, locale)} /></div> : null
+    }
+    if (block.type !== 'progress') return null
+    const maximum = Math.max(1, Number(block.max || 100))
+    const current = Math.min(maximum, Math.max(0, Number(valueAt(value, block.value_path) || 0)))
+    return <div className="py-3 first:pt-0 last:pb-0" key={index}>{block.label && <span className="mb-2 block text-[11px] text-muted-foreground">{resolveSeedLocalizedText(block.label, locale)}</span>}<div className="h-2 overflow-hidden rounded-full bg-border"><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${current / maximum * 100}%` }} /></div></div>
+  }).filter((block) => block !== null) : []
+  const panel = view.renderer === 'seed.panel' ? <div className="mt-3 grid gap-3">
+    {inlineAction?.input && inputFields(inlineAction.input.fields, inlineValues, setInlineValues, true)}
+    {panelBlocks.length > 0 && <div className="divide-y divide-border/70 rounded-[12px] bg-muted/55 px-4 py-3">{panelBlocks}</div>}
   </div> : null
 
-  return <section className="mt-8">
+  const acceptViewDrop = (files: FileList) => {
+    if (!dropField) return
+    const current = inlineValues[dropField.key]
+    const selected = selectLocalFiles(files, typeof current === 'string' || Array.isArray(current) ? current : dropField.type === 'files' ? [] : '', {
+      multiple: dropField.type === 'files', accept: dropField.accept,
+      getPathForFile: window.motusWindow.getPathForFile,
+      singleFileError: t('plugins.managementFileSingle'), tooManyFilesError: t('plugins.managementFilesMax'),
+      localFileError: t('plugins.managementFileLocal'), fileTypeError: t('plugins.managementFileType'),
+    })
+    if (selected.error) setInlineFileError(selected.error)
+    else if (selected.value !== undefined) { setInlineFileError(''); setInlineValues((values) => ({ ...values, [dropField.key]: selected.value! })) }
+  }
+
+  return <section className="mt-8 rounded-[12px]"
+    onDragEnterCapture={(event) => { if (dropField && event.dataTransfer.types.includes('Files')) { dragDepthRef.current += 1; setViewDragging(true) } }}
+    onDragOverCapture={(event) => { if (dropField && event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' } }}
+    onDragLeaveCapture={() => { if (dragDepthRef.current > 0) dragDepthRef.current -= 1; if (dragDepthRef.current === 0) setViewDragging(false) }}
+    onDragEndCapture={() => { dragDepthRef.current = 0; setViewDragging(false) }}
+    onDropCapture={(event) => { if (dropField && event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.stopPropagation(); dragDepthRef.current = 0; setViewDragging(false); acceptViewDrop(event.dataTransfer.files) } }}>
+    {viewDragging && createPortal(<div className="pointer-events-none fixed inset-0 z-[80] grid place-items-center bg-card/90 backdrop-blur-[2px]" aria-hidden="true">
+      <div className="flex flex-col items-center gap-2 text-foreground"><FileUp size={24} className="text-info" /><span className="text-[14px] font-medium">{t('plugins.managementFileRelease')}</span></div>
+    </div>, document.body)}
     <div className="flex items-center justify-between gap-4">
       <div>
         <h3 className="m-0 text-[17px] font-medium">{viewTitle}</h3>
@@ -294,6 +380,7 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
       </div>
     </div>
     {error && <p className="my-4 text-[12px] text-danger">{error}</p>}
+    {inlineFileError && <p className="my-4 text-[12px] text-danger" role="alert">{inlineFileError}</p>}
     {panel}
     {statusVisible && props.status && <div className="my-4 flex items-center gap-3 rounded-[12px] bg-muted/70 px-4 py-3">
       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusState === 'recording' ? 'animate-pulse bg-danger' : statusState === 'processing' ? 'animate-pulse bg-accent' : 'bg-muted-foreground/55'}`} />
@@ -399,38 +486,7 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
       onCancel={() => setDialogAction(undefined)}
       onConfirm={() => void run(dialogAction, { ...dialogArguments, ...managementFormArguments(dialogAction.input?.fields || [], dialogValues) })}
     >
-      {dialogAction.input && <div className="grid max-h-[min(55vh,480px)] gap-4 overflow-y-auto">{dialogAction.input.fields.map((field) => {
-        const label = resolveSeedLocalizedText(field.label, locale)
-        const raw = dialogValues[field.key]
-        const current = typeof raw === 'string' ? raw : ''
-        const update = (next: string | string[] | boolean) => setDialogValues((values) => ({ ...values, [field.key]: next }))
-        return <div className="grid min-w-0 gap-1.5" key={field.key}>
-          {field.type !== 'checkbox' && <FieldLabel description={resolveSeedLocalizedText(field.description, locale)} helpUrl={field.helpUrl} className="text-[12px] font-medium">{label}</FieldLabel>}
-          {field.type === 'textarea'
-            ? <TextAreaControl aria-label={label} rows={field.maxLength > 4_096 ? 14 : 4} maxLength={field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={current} onChange={(event) => update(event.target.value)} />
-            : field.type === 'select'
-              ? <SelectControl portal variant="form" className="w-full" label={label} value={current}
-                  options={[{ value: '', label: resolveSeedLocalizedText(field.placeholder, locale) || t('plugins.managementSelect') }, ...(field.options || []).map((option) => ({ value: option.value, label: resolveSeedLocalizedText(option.label, locale) }))]}
-                  onValueChange={update} />
-              : field.type === 'checkbox'
-                ? <div className="flex items-start gap-2"><ToggleSwitch checked={raw === true} label={label} onClick={() => update(raw !== true)} />
-                    <span className="text-[12px] text-foreground"><span className="font-medium">{label}</span>{field.description && <span className="mt-0.5 block text-muted-foreground">{resolveSeedLocalizedText(field.description, locale)}</span>}</span></div>
-                : field.type === 'date'
-                  ? <DateInputControl label={label} locale={locale} value={current} onChange={update}
-                      placeholder={resolveSeedLocalizedText(field.placeholder, locale) || t('plugins.managementDatePlaceholder')}
-                      previousMonthLabel={t('plugins.managementDatePreviousMonth')} nextMonthLabel={t('plugins.managementDateNextMonth')}
-                      todayLabel={t('plugins.managementDateToday')} clearLabel={t('plugins.managementDateClear')} />
-                : field.type === 'file' || field.type === 'files'
-                  ? <FileInputControl label={label} value={field.type === 'files' ? (Array.isArray(raw) ? raw : []) : current} multiple={field.type === 'files'} accept={field.accept} onChange={update} getPathForFile={window.motusWindow.getPathForFile}
-                      chooseLabel={t(field.type === 'files' ? 'plugins.managementFilesChoose' : 'plugins.managementFileChoose')}
-                      dropLabel={t(field.type === 'files' ? 'plugins.managementFilesDrop' : 'plugins.managementFileDrop')}
-                      clearLabel={t('plugins.managementFileClear')}
-                      singleFileError={t('plugins.managementFileSingle')} tooManyFilesError={t('plugins.managementFilesMax')}
-                      localFileError={t('plugins.managementFileLocal')} fileTypeError={t('plugins.managementFileType')} />
-                  : <TextInputControl className="w-full" type={field.type} aria-label={label} min={field.type === 'number' ? field.minValue : undefined} max={field.type === 'number' ? field.maxValue : undefined}
-                      maxLength={field.type === 'number' ? undefined : field.maxLength} placeholder={resolveSeedLocalizedText(field.placeholder, locale)} value={current} autoComplete="off" onChange={(event) => update(event.target.value)} />}
-        </div>
-      })}</div>}
+      {dialogAction.input && <div className="max-h-[min(55vh,480px)] overflow-y-auto">{inputFields(dialogAction.input.fields, dialogValues, setDialogValues)}</div>}
     </ConfirmDialog>}
   </section>
 }

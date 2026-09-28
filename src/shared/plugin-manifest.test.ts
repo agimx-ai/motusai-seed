@@ -209,6 +209,27 @@ describe('plugin dynamic configuration options schema', () => {
 })
 
 describe('plugin management view schema', () => {
+  it('supports a generic inline form and view-level file drop target', () => {
+    const panel = {
+      id: 'draft', renderer: 'seed.panel', title: text('Draft'), description: text('Draft'),
+      props: { blocks: [{ type: 'status', state_path: 'state', states: { idle: text('Idle') } }] },
+      toolbar: [{ type: 'file_input' }, { type: 'action', action_id: 'start' }],
+      actions: [{ id: 'start', label: text('Start'), target: { capability: 'draft', method: 'start' }, input: {
+        mode: 'inline', drop_target: 'files', fields: [
+          { key: 'files', type: 'files', label: text('Files'), choose_label: text('Upload files'), required: true, accept: ['.pdf'] },
+          { key: 'confirmed', type: 'checkbox', label: text('Confirmed'), required: true },
+        ],
+      } }],
+    }
+    const input = seedPluginManagementViewSchema.parse(panel).actions[0]?.input
+    expect(input).toMatchObject({ mode: 'inline', dropTarget: 'files' })
+    expect(input?.fields[0]).toMatchObject({ chooseLabel: text('Upload files') })
+    expect(seedPluginManagementViewSchema.safeParse({ ...panel, renderer: 'seed.collection' }).success).toBe(false)
+    expect(seedPluginManagementViewSchema.safeParse({ ...panel, toolbar: [{ type: 'file_input' }, { type: 'file_input' }, { type: 'action', action_id: 'start' }] }).success).toBe(false)
+    expect(seedPluginManagementViewSchema.safeParse({ ...panel, actions: [{ ...panel.actions[0], input: { ...panel.actions[0]!.input, drop_target: 'confirmed' } }] }).success).toBe(false)
+    expect(seedPluginManagementViewSchema.safeParse({ ...panel, actions: [{ ...panel.actions[0], input: { ...panel.actions[0]!.input, fields: [{ key: 'files', type: 'files', label: text('Files'), choose_label: text('Upload files') }, { key: 'confirmed', type: 'checkbox', label: text('Confirmed'), choose_label: text('Upload') }] } }] }).success).toBe(false)
+  })
+
   it('accepts common typed action fields and rejects mismatched field metadata', () => {
     const view = {
       id: 'form', renderer: 'seed.collection', title: text('Form'), description: text('Form'),

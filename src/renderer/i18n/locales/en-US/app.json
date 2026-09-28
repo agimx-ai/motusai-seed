@@ -129,6 +129,7 @@
     "managementFilesChoose": "Choose files",
     "managementFileDrop": "Or drag a local file here",
     "managementFilesDrop": "Or drag local files here",
+    "managementFileRelease": "Release to add files",
     "managementFileClear": "Clear selected file",
     "managementFileSingle": "Select one file at a time.",
     "managementFilesMax": "Select up to 32 files.",
