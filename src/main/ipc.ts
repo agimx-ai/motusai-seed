@@ -34,11 +34,6 @@ export function registerIpc(runtime: SeedRuntime) {
     username: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{2,79}$/),
     avatarDataUrl: z.string().max(512_000).startsWith('data:image/webp;base64,').optional(),
   }).strict().parse(input)))
-  handle(ipcChannels.revokePluginCapabilityGrant, (_event, id) => runtime.revokePluginCapabilityGrant(z.string().uuid().parse(id)))
-  handle(ipcChannels.respondPluginCapabilityApproval, (_event, requestId, allowed) => runtime.respondPluginCapabilityApproval(
-    z.string().uuid().parse(requestId),
-    z.boolean().parse(allowed),
-  ))
   handle(ipcChannels.launchAtLogin, (_event, enabled) => runtime.setLaunchAtLogin(z.boolean().parse(enabled)))
   handle(ipcChannels.preventSystemSleep, (_event, enabled) => runtime.setPreventSystemSleep(z.boolean().parse(enabled)))
   handle(ipcChannels.languagePreference, (_event, preference) => runtime.setLanguagePreference(z.enum(['system', 'zh-CN', 'en-US']).parse(preference)))

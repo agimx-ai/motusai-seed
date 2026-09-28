@@ -5,11 +5,10 @@ import { app, BrowserWindow, powerSaveBlocker, shell } from 'electron'
 import { z } from 'zod'
 import { buildConfig } from '../shared/build-config.generated'
 import { isCreditAmount } from '../shared/credit-amount'
-import type { AppUpdateState, AuditQueryInput, LocalClientAuthorization, MascotState, PluginCapabilityApprovalRequest, SeedCatalogPage, SeedCatalogPlugin, SeedDistribution, SeedDistributionEvent, SeedEvent, SeedInstalledPlugin, SeedLanguagePreference, SeedPluginRuntimeDefinition, SeedSnapshot, SeedThemePreference, TerminalLogUploadProgress, TerminalLogUploadRange, TerminalUserProfile, UpdatePluginConfigurationInput, UpdateProfileInput, WorkerEvent } from '../shared/contracts'
+import type { AppUpdateState, AuditQueryInput, LocalClientAuthorization, MascotState, SeedCatalogPage, SeedCatalogPlugin, SeedDistribution, SeedDistributionEvent, SeedEvent, SeedInstalledPlugin, SeedLanguagePreference, SeedPluginRuntimeDefinition, SeedSnapshot, SeedThemePreference, TerminalLogUploadProgress, TerminalLogUploadRange, TerminalUserProfile, UpdatePluginConfigurationInput, UpdateProfileInput, WorkerEvent } from '../shared/contracts'
 import { resolveSeedLocale } from './i18n/locale'
 import { pluginConfigurationKey } from '../shared/contracts'
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation'
-import { pluginCapabilityGrantIsDeclared } from '../shared/plugin-capabilities'
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest'
 import { invalidManagementInput } from '../shared/plugin-management-form'
 import { ConnectorManager } from './connector-manager'
@@ -37,7 +36,7 @@ import { SeedUpdater } from './updater'
 import { CloudDiagnosticUploader } from './cloud-diagnostic-uploader'
 import { CreditBillingClient, relayBillingModelId } from './credit-billing'
 import { ObservationStore, errorDetails } from './observation-store'
-import { carriesLocalClientCapabilityApproval, validateLocalClientCapabilityApproval } from './local-client-capability-approval'
+import { validateLocalClientCapabilityApproval } from './local-client-capability-approval'
 import { SidecarProcessService } from './sidecar-process-service'
 import { PythonEnvironmentService } from './python-environment-service'
 import { discoverDistribution } from './distribution-discovery'
@@ -91,10 +90,6 @@ export class SeedRuntime {
   private cloudRefreshPromise: Promise<string> | null = null
   private readonly pluginContributions = new Map<string, Pick<SeedInstalledPlugin, 'configurations' | 'managementViews'>>()
   private localClients: LocalClientAuthorization[] = []
-  private readonly pendingPluginCapabilityApprovals: Array<{
-    request: PluginCapabilityApprovalRequest
-    resolve: (allowed: boolean) => void
-  }> = []
   private navigationRequest: SeedSnapshot['navigationRequest']
   private readonly consumedLocalClientApprovalIds = new Map<string, number>()
   private readonly pluginInstaller: SeedPluginInstaller
@@ -366,39 +361,16 @@ export class SeedRuntime {
         throw error
       }
     }],
-    ['seed.plugin-capability.approve', async (argumentsValue) => {
-      const risk = argumentsValue.risk === 'control' ? 'control' : argumentsValue.risk === 'write' ? 'write' : null
-      const request: PluginCapabilityApprovalRequest = {
-        id: randomUUID(),
-        consumerPluginId: String(argumentsValue.consumer_plugin_id || ''),
-        providerPluginId: String(argumentsValue.provider_plugin_id || ''),
-        capability: String(argumentsValue.capability || ''),
-        method: String(argumentsValue.method || ''),
-        risk: risk || 'write',
-      }
-      if (!risk || !request.consumerPluginId || !request.providerPluginId || !request.capability || !request.method) {
-        throw new Error('插件能力授权请求无效。')
-      }
-      const consumer = this.runtimePlugins.find((plugin) => plugin.package_id === request.consumerPluginId)
-      if (consumer?.permissions.includes('local.client-capability-approval') && carriesLocalClientCapabilityApproval(argumentsValue)) {
-        return { allowed: await this.verifyLocalClientCapabilityApproval(argumentsValue, consumer) }
-      }
+    ['seed.plugin-capability.verify-approval', async (argumentsValue) => {
+      const consumerPluginId = String(argumentsValue.consumer_plugin_id || '')
       const capabilityVersion = Number(argumentsValue.capability_version)
-      if (!Number.isInteger(capabilityVersion) || capabilityVersion <= 0) throw new Error('插件能力版本无效。')
-      const grant = {
-        consumer_plugin_id: request.consumerPluginId,
-        provider_plugin_id: request.providerPluginId,
-        capability: request.capability,
-        capability_version: capabilityVersion,
-        method: request.method,
+      if (!consumerPluginId || !argumentsValue.provider_plugin_id || !argumentsValue.capability || !argumentsValue.method
+        || !Number.isInteger(capabilityVersion) || capabilityVersion <= 0) {
+        throw new Error('本地客户端的逐次审批凭据请求无效。')
       }
-      if (await this.store.hasPluginCapabilityGrant(grant)) return { allowed: true, delegated: true }
-      const allowed = await this.requestPluginCapabilityApproval(request)
-      if (allowed) {
-        await this.store.grantPluginCapability(grant)
-        await this.publishSnapshot()
-      }
-      return { allowed, delegated: allowed }
+      const consumer = this.runtimePlugins.find((plugin) => plugin.package_id === consumerPluginId)
+      if (!consumer?.permissions.includes('local.client-capability-approval')) return { allowed: false }
+      return { allowed: await this.verifyLocalClientCapabilityApproval(argumentsValue, consumer) }
     }],
   ])
 
@@ -722,8 +694,6 @@ export class SeedRuntime {
       catalogPlugins: this.remotePluginCatalog,
       ...(this.remotePluginCatalogNextCursor ? { catalogNextCursor: this.remotePluginCatalogNextCursor } : {}),
       localClients: this.localClients,
-      pluginCapabilityGrants: this.store.pluginCapabilityGrants(),
-      ...(this.pendingPluginCapabilityApprovals[0] ? { pluginCapabilityApprovalRequest: this.pendingPluginCapabilityApprovals[0].request } : {}),
       ...(this.navigationRequest ? { navigationRequest: this.navigationRequest } : {}),
       audit: this.store.audit(),
       launchAtLogin: loginSettings.openAtLogin,
@@ -900,15 +870,6 @@ export class SeedRuntime {
     window.focus()
   }
 
-  private async requestPluginCapabilityApproval(request: PluginCapabilityApprovalRequest) {
-    const allowed = new Promise<boolean>((resolve) => {
-      this.pendingPluginCapabilityApprovals.push({ request, resolve })
-    })
-    this.showAuthorizationWindow()
-    await this.publishSnapshot()
-    return await allowed
-  }
-
   private async verifyLocalClientCapabilityApproval(
     argumentsValue: Record<string, unknown>,
     consumer: SeedPluginRuntimeDefinition,
@@ -924,20 +885,6 @@ export class SeedRuntime {
     if (!valid || !await this.store.hasLocalClientAuthorization(consumer.package_id, valid.authorizationId)) return false
     this.consumedLocalClientApprovalIds.set(valid.id, valid.expiresAt)
     return true
-  }
-
-  async respondPluginCapabilityApproval(requestId: string, allowed: boolean) {
-    const index = this.pendingPluginCapabilityApprovals.findIndex((pending) => pending.request.id === requestId)
-    if (index < 0) throw new Error('插件能力授权请求已失效。')
-    const [pending] = this.pendingPluginCapabilityApprovals.splice(index, 1)
-    await this.publishSnapshot()
-    pending!.resolve(allowed)
-  }
-
-  async revokePluginCapabilityGrant(id: string) {
-    await this.store.revokePluginCapabilityGrant(id)
-    await this.store.auditSystem('plugin.capability_grant.revoke', 'allowed', '已撤销插件间能力委托授权。', 'control')
-    await this.publishSnapshot()
   }
 
   async setLaunchAtLogin(enabled: boolean) {
@@ -1533,15 +1480,8 @@ export class SeedRuntime {
       const plugin = this.installedPlugins.find((candidate) => candidate.id === pluginId)
       if (!plugin) throw new Error('插件尚未安装。')
       this.pluginBrowserAuthorization.cancelPlugin(plugin.id)
-      for (let index = this.pendingPluginCapabilityApprovals.length - 1; index >= 0; index -= 1) {
-        const pending = this.pendingPluginCapabilityApprovals[index]!
-        if (pending.request.consumerPluginId !== plugin.id && pending.request.providerPluginId !== plugin.id) continue
-        this.pendingPluginCapabilityApprovals.splice(index, 1)
-        pending.resolve(false)
-      }
       await this.pluginInstaller.uninstall(plugin.id)
       await this.store.removePluginLocalClientAuthorizations(plugin.id)
-      await this.store.removePluginCapabilityGrants(plugin.id)
       this.localClients = await this.store.localClients()
       await this.reloadPlugins()
       await this.pythonEnvironmentService.remove(plugin.id)
@@ -1575,9 +1515,6 @@ export class SeedRuntime {
       ...(this.pluginContributions.get(plugin.id) || {}),
     }))
     const installedRuntimePlugins = await this.pluginInstaller.listRuntimePlugins()
-    for (const grant of this.store.pluginCapabilityGrants()) {
-      if (!pluginCapabilityGrantIsDeclared(grant, installedRuntimePlugins)) await this.store.revokePluginCapabilityGrant(grant.id)
-    }
     this.runtimePlugins = installedRuntimePlugins.filter((plugin) =>
       Date.now() < this.entitlementExpiresAt && this.authorizedInstalledPluginIds.has(plugin.package_id))
     await this.sandboxHost.configure(this.runtimePlugins)

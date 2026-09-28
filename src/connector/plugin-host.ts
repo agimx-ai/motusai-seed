@@ -1085,7 +1085,15 @@ export class SeedPluginHost {
       throw Object.assign(new Error(`已阻止插件能力循环调用：${[...chain, providerId].join(' -> ')}`), { code: 'capability_cycle' })
     }
     const requestId = invocation.request_id || randomUUID()
-    if (declared.method.risk === 'write' || declared.method.risk === 'control') {
+    const invocationContext = invocation.context && typeof invocation.context === 'object' && !Array.isArray(invocation.context)
+      ? invocation.context as Record<string, unknown> : null
+    const localClientContext = invocationContext !== null && 'auth_id' in invocationContext
+    if ((declared.method.risk === 'write' || declared.method.risk === 'control') && (localClientContext || invocation.approval)) {
+      const authorizationId = localClientContext ? String(invocationContext.auth_id || '') : ''
+      if (!invocation.approval || !authorizationId) {
+        await this.recordCapabilityAudit(consumer, providerId, invocation.capability, invocation.method, declared.method.risk, requestId, 'denied')
+        throw Object.assign(new Error('本地客户端的逐次审批凭据缺失。'), { code: 'plugin_capability_denied' })
+      }
       const argumentsSha256 = createHash('sha256').update(canonicalSeedCapabilityApprovalPayload({
         provider_plugin_id: providerId,
         capability: invocation.capability,
@@ -1093,20 +1101,19 @@ export class SeedPluginHost {
         method: invocation.method,
         arguments: invocation.arguments,
       })).digest('hex')
-      const response = await this.runtime.invoke_host('seed.plugin-capability.approve', {
+      const response = await this.runtime.invoke_host('seed.plugin-capability.verify-approval', {
         consumer_plugin_id: consumer.package_id,
         provider_plugin_id: providerId,
         capability: invocation.capability,
         capability_version: declared.capability.version,
         method: invocation.method,
-        risk: declared.method.risk,
-        request_id: requestId,
+        auth_id: authorizationId,
         arguments_sha256: argumentsSha256,
-        ...(invocation.approval ? { approval: invocation.approval } : {}),
+        approval: invocation.approval,
       }) as { allowed?: unknown }
       if (response.allowed !== true) {
         await this.recordCapabilityAudit(consumer, providerId, invocation.capability, invocation.method, declared.method.risk, requestId, 'denied')
-        throw Object.assign(new Error('用户拒绝了插件能力调用。'), { code: 'plugin_capability_denied' })
+        throw Object.assign(new Error('本地客户端的逐次审批凭据无效或已失效。'), { code: 'plugin_capability_denied' })
       }
     }
     try {

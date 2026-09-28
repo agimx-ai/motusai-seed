@@ -254,8 +254,6 @@ export type SeedSnapshot = {
   catalogPlugins: SeedCatalogPlugin[]
   catalogNextCursor?: string
   localClients: LocalClientAuthorization[]
-  pluginCapabilityGrants: PluginCapabilityGrant[]
-  pluginCapabilityApprovalRequest?: PluginCapabilityApprovalRequest
   navigationRequest?: SeedNavigationTarget & { id: string }
   audit: AuditEntry[]
   launchAtLogin: boolean
@@ -287,24 +285,6 @@ export type LocalClientAuthorization = {
   deviceName?: string
   createdAt: string
   updatedAt: string
-}
-
-export type PluginCapabilityApprovalRequest = {
-  id: string
-  consumerPluginId: string
-  providerPluginId: string
-  capability: string
-  method: string
-  risk: 'write' | 'control'
-}
-export type PluginCapabilityGrant = {
-  id: string
-  consumerPluginId: string
-  providerPluginId: string
-  capability: string
-  capabilityVersion: number
-  method: string
-  createdAt: string
 }
 
 export type SeedInstalledPlugin = {
@@ -405,8 +385,6 @@ export type SeedApi = {
   openPersonalWallet(): Promise<void>
   readProfile(): Promise<TerminalUserProfile>
   updateProfile(input: UpdateProfileInput): Promise<TerminalUserProfile>
-  revokePluginCapabilityGrant(id: string): Promise<void>
-  respondPluginCapabilityApproval(requestId: string, allowed: boolean): Promise<void>
   setLaunchAtLogin(enabled: boolean): Promise<boolean>
   setPreventSystemSleep(enabled: boolean): Promise<boolean>
   setLanguagePreference(preference: SeedLanguagePreference): Promise<void>
@@ -455,8 +433,6 @@ export const ipcChannels = {
   openPersonalWallet: 'seed:credits:open-personal-wallet',
   readProfile: 'seed:account:read-profile',
   updateProfile: 'seed:account:update-profile',
-  revokePluginCapabilityGrant: 'seed:plugins:revoke-capability-grant',
-  respondPluginCapabilityApproval: 'seed:plugins:respond-capability-approval',
   launchAtLogin: 'seed:settings:launch-at-login',
   preventSystemSleep: 'seed:settings:prevent-system-sleep',
   languagePreference: 'seed:settings:language-preference',

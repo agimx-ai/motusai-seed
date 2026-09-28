@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { safeStorage } from 'electron'
 import createKnex, { type Knex } from 'knex'
 import { activityCategory, activityRisk } from '../shared/activity'
-import type { AuditCategory, AuditEntry, AuditMetadata, AuditOutcome, AuditPage, AuditQueryInput, LocalClientAuthorization, PluginCapabilityGrant, SeedLanguagePreference, SeedThemePreference, StoredPluginConfiguration, UsageSummary } from '../shared/contracts'
+import type { AuditCategory, AuditEntry, AuditMetadata, AuditOutcome, AuditPage, AuditQueryInput, LocalClientAuthorization, SeedLanguagePreference, SeedThemePreference, StoredPluginConfiguration, UsageSummary } from '../shared/contracts'
 import type { CloudSessionCredential } from './cloud-auth'
 import { ObservationStore, observationDatabaseFileName } from './observation-store'
 
@@ -23,9 +23,6 @@ type LocalClientRow = {
 type LegacyLocalClientRow = Omit<LocalClientRow, 'device_name'> & { plugin_id: string; device_name?: string | null }
 type LocalClientScopeRow = { auth_id: string; plugin_id: string; created_at: string }
 type LegacyLocalClientScopeRow = { authorization_id: string; plugin_id: string; created_at: string }
-type PluginCapabilityGrantRow = {
-  id: string; consumer_plugin_id: string; provider_plugin_id: string; capability: string; capability_version: number; method: string; created_at: string; updated_at: string
-}
 type AuditRow = {
   id: string; timestamp: string; source: AuditEntry['source']; operation: string; category: Exclude<AuditCategory, 'all'>
   capability: string | null; method: string | null; risk: NonNullable<AuditEntry['risk']>; task_id: string | null
@@ -123,7 +120,6 @@ export class SeedStore {
   private value: StoredConfig = defaults()
   private database: Knex | null = null
   private recentAudit: AuditEntry[] = []
-  private delegatedCapabilityGrants: PluginCapabilityGrant[] = []
 
   constructor(userDataPath: string, appName: string, observations?: ObservationStore) {
     this.databasePath = join(userDataPath, observationDatabaseFileName(appName))
@@ -152,13 +148,7 @@ export class SeedStore {
     })
     const database = this.getDatabase()
     if (!await database.schema.hasTable('app_settings')) await database.schema.createTable('app_settings', (table) => { table.text('key').primary(); table.text('value').notNullable() })
-    if (!await database.schema.hasTable('plugin_capability_grants')) await database.schema.createTable('plugin_capability_grants', (table) => {
-      table.text('id').primary(); table.text('consumer_plugin_id').notNullable(); table.text('provider_plugin_id').notNullable(); table.text('capability').notNullable()
-      table.integer('capability_version').notNullable(); table.text('method').notNullable(); table.text('created_at').notNullable(); table.text('updated_at').notNullable()
-      table.unique(['consumer_plugin_id', 'provider_plugin_id', 'capability', 'capability_version', 'method'], { indexName: 'plugin_capability_grants_scope_unique' })
-      table.index(['consumer_plugin_id'], 'plugin_capability_grants_consumer_index')
-      table.index(['provider_plugin_id'], 'plugin_capability_grants_provider_index')
-    })
+    if (await database.schema.hasTable('plugin_capability_grants')) await database.schema.dropTable('plugin_capability_grants')
     await this.initializeLocalClientAuthorizationSchema(database)
   }
 
@@ -266,8 +256,6 @@ export class SeedStore {
       themePreference: settings.get('theme_preference') === 'light' || settings.get('theme_preference') === 'dark' ? settings.get('theme_preference') as SeedThemePreference : 'system',
     }
     this.recentAudit = await this.loadRecentAudit()
-    this.delegatedCapabilityGrants = (await database<PluginCapabilityGrantRow>('plugin_capability_grants').select('*').orderBy('created_at', 'asc'))
-      .map((row) => ({ id: row.id, consumerPluginId: row.consumer_plugin_id, providerPluginId: row.provider_plugin_id, capability: row.capability, capabilityVersion: row.capability_version, method: row.method, createdAt: row.created_at }))
   }
 
   private getDatabase() { if (!this.database) throw new Error('客户端数据库尚未初始化。'); return this.database }
@@ -372,28 +360,6 @@ export class SeedStore {
     const encrypted = Object.keys(secrets).length ? safeStorage.encryptString(JSON.stringify(secrets)).toString('base64') : undefined
     await this.setSetting('encrypted_plugin_secrets', encrypted)
     this.value.encryptedPluginSecrets = encrypted
-  }
-  async hasPluginCapabilityGrant(input: Omit<PluginCapabilityGrantRow, 'id' | 'created_at' | 'updated_at'>) {
-    return Boolean(await this.getDatabase()<PluginCapabilityGrantRow>('plugin_capability_grants').where(input).first())
-  }
-  async grantPluginCapability(input: Omit<PluginCapabilityGrantRow, 'id' | 'created_at' | 'updated_at'>) {
-    const now = new Date().toISOString()
-    const id = randomUUID()
-    await this.getDatabase()<PluginCapabilityGrantRow>('plugin_capability_grants').insert({ id, ...input, created_at: now, updated_at: now })
-      .onConflict(['consumer_plugin_id', 'provider_plugin_id', 'capability', 'capability_version', 'method']).merge({ updated_at: now })
-    if (!this.delegatedCapabilityGrants.some((grant) => grant.consumerPluginId === input.consumer_plugin_id && grant.providerPluginId === input.provider_plugin_id && grant.capability === input.capability && grant.capabilityVersion === input.capability_version && grant.method === input.method)) {
-      this.delegatedCapabilityGrants.push({ id, consumerPluginId: input.consumer_plugin_id, providerPluginId: input.provider_plugin_id, capability: input.capability, capabilityVersion: input.capability_version, method: input.method, createdAt: now })
-    }
-  }
-  pluginCapabilityGrants(): PluginCapabilityGrant[] { return this.delegatedCapabilityGrants.map((grant) => ({ ...grant })) }
-  async revokePluginCapabilityGrant(id: string) {
-    await this.getDatabase()<PluginCapabilityGrantRow>('plugin_capability_grants').where({ id }).delete()
-    this.delegatedCapabilityGrants = this.delegatedCapabilityGrants.filter((grant) => grant.id !== id)
-  }
-  async removePluginCapabilityGrants(pluginId: string) {
-    await this.getDatabase()<PluginCapabilityGrantRow>('plugin_capability_grants')
-      .where({ consumer_plugin_id: pluginId }).orWhere({ provider_plugin_id: pluginId }).delete()
-    this.delegatedCapabilityGrants = this.delegatedCapabilityGrants.filter((grant) => grant.consumerPluginId !== pluginId && grant.providerPluginId !== pluginId)
   }
   async installedPluginState(): Promise<unknown | undefined> {
     const row = await this.getDatabase()<SettingRow>('app_settings').where({ key: 'installed_plugin_state' }).first()

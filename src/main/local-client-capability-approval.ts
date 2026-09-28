@@ -4,10 +4,6 @@ export type ValidLocalClientCapabilityApproval = {
   expiresAt: number
 }
 
-export function carriesLocalClientCapabilityApproval(argumentsValue: Record<string, unknown>) {
-  return argumentsValue.approval !== undefined
-}
-
 export function validateLocalClientCapabilityApproval(
   argumentsValue: Record<string, unknown>,
   consumedApprovalIds: ReadonlyMap<string, number>,
@@ -18,6 +14,7 @@ export function validateLocalClientCapabilityApproval(
   const value = approval as Record<string, unknown>
   const id = String(value.id || '')
   const authorizationId = String(value.auth_id || '')
+  const requestAuthorizationId = String(argumentsValue.auth_id || '')
   const approvedAt = Date.parse(String(value.approved_at || ''))
   const capabilityVersion = Number(argumentsValue.capability_version)
   const argumentsSha256 = String(argumentsValue.arguments_sha256 || '')
@@ -26,6 +23,7 @@ export function validateLocalClientCapabilityApproval(
     || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(id)
     || consumedApprovalIds.has(id)
     || !authorizationId
+    || authorizationId !== requestAuthorizationId
     || String(value.provider_plugin_id || '') !== String(argumentsValue.provider_plugin_id || '')
     || String(value.capability || '') !== String(argumentsValue.capability || '')
     || Number(value.capability_version) !== capabilityVersion

@@ -1,6 +1,6 @@
 import { PackageCheck, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState, type RefObject } from 'react'
-import type { PluginCapabilityGrant, PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, SeedCatalogPlugin, SeedInstalledPlugin, UpdatePluginConfigurationInput } from '../../shared/contracts'
+import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, SeedCatalogPlugin, SeedInstalledPlugin, UpdatePluginConfigurationInput } from '../../shared/contracts'
 import { resolveSeedLocalizedText, type SeedLocalizedText } from '../../shared/plugin-manifest'
 import { useTranslation } from 'react-i18next'
 import { ActionButton } from '../components/ActionButton'
@@ -35,7 +35,6 @@ type PluginsPageProps = {
   appName: string
   plugins: SeedInstalledPlugin[]
   catalogPlugins: SeedCatalogPlugin[]
-  pluginCapabilityGrants: PluginCapabilityGrant[]
   selectedPlugin?: SeedInstalledPlugin | SeedCatalogPlugin
   query: string
   searchRef: RefObject<HTMLInputElement | null>
@@ -55,16 +54,14 @@ type PluginsPageProps = {
   onReconnectConfigurationProfile: (input: ReconnectPluginConfigurationProfileInput) => Promise<void>
   onQueryManagementView: (input: { pluginId: string; viewId: string; sourceId?: string; arguments?: Record<string, unknown> }) => Promise<unknown>
   onInvokeManagementAction: (input: { pluginId: string; viewId: string; actionId: string; arguments: Record<string, unknown> }) => Promise<unknown>
-  onRevokePluginCapabilityGrant: (id: string) => void
 }
 
-export function PluginsPage({ appName, plugins, catalogPlugins, pluginCapabilityGrants, selectedPlugin, query, searchRef, busy, hasMore, loadingMore, updateHighlightRevision, configurationStates, onQueryChange, onLoadMore, onSelectPlugin, onInstall, onUninstall, onUpdateConfiguration, onQueryConfigurationOptions, onQueryConfigurationProfileStatuses, onReconnectConfigurationProfile, onQueryManagementView, onInvokeManagementAction, onRevokePluginCapabilityGrant }: PluginsPageProps) {
+export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, query, searchRef, busy, hasMore, loadingMore, updateHighlightRevision, configurationStates, onQueryChange, onLoadMore, onSelectPlugin, onInstall, onUninstall, onUpdateConfiguration, onQueryConfigurationOptions, onQueryConfigurationProfileStatuses, onReconnectConfigurationProfile, onQueryManagementView, onInvokeManagementAction }: PluginsPageProps) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const [confirmation, setConfirmation] = useState<
     | { kind: 'install'; plugin: SeedCatalogPlugin; version: string; updating: boolean; currentVersion?: string }
     | { kind: 'uninstall'; plugin: SeedInstalledPlugin }
-    | { kind: 'revoke-capability'; grant: PluginCapabilityGrant }
   >()
   const [sourceFilter, setSourceFilter] = useState<'all' | 'public' | 'organization'>('all')
   const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -73,7 +70,6 @@ export function PluginsPage({ appName, plugins, catalogPlugins, pluginCapability
     ...catalogPlugins.map((plugin) => [plugin.id, resolveSeedLocalizedText(plugin.name, locale)] as const),
     ...plugins.map((plugin) => [plugin.id, resolveSeedLocalizedText(plugin.name, locale)] as const),
   ])
-  const pluginName = (pluginId: string) => pluginNamesById.get(pluginId) || pluginId
   const matches = (plugin: SeedInstalledPlugin | SeedCatalogPlugin) => !normalizedQuery || [
     searchableText(plugin.name),
     plugin.id,
@@ -115,20 +111,17 @@ export function PluginsPage({ appName, plugins, catalogPlugins, pluginCapability
       ? t(confirmation.updating ? 'plugins.confirmUpdateTitle' : 'plugins.confirmInstallTitle', {
         name: resolveSeedLocalizedText(confirmation.plugin.name, locale),
       })
-      : confirmation.kind === 'uninstall'
-        ? t('plugins.confirmUninstallTitle', { name: resolveSeedLocalizedText(confirmation.plugin.name, locale) })
-        : t('plugins.confirmRevokeCapabilityTitle')}
-    description={confirmation.kind === 'install' ? t('plugins.confirmInstallDescription') : confirmation.kind === 'uninstall' ? t('plugins.confirmUninstallDescription') : t('plugins.confirmRevokeCapabilityDescription')}
+      : t('plugins.confirmUninstallTitle', { name: resolveSeedLocalizedText(confirmation.plugin.name, locale) })}
+    description={confirmation.kind === 'install' ? t('plugins.confirmInstallDescription') : t('plugins.confirmUninstallDescription')}
     confirmLabel={confirmation.kind === 'install'
       ? t(confirmation.updating ? 'plugins.update' : 'plugins.install')
-      : confirmation.kind === 'uninstall' ? t('plugins.uninstall') : t('plugins.revokeCapability')}
+      : t('plugins.uninstall')}
     cancelLabel={t('common.cancel')}
     tone={confirmation.kind === 'install' ? 'primary' : 'danger'}
     onCancel={() => setConfirmation(undefined)}
     onConfirm={() => {
       if (confirmation.kind === 'install') onInstall(confirmation.plugin.id, confirmation.version)
-      else if (confirmation.kind === 'uninstall') onUninstall(confirmation.plugin.id)
-      else onRevokePluginCapabilityGrant(confirmation.grant.id)
+      else onUninstall(confirmation.plugin.id)
       setConfirmation(undefined)
     }}
   >
@@ -251,10 +244,6 @@ export function PluginsPage({ appName, plugins, catalogPlugins, pluginCapability
         <p className="mb-0 mt-1 text-[12px] text-muted-foreground">{t('plugins.unsupportedRenderer', { renderer: configuration.renderer })}</p>
       </section>
     })}
-    {selectedInstalledPlugin && pluginCapabilityGrants.length > 0 && <section className="mt-8">
-      <div><h3 className="m-0 text-[17px] font-medium">{t('plugins.delegatedCapabilities')}</h3><p className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">{t('plugins.delegatedCapabilitiesDescription')}</p></div>
-      <div>{pluginCapabilityGrants.map((grant) => <div className="flex items-center justify-between gap-4 border-b border-border/70 py-3 last:border-b-0" key={grant.id}><div className="min-w-0"><strong className="block truncate text-[13px] font-medium">{grant.method}</strong><span className="block truncate text-[11px] text-muted-foreground">{grant.capability} · {pluginName(grant.consumerPluginId)} → {pluginName(grant.providerPluginId)}</span></div><ActionButton tone="danger" icon={<Trash2 size={14} />} busy={busy === `plugin-capability-revoke-${grant.id}`} onClick={() => setConfirmation({ kind: 'revoke-capability', grant })}>{t('plugins.revokeCapability')}</ActionButton></div>)}</div>
-    </section>}
     {selectedInstalledPlugin?.managementViews.filter((view) => (view.renderer === 'seed.collection' || view.renderer === 'seed.panel') && view.source).map((view) => <PluginManagementView
       key={view.id}
       pluginId={selectedInstalledPlugin.id}

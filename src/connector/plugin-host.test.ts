@@ -1028,7 +1028,53 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
     }
   })
 
-  it('requires one-time approval for write and control capability calls', async () => {
+  it.each(['write', 'control'] as const)('does not request a second approval for a declared %s capability call', async (risk) => {
+    const provider: SeedPluginRuntimeDefinition = {
+      ...plugin,
+      capabilities: [{ id: 'probe', version: 1, exposure: 'terminal', methods: [{ name: 'change', risk }] }],
+    }
+    const consumer: SeedPluginRuntimeDefinition = {
+      ...plugin,
+      package_id: 'com.example.consumer',
+      consumes: [{ capability: 'probe', methods: ['change'] }],
+      capabilities: [{ id: 'consumer_probe', version: 1, exposure: 'local', methods: [{ name: 'noop', risk: 'read' }] }],
+    }
+    const invokeHost = vi.fn(async (service: string) => {
+      if (service === 'seed.plugin.audit') return { recorded: true }
+      if (service === 'seed.plugin.invoke') return { changed: true }
+      throw new Error(`Unexpected service: ${service}`)
+    })
+    const host = new SeedPluginHost({ configuration: () => null, invoke_host: invokeHost })
+    await host.start([provider, consumer])
+    const broker = (host as unknown as { invokeConsumedCapability: Function }).invokeConsumedCapability.bind(host)
+    await expect(broker(consumer, { capability: 'probe', method: 'change', arguments: {} })).resolves.toBeDefined()
+    expect(invokeHost).not.toHaveBeenCalledWith('seed.plugin-capability.verify-approval', expect.anything())
+  })
+
+  it('requires a proof when a local client requests a write capability', async () => {
+    const provider: SeedPluginRuntimeDefinition = {
+      ...plugin,
+      capabilities: [{ id: 'probe', version: 1, exposure: 'terminal', methods: [{ name: 'change', risk: 'write' }] }],
+    }
+    const consumer: SeedPluginRuntimeDefinition = {
+      ...plugin,
+      package_id: 'com.example.consumer',
+      consumes: [{ capability: 'probe', methods: ['change'] }],
+      capabilities: [{ id: 'consumer_probe', version: 1, exposure: 'local', methods: [{ name: 'noop', risk: 'read' }] }],
+    }
+    const invokeHost = vi.fn(async (service: string) => {
+      if (service === 'seed.plugin.audit') return { recorded: true }
+      throw new Error(`Unexpected service: ${service}`)
+    })
+    const host = new SeedPluginHost({ configuration: () => null, invoke_host: invokeHost })
+    await host.start([provider, consumer])
+    const broker = (host as unknown as { invokeConsumedCapability: Function }).invokeConsumedCapability.bind(host)
+    await expect(broker(consumer, { capability: 'probe', method: 'change', arguments: {}, context: { auth_id: 'authorization-1' } }))
+      .rejects.toMatchObject({ code: 'plugin_capability_denied' })
+    expect(invokeHost).not.toHaveBeenCalledWith('seed.plugin.invoke', expect.anything())
+  })
+
+  it('rejects a write capability call when the host rejects its local-client approval proof', async () => {
     const writeProvider: SeedPluginRuntimeDefinition = {
       ...plugin,
       capabilities: [{ id: 'probe', version: 1, exposure: 'terminal', methods: [{ name: 'change', risk: 'write' }] }],
@@ -1040,18 +1086,18 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
       capabilities: [{ id: 'consumer_probe', version: 1, exposure: 'local', methods: [{ name: 'noop', risk: 'read' }] }],
     }
     const invokeHost = vi.fn(async (service: string) => {
-      if (service === 'seed.plugin-capability.approve') return { allowed: false }
+      if (service === 'seed.plugin-capability.verify-approval') return { allowed: false }
       if (service === 'seed.plugin.audit') return { recorded: true }
       throw new Error(`Unexpected service: ${service}`)
     })
     const host = new SeedPluginHost({ configuration: () => null, invoke_host: invokeHost })
     await host.start([writeProvider, consumer])
     const broker = (host as unknown as { invokeConsumedCapability: Function }).invokeConsumedCapability.bind(host)
-    await expect(broker(consumer, { capability: 'probe', method: 'change', arguments: {} }))
+    await expect(broker(consumer, { capability: 'probe', method: 'change', arguments: {}, context: { auth_id: 'authorization-1' }, approval: { kind: 'local_client_human_once' } }))
       .rejects.toMatchObject({ code: 'plugin_capability_denied' })
-    expect(invokeHost).toHaveBeenCalledWith('seed.plugin-capability.approve', expect.objectContaining({
-      risk: 'write',
+    expect(invokeHost).toHaveBeenCalledWith('seed.plugin-capability.verify-approval', expect.objectContaining({
       capability_version: 1,
+      auth_id: 'authorization-1',
       arguments_sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
     }))
     expect(invokeHost).not.toHaveBeenCalledWith('seed.plugin.invoke', expect.anything())

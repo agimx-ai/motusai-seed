@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carriesLocalClientCapabilityApproval, validateLocalClientCapabilityApproval } from './local-client-capability-approval'
+import { validateLocalClientCapabilityApproval } from './local-client-capability-approval'
 
 const now = Date.parse('2026-09-02T10:00:00.000Z')
 const request = {
@@ -7,6 +7,7 @@ const request = {
   capability: 'files',
   capability_version: 1,
   method: 'write_file',
+  auth_id: 'authorization-1',
   arguments_sha256: 'a'.repeat(64),
   approval: {
     kind: 'local_client_human_once',
@@ -22,11 +23,6 @@ const request = {
 }
 
 describe('local client capability approval', () => {
-  it('distinguishes a local-client proof from a plugin call delegated to the Seed host', () => {
-    expect(carriesLocalClientCapabilityApproval(request)).toBe(true)
-    expect(carriesLocalClientCapabilityApproval({ ...request, approval: undefined })).toBe(false)
-  })
-
   it('accepts an exact fresh one-time approval', () => {
     expect(validateLocalClientCapabilityApproval(request, new Map(), now)).toEqual({
       id: request.approval.id,
@@ -38,6 +34,7 @@ describe('local client capability approval', () => {
   it('rejects replayed, stale, or argument-mismatched approvals', () => {
     expect(validateLocalClientCapabilityApproval(request, new Map([[request.approval.id, now + 1]]), now)).toBeNull()
     expect(validateLocalClientCapabilityApproval({ ...request, arguments_sha256: 'b'.repeat(64) }, new Map(), now)).toBeNull()
+    expect(validateLocalClientCapabilityApproval({ ...request, auth_id: 'authorization-2' }, new Map(), now)).toBeNull()
     expect(validateLocalClientCapabilityApproval({ ...request, provider_plugin_id: 'com.example.other' }, new Map(), now)).toBeNull()
     expect(validateLocalClientCapabilityApproval({
       ...request,

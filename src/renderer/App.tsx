@@ -20,7 +20,6 @@ import { OverviewPage } from './pages/OverviewPage'
 import { PluginsPage } from './pages/PluginsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { UsagePage } from './pages/UsagePage'
-import { PluginCapabilityAuthDialog } from './features/plugins/PluginCapabilityAuthDialog'
 import { countAvailablePluginUpdates } from './features/plugins/plugin-updates'
 import { useSeedI18n } from './i18n'
 
@@ -114,20 +113,6 @@ export default function App() {
     theme={resolvedTheme}
     contentInsetLeft={snapshot?.startup.status === 'ready' && snapshot.user && !sidebarCollapsed ? sidebarWidth : 0}
   />
-  const capabilityAuthRequest = snapshot?.pluginCapabilityApprovalRequest
-  const capabilityConsumer = snapshot?.plugins.find((plugin) => plugin.id === capabilityAuthRequest?.consumerPluginId)
-  const capabilityProvider = snapshot?.plugins.find((plugin) => plugin.id === capabilityAuthRequest?.providerPluginId)
-  const capabilityAuthDialog = <PluginCapabilityAuthDialog
-    request={capabilityAuthRequest}
-    consumerName={capabilityConsumer ? resolveSeedLocalizedText(capabilityConsumer.name, locale) : capabilityAuthRequest?.consumerPluginId || ''}
-    providerName={capabilityProvider ? resolveSeedLocalizedText(capabilityProvider.name, locale) : capabilityAuthRequest?.providerPluginId || ''}
-    busy={busy === 'plugin-capability-authorization'}
-    onRespond={(allowed) => {
-      if (!capabilityAuthRequest) return
-      void run('plugin-capability-authorization', (api) => api.respondPluginCapabilityApproval(capabilityAuthRequest.id, allowed))
-    }}
-  />
-
   if (previewStartupScreen || !minimumStartupElapsed || !snapshot || snapshot.startup.status === 'initializing') return <>
     <main className="relative grid h-full animate-[fade_.3s_ease_both] place-content-center justify-items-center bg-[var(--startup-surface)] text-foreground">
       <WindowChrome />
@@ -142,7 +127,6 @@ export default function App() {
       </div>
     </main>
     {globalToaster}
-    {capabilityAuthDialog}
   </>
 
   if (!snapshot.user) return <>
@@ -156,7 +140,6 @@ export default function App() {
       onCancel={() => void run('cancel-sign-in', (api) => api.cancelSignIn())}
     />
     {globalToaster}
-    {capabilityAuthDialog}
   </>
 
   const plugins = snapshot.plugins ?? []
@@ -261,7 +244,6 @@ export default function App() {
           appName={snapshot.appName}
           plugins={plugins}
           catalogPlugins={catalogPlugins}
-          pluginCapabilityGrants={snapshot.pluginCapabilityGrants.filter((grant) => selectedPlugin && (grant.consumerPluginId === selectedPlugin.id || grant.providerPluginId === selectedPlugin.id))}
           selectedPlugin={selectedPlugin}
           query={pluginQuery}
           searchRef={pluginSearchRef}
@@ -281,7 +263,6 @@ export default function App() {
           onReconnectConfigurationProfile={window.motusSeed.reconnectPluginConfigurationProfile}
           onQueryManagementView={window.motusSeed.queryPluginManagementView}
           onInvokeManagementAction={window.motusSeed.invokePluginManagementAction}
-          onRevokePluginCapabilityGrant={(id) => void run(`plugin-capability-revoke-${id}`, (api) => api.revokePluginCapabilityGrant(id))}
         />}
         {view === 'activity' && <ActivityPage entries={snapshot.audit} appName={snapshot.appName} />}
         {view === 'settings' && <SettingsPage
@@ -303,7 +284,6 @@ export default function App() {
       </section>
     </div>
     {globalToaster}
-    {capabilityAuthDialog}
     {profileEditing && <ProfileEditDialog user={snapshot.user} onClose={() => setProfileEditing(false)} />}
   </>
 }

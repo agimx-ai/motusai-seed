@@ -461,20 +461,29 @@ describe('SeedStore SQLite persistence', () => {
     await store.close()
   })
 
-  it('isolates encrypted plugin secrets and persists revocable delegated capability grants', async () => {
+  it('isolates encrypted plugin secrets and removes obsolete delegated capability grants', async () => {
     const directory = await temporaryDirectory()
     const store = new SeedStore(directory, 'MotusAI Seed')
     await store.load()
     await store.setPluginSecret('com.example.connector', 'session.token', 'secret-token')
     expect(store.pluginSecret('com.example.connector', 'session.token')).toBe('secret-token')
     expect(store.pluginSecret('com.example.other', 'session.token')).toBeUndefined()
-    const grant = { consumer_plugin_id: 'com.example.connector', provider_plugin_id: 'com.motusai.seed.agent-harness', capability: 'agent_sessions', capability_version: 1, method: 'messages.submit' }
-    await store.grantPluginCapability(grant)
-    expect(await store.hasPluginCapabilityGrant(grant)).toBe(true)
-    const [storedGrant] = store.pluginCapabilityGrants()
-    expect(storedGrant).toMatchObject({ consumerPluginId: grant.consumer_plugin_id, capability: 'agent_sessions', method: 'messages.submit' })
-    await store.revokePluginCapabilityGrant(storedGrant!.id)
-    expect(await store.hasPluginCapabilityGrant(grant)).toBe(false)
     await store.close()
+
+    const legacy = createKnex({ client: 'better-sqlite3', connection: { filename: store.databasePath }, useNullAsDefault: true })
+    await legacy.schema.createTable('plugin_capability_grants', (table) => {
+      table.text('id').primary()
+      table.text('consumer_plugin_id').notNullable()
+    })
+    await legacy('plugin_capability_grants').insert({ id: 'grant-1', consumer_plugin_id: 'com.example.connector' })
+    await legacy.destroy()
+
+    const reopened = new SeedStore(directory, 'MotusAI Seed')
+    await reopened.load()
+    expect(reopened.pluginSecret('com.example.connector', 'session.token')).toBe('secret-token')
+    const migrated = createKnex({ client: 'better-sqlite3', connection: { filename: reopened.databasePath }, useNullAsDefault: true })
+    expect(await migrated.schema.hasTable('plugin_capability_grants')).toBe(false)
+    await migrated.destroy()
+    await reopened.close()
   })
 })
