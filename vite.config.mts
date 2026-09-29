@@ -11,7 +11,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@motusai/seed-sdk': resolve(projectRoot, 'packages/seed-sdk/src/index.ts'),
+      '@motus-ai/seed-sdk': resolve(projectRoot, 'packages/seed-sdk/src/index.ts'),
       '@renderer': resolve(projectRoot, 'src/renderer'),
       '@shared': resolve(projectRoot, 'src/shared'),
     },

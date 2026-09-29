@@ -95,13 +95,13 @@ export class ConnectorManager {
     return this.requestNativeCapability({ type: 'native.capability.list', packageId })
   }
 
-  invokeNativeCapability(packageId: string, invocation: import('@motusai/seed-sdk').SeedPluginCapabilityInvocation, chain: string[]) {
+  invokeNativeCapability(packageId: string, invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation, chain: string[]) {
     return this.requestNativeCapability({ type: 'native.capability.invoke', packageId, invocation, chain })
   }
 
   private requestNativeCapability(command:
     | { type: 'native.capability.list'; packageId: string }
-    | { type: 'native.capability.invoke'; packageId: string; invocation: import('@motusai/seed-sdk').SeedPluginCapabilityInvocation; chain: string[] }) {
+    | { type: 'native.capability.invoke'; packageId: string; invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation; chain: string[] }) {
     const requestId = randomUUID()
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {

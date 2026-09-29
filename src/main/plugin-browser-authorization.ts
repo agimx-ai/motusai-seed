@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { SeedBrowserAuthorizationRequest, SeedBrowserAuthorizationResult, SeedNetworkPermission } from '@motusai/seed-sdk'
+import type { SeedBrowserAuthorizationRequest, SeedBrowserAuthorizationResult, SeedNetworkPermission } from '@motus-ai/seed-sdk'
 
 type Pending = {
   packageId: string

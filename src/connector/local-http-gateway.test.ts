@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
-import type { SeedLocalApiRegistration } from '@motusai/seed-sdk'
+import type { SeedLocalApiRegistration } from '@motus-ai/seed-sdk'
 import type { CapsRuntimeService } from './caps'
 import { SeedLocalHttpGateway } from './local-http-gateway'
 import type { SeedPluginHost } from './plugin-host'

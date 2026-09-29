@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { SeedLocalEventStream, type SeedLocalApiRegistration, type SeedLocalGatewayEvent, type SeedLocalGatewaySnapshot, type SeedLocalPluginRuntimeState } from '@motusai/seed-sdk'
+import { SeedLocalEventStream, type SeedLocalApiRegistration, type SeedLocalGatewayEvent, type SeedLocalGatewaySnapshot, type SeedLocalPluginRuntimeState } from '@motus-ai/seed-sdk'
 import type { CapsRuntimeService } from './caps'
 import type { SeedPluginHost } from './plugin-host'
 import type { GlobalTaskActivityObserver } from './global-task-activity-observer'

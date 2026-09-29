@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { canonicalSeedCapabilityApprovalPayload, seedNetworkPermissions, type SeedCapabilityHandler, type SeedConfigurationOption, type SeedConfigurationOptionBadge, type SeedConnectionDescriptor, type SeedConnectionHandle, type SeedConnectionSnapshot, type SeedConnectionStatus, type SeedInvocationPrincipal, type SeedLocalApiRegistration, type SeedPlugin, type SeedPluginCapabilityInvocation, type SeedPluginContext } from '@motusai/seed-sdk'
+import { canonicalSeedCapabilityApprovalPayload, seedNetworkPermissions, type SeedCapabilityHandler, type SeedConfigurationOption, type SeedConfigurationOptionBadge, type SeedConnectionDescriptor, type SeedConnectionHandle, type SeedConnectionSnapshot, type SeedConnectionStatus, type SeedInvocationPrincipal, type SeedLocalApiRegistration, type SeedPlugin, type SeedPluginCapabilityInvocation, type SeedPluginContext } from '@motus-ai/seed-sdk'
 import type { CapsInvokeContext, CapsRuntimeService } from './caps'
 import { CapsContext, CapsRegistry } from './caps'
 import type { CapsPluginDescriptor, NativePluginRuntimeSnapshot, PluginConfigurationOption, PluginConfigurationOptionBadge, SeedPluginRuntimeDefinition } from '../shared/contracts'
@@ -846,7 +846,7 @@ export class SeedPluginHost {
           try {
             return await invokeHost('seed.plugin-authorization', {
               operation: 'start', request_id: requestId, request,
-            }) as import('@motusai/seed-sdk').SeedBrowserAuthorizationResult
+            }) as import('@motus-ai/seed-sdk').SeedBrowserAuthorizationResult
           } finally {
             signal?.removeEventListener('abort', cancel)
             pendingAuthorizations.delete(requestId)

@@ -1,4 +1,4 @@
-import type { SeedConnectionState, SeedNavigationTarget } from '@motusai/seed-sdk'
+import type { SeedConnectionState, SeedNavigationTarget } from '@motus-ai/seed-sdk'
 import type { SeedConsumedCapability, SeedPluginLabel } from './plugin-manifest'
 import type { SeedLocalizedText } from './plugin-manifest'
 
@@ -539,13 +539,13 @@ export type WorkerCommand =
   | { type: 'host.result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string }
   | { type: 'native.runtime.updated'; packageId: string; snapshot: NativePluginRuntimeSnapshot | null }
   | { type: 'native.capability.list'; requestId: string; packageId: string }
-  | { type: 'native.capability.invoke'; requestId: string; packageId: string; invocation: import('@motusai/seed-sdk').SeedPluginCapabilityInvocation; chain: string[] }
+  | { type: 'native.capability.invoke'; requestId: string; packageId: string; invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation; chain: string[] }
   | { type: 'plugin.management.query'; requestId: string; pluginId: string; viewId: string; sourceId?: string; arguments?: Record<string, unknown> }
   | { type: 'plugin.configuration.options.query'; requestId: string; pluginId: string; configurationId: string; fieldKey: string; values: Record<string, string> }
   | { type: 'plugin.configuration.profile-statuses.query'; requestId: string; pluginId: string; configurationId: string }
   | { type: 'plugin.configuration.profile.reconnect'; requestId: string; pluginId: string; configurationId: string; profileId: string }
   | { type: 'plugin.management.invoke'; requestId: string; pluginId: string; viewId: string; actionId: string; arguments: Record<string, unknown> }
-  | { type: 'local-gateway.event'; event: import('@motusai/seed-sdk').SeedLocalGatewayEvent }
+  | { type: 'local-gateway.event'; event: import('@motus-ai/seed-sdk').SeedLocalGatewayEvent }
   | { type: 'shutdown' }
 
 export type WorkerEvent =
@@ -565,6 +565,6 @@ export type NativePluginRuntimeSnapshot = {
   capabilities: string[]
   configurations: import('./plugin-manifest').SeedPluginConfiguration[]
   managementViews: import('./plugin-manifest').SeedPluginManagementView[]
-  localApi?: Omit<import('@motusai/seed-sdk').SeedLocalApiRegistration, 'handle'>
-  connections: import('@motusai/seed-sdk').SeedConnectionSnapshot[]
+  localApi?: Omit<import('@motus-ai/seed-sdk').SeedLocalApiRegistration, 'handle'>
+  connections: import('@motus-ai/seed-sdk').SeedConnectionSnapshot[]
 }

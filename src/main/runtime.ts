@@ -178,7 +178,7 @@ export class SeedRuntime {
     }],
     ['seed.plugin.invoke', async (argumentsValue) => {
       const invocation = argumentsValue.invocation && typeof argumentsValue.invocation === 'object'
-        ? argumentsValue.invocation as import('@motusai/seed-sdk').SeedInvocation
+        ? argumentsValue.invocation as import('@motus-ai/seed-sdk').SeedInvocation
         : null
       if (!invocation) throw new Error('插件调用缺少 invocation。')
       return await this.sandboxHost.invoke(
@@ -338,7 +338,7 @@ export class SeedRuntime {
         return { cancelled: true }
       }
       if (argumentsValue.operation !== 'start') throw new Error('插件授权操作无效。')
-      const request = argumentsValue.request as import('@motusai/seed-sdk').SeedBrowserAuthorizationRequest
+      const request = argumentsValue.request as import('@motus-ai/seed-sdk').SeedBrowserAuthorizationRequest
       if (!request || typeof request !== 'object') throw new Error('插件授权请求无效。')
       const standardPermission = request.standard === 'oauth2.authorization_code.pkce'
         ? 'authorization.oauth2.pkce'
@@ -460,7 +460,7 @@ export class SeedRuntime {
     })
     this.hostServices.set('seed.native.stop', async (args) => { await this.nativeHost.stop(String(args.package_id || '')); return null })
     this.hostServices.set('seed.native.invoke', async (args) => {
-      const invocation = args.invocation as import('@motusai/seed-sdk').SeedInvocation
+      const invocation = args.invocation as import('@motus-ai/seed-sdk').SeedInvocation
       const packageId = String(args.package_id || '')
       return await this.nativeHost.call(packageId, { type: 'invoke', capability: String(args.capability || ''),
         method: String(args.method || ''), invocation, chain: Array.isArray(args.chain) ? args.chain.filter((x): x is string => typeof x === 'string') : [],
@@ -473,7 +473,7 @@ export class SeedRuntime {
     this.hostServices.set('seed.native.local-api', async (args) => await this.nativeHost.call(String(args.package_id || ''), {
       type: 'local-api', url: String(args.url || ''), method: String(args.method || ''),
       headers: args.headers as Array<[string, string]>, body: args.body as Uint8Array | undefined,
-      client: args.client as import('@motusai/seed-sdk').SeedLocalApiClient | null,
+      client: args.client as import('@motus-ai/seed-sdk').SeedLocalApiClient | null,
       trace: args.trace as import('../shared/diagnostic-trace').DiagnosticTraceContext | undefined,
     }))
     this.hostServices.set('seed.native.local-api.read', async (args) => await this.nativeHost.call(String(args.package_id || ''), {
@@ -1640,7 +1640,7 @@ export class SeedRuntime {
       }
       if (service === 'seed.native.capabilities.list') return await this.connector.queryNativeCapabilities(packageId)
       return await this.connector.invokeNativeCapability(packageId,
-        argumentsValue.invocation as import('@motusai/seed-sdk').SeedPluginCapabilityInvocation,
+        argumentsValue.invocation as import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation,
         Array.isArray(argumentsValue.chain) ? argumentsValue.chain.filter((x): x is string => typeof x === 'string') : [])
     }
     if (service === 'seed.plugin.audit' || service === 'seed.plugin.diagnostic') {
@@ -1662,7 +1662,7 @@ export class SeedRuntime {
     if (service === 'seed.broker.files.invoke') {
       const method = String(argumentsValue.method || '')
       const request = argumentsValue.request && typeof argumentsValue.request === 'object'
-        ? argumentsValue.request as import('@motusai/seed-sdk').SeedInvocation
+        ? argumentsValue.request as import('@motus-ai/seed-sdk').SeedInvocation
         : null
       if (!method || !request) throw new Error('文件 Broker 请求无效。')
       return await this.fileBroker.invoke(method, request)

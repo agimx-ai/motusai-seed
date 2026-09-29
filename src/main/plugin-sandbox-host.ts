@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFile, realpath } from 'node:fs/promises'
 import { extname, join, relative, resolve, sep } from 'node:path'
 import { BrowserWindow, ipcMain, session } from 'electron'
-import type { SeedInvocation } from '@motusai/seed-sdk'
+import type { SeedInvocation } from '@motus-ai/seed-sdk'
 import type { SeedPluginRuntimeDefinition } from '../shared/contracts'
 
 const pluginHostPath = 'src/renderer/hosts/plugin/index.html'

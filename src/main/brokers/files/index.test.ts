@@ -1,7 +1,7 @@
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import type { SeedInvocation } from '@motusai/seed-sdk'
+import type { SeedInvocation } from '@motus-ai/seed-sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FileBroker, filesystemRoots } from './index'
 

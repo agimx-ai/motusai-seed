@@ -1,7 +1,7 @@
 import {
   seedDeepLinkScheme,
   type SeedNavigationTarget,
-} from '@motusai/seed-sdk'
+} from '@motus-ai/seed-sdk'
 
 type SeedDeepLinkParser = (url: URL) => SeedNavigationTarget | null
 

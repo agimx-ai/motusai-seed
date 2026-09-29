@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SeedLocalEventStream } from '@motusai/seed-sdk'
+import { SeedLocalEventStream } from '@motus-ai/seed-sdk'
 
 describe('SeedLocalEventStream', () => {
   it('replays filtered events after the requested event id', async () => {

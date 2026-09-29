@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { SeedInvocation } from '@motusai/seed-sdk'
+import type { SeedInvocation } from '@motus-ai/seed-sdk'
 import type { FilesystemRoot } from '../../../shared/contracts'
 import { LocalFileError, LocalFileService, type LocalFileMethod, type TrashItem } from './file-service'
 

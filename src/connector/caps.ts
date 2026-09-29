@@ -1,6 +1,6 @@
 import { Context, type Fiber, type Plugin } from '../vendor/cordis-core'
 import type { WorkerCommand } from '../shared/contracts'
-import { type SeedEffectSetup, type SeedInvocation } from '@motusai/seed-sdk'
+import { type SeedEffectSetup, type SeedInvocation } from '@motus-ai/seed-sdk'
 
 export type CapsInvokeContext = Omit<SeedInvocation, 'principal' | 'signal'> & Partial<Pick<SeedInvocation, 'principal' | 'signal'>>
 

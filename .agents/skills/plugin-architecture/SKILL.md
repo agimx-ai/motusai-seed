@@ -60,7 +60,7 @@ description: 维护 MotusAI Seed 的插件架构、共享协议、声明式 UI�
 
 - 静态 Manifest 是身份、能力、方法、权限、Schema 与审批语义的权威来源；运行时注册只能是声明的子集。
 - Seed 自有外部字段使用 `snake_case`；所有用户文案提供 block-style `en_US` 与 `zh_Hans`。
-- 插件只依赖 `@motusai/seed-sdk`，入口使用 `apply(ctx)`；贡献通过 `ctx.effect(() => register(...))` 注册并返回可靠清理。
+- 插件只依赖 `@motus-ai/seed-sdk`，入口使用 `apply(ctx)`；贡献通过 `ctx.effect(() => register(...))` 注册并返回可靠清理。
 - 跨插件调用只允许 Manifest `consumes` 通过精确 capability/method 或通用方法 annotation 匹配后，再使用 `ctx.capabilities.list/invoke`；不得导入提供方代码或绕过能力代理。动态发现必须由提供方逐方法显式 opt-in，不能无条件暴露全部能力。
 - `agent.tool: true` 的方法必须审计 Agent 最终看到的名称、描述和参数。显式 `agent.tool_name` 使用小写字母开头，只包含小写字母、数字、下划线或连字符且不超过 64 个字符；名称采用“动作 + 明确对象”，避免 `read`、`search`、`run`、`roots` 等脱离上下文的宽泛词。不同资源类型不得共用一个工具后再按参数或路径猜测分流。
 - 最终 Agent 工具名在全部插件和消费方内置工具之间必须唯一；非法名称或重名直接拒绝创建运行时，不得静默改名、按顺序覆盖或增加旧名 fallback。改名时同步 capability annotation、消费方提示词、命令替代规则、文档、测试与提供方/消费方版本，并用全仓搜索确认旧别名已清除。
@@ -98,6 +98,6 @@ npm run build
 npm run smoke:plugin-host   # Plugin Host、沙箱或运行时变化
 ```
 
-协议变化至少覆盖成功、Schema 拒绝、权限拒绝、取消/失败、卸载/重载清理和多入口生命周期。共享类型变化后先构建 `@motusai/seed-sdk`，再检查依赖方。可见 UI 变化必须在真实页面验证窄宽、溢出、悬停、滚动、亮暗主题和插件卸载后的消失行为。
+协议变化至少覆盖成功、Schema 拒绝、权限拒绝、取消/失败、卸载/重载清理和多入口生命周期。共享类型变化后先构建 `@motus-ai/seed-sdk`，再检查依赖方。可见 UI 变化必须在真实页面验证窄宽、溢出、悬停、滚动、亮暗主题和插件卸载后的消失行为。
 
 最终分别报告类型检查、测试、构建、视觉验收、打包、提交和推送结果。不要把其中一项成功描述成全部完成；用户未明确要求时，不提升版本、不打包、不提交、不推送。

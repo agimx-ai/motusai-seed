@@ -1,4 +1,4 @@
-import type { SeedCapabilityHandler, SeedPlugin, SeedPluginContext } from '@motusai/seed-sdk'
+import type { SeedCapabilityHandler, SeedPlugin, SeedPluginContext } from '@motus-ai/seed-sdk'
 import { CapsRegistry } from '../../../connector/caps'
 import type { CapsPluginDescriptor } from '../../../shared/contracts'
 
@@ -115,7 +115,7 @@ runtimeBridge.onConfigure(async (configuration: PluginConfiguration) => {
                 try {
                   return await runtimeBridge.invokeBroker(owner.broker_token, 'seed.plugin-authorization', {
                     operation: 'start', request_id: requestId, request,
-                  }) as import('@motusai/seed-sdk').SeedBrowserAuthorizationResult
+                  }) as import('@motus-ai/seed-sdk').SeedBrowserAuthorizationResult
                 } finally {
                   signal?.removeEventListener('abort', cancel)
                   pendingAuthorizations.delete(requestId)

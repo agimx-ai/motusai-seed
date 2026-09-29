@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { seedNetworkPermissions } from '@motusai/seed-sdk'
+import { seedNetworkPermissions } from '@motus-ai/seed-sdk'
 import { seedVersionPattern } from './seed-version'
 
 const identifier = z.string().regex(/^[a-z][a-z0-9_.-]{0,127}$/)

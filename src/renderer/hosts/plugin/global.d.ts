@@ -10,7 +10,7 @@ type PluginInvocation = {
   package_id: string
   capability: string
   method: string
-  invocation: import('@motusai/seed-sdk').SeedInvocation
+  invocation: import('@motus-ai/seed-sdk').SeedInvocation
 }
 
 declare global {

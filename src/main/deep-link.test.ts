@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSeedDeepLink } from '@motusai/seed-sdk'
+import { createSeedDeepLink } from '@motus-ai/seed-sdk'
 import { parseSeedDeepLink, seedDeepLinkFromArguments } from './deep-link'
 
 describe('Seed deep links', () => {

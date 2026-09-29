@@ -1,6 +1,6 @@
 import { join, resolve } from 'node:path'
 import { release } from 'node:os'
-import { seedDeepLinkScheme, type SeedNavigationTarget } from '@motusai/seed-sdk'
+import { seedDeepLinkScheme, type SeedNavigationTarget } from '@motus-ai/seed-sdk'
 import { app, BrowserWindow, Menu, Tray, crashReporter, ipcMain, nativeImage, nativeTheme, powerMonitor, protocol, session, shell } from 'electron'
 import { buildConfig } from '../shared/build-config.generated'
 import { ipcChannels, type SeedLanguagePreference } from '../shared/contracts'

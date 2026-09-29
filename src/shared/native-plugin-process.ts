@@ -1,4 +1,4 @@
-import type { SeedInvocation, SeedLocalApiClient } from '@motusai/seed-sdk'
+import type { SeedInvocation, SeedLocalApiClient } from '@motus-ai/seed-sdk'
 import type { NativePluginRuntimeSnapshot, SeedPluginRuntimeDefinition, WorkerCommand } from './contracts'
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from './diagnostic-trace'
 
