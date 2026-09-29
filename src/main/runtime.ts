@@ -42,6 +42,7 @@ import { PythonEnvironmentService } from './python-environment-service'
 import { discoverDistribution } from './distribution-discovery'
 import { SeedDistributionEvents } from './distribution-events'
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization'
+import { entitlementRefreshChangesRuntime } from './entitlement-refresh'
 
 const entitlementResponseSchema = z.object({
   items: z.array(z.object({
@@ -1284,12 +1285,18 @@ export class SeedRuntime {
     if (!response.ok) throw new Error(`无法确认插件使用权限（${response.status}）。`)
     const result = entitlementResponseSchema.parse(await response.json())
     if (!this.user || this.store.cloudSession()?.accessToken !== accessToken) return
+    const runtimeChanged = entitlementRefreshChangesRuntime(
+      installed, this.authorizedInstalledPluginIds, result.items, Date.now() >= this.entitlementExpiresAt,
+    )
     await this.pluginInstaller.syncEntitlements(result.items)
     this.authorizedInstalledPluginIds.clear()
     for (const item of result.items) if (item.authorized) this.authorizedInstalledPluginIds.add(item.plugin_id)
     this.entitlementExpiresAt = Date.now() + 5 * 60_000
-    await this.reloadPlugins()
-    this.configureWorker()
+    // A routine renewal must not restart plugins or abort their active Cloud streams.
+    if (runtimeChanged) {
+      await this.reloadPlugins()
+      this.configureWorker()
+    }
     await this.publishSnapshot()
   }
 
