@@ -37,7 +37,7 @@ export function apply(ctx: SeedPluginContext) {
 | --- | --- |
 | 注册能力、调用已声明依赖的插件能力 | `ctx.capabilities.register()`、`list()`、`invoke()` |
 | 注册配置和读取当前值 | `ctx.configuration.register()`、`get()` |
-| 注册插件管理视图 | `ctx.management.registerView()` |
+| 注册插件管理视图、推送面板文本 | `ctx.management.registerView()`、`ctx.management.publishText()` |
 | 向本地应用提供 HTTP/SSE 路由 | `ctx.localApi.register()`、`SeedLocalEventStream` |
 | 调用经过权限检查的宿主服务 | `ctx.invokeHost()` |
 | 登记插件自己创建的长连接 | `ctx.connections.register()` |
@@ -45,6 +45,25 @@ export function apply(ctx: SeedPluginContext) {
 | 生成打开 Seed 的深链 | `createSeedDeepLink()` |
 
 `ctx.capabilities.invoke()` 只能调用插件在根 Manifest 的 `consumes` 中声明的能力与方法。存在多个提供方时，调用需指定 `provider_plugin_id`。能力参数和结果由 Seed 按声明的 Schema 校验；写入与控制操作仍须经过确认。
+
+### 管理面板的实时文本
+
+`seed.panel` 的 Markdown 块从数据源结果读取快照；需要实时输出时，声明 `stream_id_path` 并调用 `ctx.management.publishText()`：
+
+```ts
+await ctx.management.publishText({
+  view_id: 'my-view',
+  value_path: 'result',
+  stream_id: runId,
+  operation: 'append',
+  text: chunk,
+  offset: currentText.length,
+})
+```
+
+- `value_path` 必须指向本插件该视图声明的 Markdown 块，`stream_id` 必须匹配当前运行。
+- `append` 的 `offset` 是追加前的文本长度；也可用 `replace` 替换当前文本。
+- 首次加载的骨架图，以及状态块配合 Markdown 块时的复制按钮，均由 Seed 统一提供。完整的视图字段见[插件开发手册](https://github.com/agimx-ai/motusai-seed/blob/main/docs/插件开发手册.md)。
 
 ## 宿主边界
 
