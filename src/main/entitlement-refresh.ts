@@ -1,6 +1,16 @@
 type InstalledPlugin = { id: string; visibility: 'public' | 'organization' }
 type Entitlement = { plugin_id: string; visibility: 'public' | 'organization'; authorized: boolean }
 
+export function pluginInstallNeedsReload(
+  pluginId: string,
+  version: string,
+  installed: readonly { id: string; version: string }[],
+  runtime: readonly { package_id: string; version: string }[],
+): boolean {
+  return installed.find((plugin) => plugin.id === pluginId)?.version !== version
+    || runtime.find((plugin) => plugin.package_id === pluginId)?.version !== version
+}
+
 export function entitlementRefreshChangesRuntime(
   installed: readonly InstalledPlugin[],
   authorized: ReadonlySet<string>,

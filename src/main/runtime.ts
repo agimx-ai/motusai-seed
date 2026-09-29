@@ -10,7 +10,7 @@ import { resolveSeedLocale } from './i18n/locale'
 import { pluginConfigurationKey } from '../shared/contracts'
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation'
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest'
-import { invalidManagementInput } from '../shared/plugin-management-form'
+import { invalidManagementInput, resolveManagementInputFields } from '../shared/plugin-management-form'
 import { ConnectorManager } from './connector-manager'
 import {
   createCloudAuthorization,
@@ -42,7 +42,7 @@ import { PythonEnvironmentService } from './python-environment-service'
 import { discoverDistribution } from './distribution-discovery'
 import { SeedDistributionEvents } from './distribution-events'
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization'
-import { entitlementRefreshChangesRuntime } from './entitlement-refresh'
+import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh'
 
 const entitlementResponseSchema = z.object({
   items: z.array(z.object({
@@ -1015,7 +1015,11 @@ export class SeedRuntime {
       ...(action.input?.fields.map((field) => field.key) || []),
     ])
     if (Object.keys(input.arguments).some((key) => !allowedArguments.has(key))) throw new Error('插件管理动作参数无效。')
-    const invalidField = action.input && invalidManagementInput(action.input.fields, input.arguments)
+    const fields = action.input?.fields
+    const source = fields?.some((field) => field.optionsPath)
+      ? await this.queryPluginManagementView({ pluginId: input.pluginId, viewId: input.viewId })
+      : undefined
+    const invalidField = fields && invalidManagementInput(source === undefined ? fields : resolveManagementInputFields(fields, source), input.arguments)
     if (invalidField) throw new Error(`插件管理字段无效：${invalidField}`)
     for (const field of action.input?.fields || []) {
       if (field.type !== 'file' || !input.arguments[field.key]) continue
@@ -1463,11 +1467,17 @@ export class SeedRuntime {
       const verified = await this.pluginInstaller.downloadAndVerify(plugin, release)
       await this.pluginInstaller.install(verified, { publisherType: plugin.publisherType, visibility: plugin.visibility, source: 'marketplace', enabled: true })
       await this.refreshInstalledEntitlements()
+      if (pluginInstallNeedsReload(verified.manifest.id, verified.manifest.version, this.installedPlugins, this.runtimePlugins)) {
+        await this.reloadPlugins()
+        this.configureWorker()
+      }
       const installed = this.installedPlugins.find((candidate) => candidate.id === verified.manifest.id)
       const runtime = this.runtimePlugins.find((candidate) => candidate.package_id === verified.manifest.id)
-      if (!installed || installed.version !== verified.manifest.version || !installed.enabled || !runtime) {
-        throw new Error('插件安装后未能通过本地完整性校验并载入运行时。')
-      }
+      if (!installed) throw new Error('插件安装后未通过本地文件完整性校验。')
+      if (installed.status === 'incompatible') throw new Error(installed.incompatibilityReason || '插件格式与当前客户端不兼容。')
+      if (installed.version !== verified.manifest.version || !installed.enabled) throw new Error('插件安装状态与所选版本不一致。')
+      if (!this.pluginIsAuthorized(installed.id)) throw new Error('插件已安装，但当前账号未获得运行权限。')
+      if (runtime?.version !== verified.manifest.version) throw new Error('插件已安装，但对应版本的运行时未能载入。')
       installedSummary = `已安装 ${installed.name.zh_Hans}（${installed.version}）。`
       installedMetadata = { plugin_id: installed.id, plugin_version: installed.version, plugin_name_en_us: installed.name.en_US, plugin_name_zh_hans: installed.name.zh_Hans }
     } catch (error) {

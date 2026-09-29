@@ -340,6 +340,8 @@ const seedPluginManagementConditionSchema = z.object({
   in: z.array(z.union([z.string().max(200), z.number(), z.boolean(), z.null()])).min(1).max(16),
 }).strict()
 
+const seedPluginManagementImageDataUrlSchema = z.string().max(350_000).regex(/^data:image\/(?:svg\+xml|png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/)
+
 const seedPluginManagementInputFieldSchema = z.object({
   key: identifier,
   type: z.enum(['text', 'textarea', 'password', 'email', 'url', 'number', 'date', 'select', 'checkbox', 'file', 'files']),
@@ -351,20 +353,23 @@ const seedPluginManagementInputFieldSchema = z.object({
   max_length: z.number().int().min(1).max(65_536).default(2_048),
   min_value: z.number().finite().optional(),
   max_value: z.number().finite().optional(),
-  options: z.array(z.object({ value: z.string().min(1).max(200), label: seedLocalizedTextSchema(100) }).strict()).min(1).max(32).optional(),
+  options: z.array(z.object({ value: z.string().min(1).max(200), label: seedLocalizedTextSchema(100), icon_data_url: seedPluginManagementImageDataUrlSchema.optional(), group: z.enum(['seed', 'custom']).optional(), is_default: z.boolean().optional(), thinking_levels: z.array(z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])).max(7).optional() }).strict()).min(1).max(32).optional(),
+  options_path: z.string().min(1).max(200).optional(),
   accept: z.array(z.string().regex(/^\.[a-zA-Z0-9]+$/)).min(1).max(16).optional(),
   choose_label: seedLocalizedTextSchema(100).optional(),
   initial_value_path: z.string().min(1).max(200).optional(),
 }).strict().superRefine((field, context) => {
   if (field.help_url && !field.description) context.addIssue({ code: 'custom', path: ['help_url'], message: '帮助链接必须同时声明字段说明。' })
-  if (field.type === 'select' && !field.options?.length) context.addIssue({ code: 'custom', path: ['options'], message: '选择字段必须声明选项。' })
+  if (field.type === 'select' && !field.options?.length && !field.options_path) context.addIssue({ code: 'custom', path: ['options'], message: '选择字段必须声明选项或选项路径。' })
   if (field.type !== 'select' && field.options) context.addIssue({ code: 'custom', path: ['options'], message: '只有选择字段可以声明选项。' })
+  if (field.type !== 'select' && field.options_path) context.addIssue({ code: 'custom', path: ['options_path'], message: '只有选择字段可以声明选项路径。' })
+  if (field.options && field.options_path) context.addIssue({ code: 'custom', path: ['options_path'], message: '选择字段不能同时声明固定选项和选项路径。' })
   if (field.type !== 'file' && field.type !== 'files' && field.accept) context.addIssue({ code: 'custom', path: ['accept'], message: '只有文件字段可以声明扩展名。' })
   if (field.type !== 'file' && field.type !== 'files' && field.choose_label) context.addIssue({ code: 'custom', path: ['choose_label'], message: '只有文件字段可以声明选择按钮文案。' })
   if (field.type !== 'number' && (field.min_value !== undefined || field.max_value !== undefined)) context.addIssue({ code: 'custom', path: ['min_value'], message: '只有数字字段可以声明数值范围。' })
   if (field.min_value !== undefined && field.max_value !== undefined && field.min_value > field.max_value) context.addIssue({ code: 'custom', path: ['max_value'], message: '最大值不能小于最小值。' })
   if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) context.addIssue({ code: 'custom', path: ['options'], message: '选择字段不能有重复选项。' })
-}).transform(({ max_length, min_value, max_value, help_url, initial_value_path, choose_label, ...field }) => ({
+}).transform(({ max_length, min_value, max_value, help_url, initial_value_path, choose_label, options_path, ...field }) => ({
   ...field,
   maxLength: max_length,
   minValue: min_value,
@@ -372,6 +377,7 @@ const seedPluginManagementInputFieldSchema = z.object({
   helpUrl: help_url,
   initialValuePath: initial_value_path,
   chooseLabel: choose_label,
+  optionsPath: options_path,
 }))
 
 const seedPluginManagementActionSchema = z.object({
@@ -380,12 +386,12 @@ const seedPluginManagementActionSchema = z.object({
   icon: z.enum(['record', 'pause', 'play', 'check', 'save', 'x', 'trash', 'folder']).optional(),
   display: z.enum(['label', 'icon']).default('label'),
   tone: z.enum(['neutral', 'primary', 'danger']).default('neutral'),
-  placement: z.enum(['toolbar', 'footer', 'item_menu', 'item_footer']).default('toolbar'),
+  placement: z.enum(['toolbar', 'footer', 'item_menu', 'item_footer', 'field_change']).default('toolbar'),
   target: seedPluginManagementSourceSchema,
   argument_bindings: z.record(identifier, z.string().min(1).max(200)).default({}),
   visible_when: seedPluginManagementConditionSchema.optional(),
   input: z.object({
-    mode: z.enum(['dialog', 'inline']).default('dialog'),
+    mode: z.enum(['dialog', 'inline', 'field_change']).default('dialog'),
     drop_target: identifier.optional(),
     title: seedLocalizedTextSchema(100).optional(),
     description: seedLocalizedTextSchema(500).optional(),
@@ -414,11 +420,10 @@ const seedPluginManagementActionSchema = z.object({
 
 const seedPluginManagementToolbarItemSchema = z.union([
   z.object({ type: z.literal('refresh') }).strict(),
-  z.object({ type: z.literal('file_input') }).strict(),
+  z.object({ type: z.literal('file_input'), on_change_action_id: identifier.optional() }).strict().transform(({ on_change_action_id, ...item }) => ({ ...item, onChangeActionId: on_change_action_id })),
+  z.object({ type: z.literal('select_field'), field_key: identifier, control: z.enum(['select', 'model_select']).default('select'), align: z.enum(['start', 'end']).default('end'), thinking_field_key: identifier.optional(), on_change_action_id: identifier.optional() }).strict().transform(({ field_key, thinking_field_key, on_change_action_id, ...item }) => ({ ...item, fieldKey: field_key, thinkingFieldKey: thinking_field_key, onChangeActionId: on_change_action_id })),
   z.object({ type: z.literal('action'), action_id: identifier }).strict().transform(({ action_id, ...item }) => ({ ...item, actionId: action_id })),
 ])
-
-const seedPluginManagementImageDataUrlSchema = z.string().max(350_000).regex(/^data:image\/(?:svg\+xml|png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/)
 
 const seedPluginCollectionItemIconSchema = z.union([
   z.object({
@@ -476,6 +481,7 @@ export const seedPluginManagementViewSchema = z.object({
   renderer: identifier,
   title: seedLocalizedTextSchema(100),
   description: seedLocalizedTextSchema(500),
+  show_header: z.boolean().default(true),
   source: seedPluginManagementSourceSchema.optional(),
   data_sources: z.record(identifier, seedPluginManagementDataSourceSchema).default({}),
   actions: z.array(seedPluginManagementActionSchema).max(16).default([]),
@@ -486,12 +492,38 @@ export const seedPluginManagementViewSchema = z.object({
   const actions = new Map(view.actions.map((action) => [action.id, action]))
   const toolbarEntries = new Set<string>()
   for (const [index, item] of view.toolbar.entries()) {
-    const key = item.type === 'action' ? `action:${item.actionId}` : item.type
+    const key = item.type === 'action' ? `action:${item.actionId}` : item.type === 'select_field' ? `select_field:${item.fieldKey}` : item.type
     if (toolbarEntries.has(key)) context.addIssue({ code: 'custom', path: ['toolbar', index], message: '工具栏项目不能重复。' })
     toolbarEntries.add(key)
     if (item.type === 'file_input') {
       if (view.renderer !== 'seed.panel' || !view.actions.some((action) => action.input?.mode === 'inline' && action.input.dropTarget && action.input.fields.some((field) => field.key === action.input?.dropTarget && (field.type === 'file' || field.type === 'files')))) {
         context.addIssue({ code: 'custom', path: ['toolbar', index], message: '文件选择按钮必须关联面板的页内文件字段。' })
+      }
+      if (item.onChangeActionId) {
+        const action = actions.get(item.onChangeActionId)
+        const dropKey = view.actions.find((candidate) => candidate.input?.mode === 'inline')?.input?.dropTarget
+        if (action?.placement !== 'field_change' || action.input?.mode !== 'field_change'
+          || action.input.fields.length !== 1 || action.input.fields[0]?.key !== dropKey || !['file', 'files'].includes(action.input.fields[0]?.type || '')) {
+          context.addIssue({ code: 'custom', path: ['toolbar', index, 'on_change_action_id'], message: '文件变更动作必须只接受页内文件字段。' })
+        }
+      }
+      continue
+    }
+    if (item.type === 'select_field') {
+      if (view.renderer !== 'seed.panel' || !view.actions.some((action) => action.input?.mode === 'inline' && action.input.fields.some((field) => field.key === item.fieldKey && field.type === 'select'))) {
+        context.addIssue({ code: 'custom', path: ['toolbar', index, 'field_key'], message: '工具栏选择字段必须引用面板的页内选择字段。' })
+      }
+      if (item.thinkingFieldKey && (item.control !== 'model_select' || !view.actions.some((action) => action.input?.mode === 'inline' && action.input.fields.some((field) => field.key === item.thinkingFieldKey && field.type === 'select')))) {
+        context.addIssue({ code: 'custom', path: ['toolbar', index, 'thinking_field_key'], message: '模型思考等级必须引用页内选择字段。' })
+      }
+      if (item.onChangeActionId) {
+        const action = actions.get(item.onChangeActionId)
+        const keys = [item.fieldKey, ...(item.thinkingFieldKey ? [item.thinkingFieldKey] : [])]
+        if (action?.placement !== 'field_change' || action.input?.mode !== 'field_change'
+          || !keys.every((key) => action.input?.fields.some((field) => field.key === key && field.type === 'select'))
+          || action?.input?.fields.some((field) => !keys.includes(field.key))) {
+          context.addIssue({ code: 'custom', path: ['toolbar', index, 'on_change_action_id'], message: '选择字段的变更动作必须只接受所引用的选择字段。' })
+        }
       }
       continue
     }
@@ -503,6 +535,12 @@ export const seedPluginManagementViewSchema = z.object({
   for (const action of view.actions) {
     if (action.placement === 'toolbar' && !toolbarEntries.has(`action:${action.id}`)) {
       context.addIssue({ code: 'custom', path: ['actions'], message: `工具栏动作未被 toolbar 引用：${action.id}` })
+    }
+    if ((action.placement === 'field_change') !== (action.input?.mode === 'field_change')) {
+      context.addIssue({ code: 'custom', path: ['actions'], message: '字段变更动作必须声明 field_change 输入与 placement。' })
+    }
+    if (action.placement === 'field_change' && !view.toolbar.some((item) => (item.type === 'select_field' || item.type === 'file_input') && item.onChangeActionId === action.id)) {
+      context.addIssue({ code: 'custom', path: ['actions'], message: `字段变更动作未被工具栏引用：${action.id}` })
     }
   }
   if (view.renderer === 'seed.panel') {

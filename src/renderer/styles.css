@@ -563,6 +563,56 @@
     transform: scale(var(--action-button-pencil-scale));
   }
 
+  .seed-model-menu--bottom {
+    --seed-model-menu-offset: 6px;
+    transform-origin: top center;
+  }
+
+  .seed-model-menu--top {
+    --seed-model-menu-offset: -6px;
+    transform-origin: bottom center;
+  }
+
+  .seed-model-menu--enter {
+    animation: seedModelMenuEnter 160ms cubic-bezier(.2, .75, .25, 1) both;
+  }
+
+  .seed-model-menu--exit {
+    animation: seedModelMenuExit 120ms ease-in both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .seed-model-menu--enter,
+    .seed-model-menu--exit {
+      animation-duration: .01ms;
+    }
+  }
+
+  .seed-thinking-slider {
+    appearance: none;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--muted);
+  }
+
+  .seed-thinking-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 17px;
+    height: 17px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--card);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  }
+
+  .seed-thinking-slider::-moz-range-thumb {
+    width: 17px;
+    height: 17px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--card);
+  }
+
   .seedling-mascot-button {
     --bloub-size: clamp(176px, 22vw, 208px);
     display: inline-grid;
@@ -732,6 +782,16 @@
 
 @keyframes pulse {
   50% { opacity: 0.35; }
+}
+
+@keyframes seedModelMenuEnter {
+  from { opacity: 0; transform: translateY(var(--seed-model-menu-offset)) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes seedModelMenuExit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(var(--seed-model-menu-offset)) scale(.985); }
 }
 
 @keyframes fade {

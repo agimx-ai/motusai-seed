@@ -415,6 +415,7 @@ export type SeedApi = {
 export type SeedWindowApi = {
   platform: NodeJS.Platform
   getPathForFile(file: File): string
+  copyText(text: string): Promise<void>
   reportDiagnostic(input: { event: string; message: string; error_stack?: string; error_name?: string }): void
   minimize(): Promise<void>
   toggleMaximize(): Promise<boolean>
@@ -458,6 +459,7 @@ export const ipcChannels = {
   installPlugin: 'seed:plugins:install',
   uninstallPlugin: 'seed:plugins:uninstall',
   windowMinimize: 'seed:window:minimize',
+  windowCopyText: 'seed:window:copy-text',
   windowToggleMaximize: 'seed:window:toggle-maximize',
   windowClose: 'seed:window:close',
   windowIsMaximized: 'seed:window:is-maximized',

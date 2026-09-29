@@ -3,7 +3,66 @@ import type { SeedPluginManagementView } from './plugin-manifest'
 export type ManagementInputField = NonNullable<SeedPluginManagementView['actions'][number]['input']>['fields'][number]
 export type ManagementFormValues = Record<string, string | string[] | boolean>
 
+export function resolveManagementInitialValues(fields: ManagementInputField[], source: unknown, values: ManagementFormValues): ManagementFormValues {
+  const resolved = { ...values }
+  for (const field of fields) {
+    if (resolved[field.key] !== undefined || !field.initialValuePath) continue
+    const initial = field.initialValuePath.split('.').filter(Boolean).reduce<unknown>((current, key) => (
+      current && typeof current === 'object' && !Array.isArray(current) ? (current as Record<string, unknown>)[key] : undefined
+    ), source)
+    if (typeof initial === 'string') resolved[field.key] = initial
+    else if (field.type === 'files' && Array.isArray(initial) && initial.every((entry) => typeof entry === 'string')) resolved[field.key] = initial
+  }
+  return resolved
+}
+
+export function resolveManagementModelValues(toolbar: SeedPluginManagementView['toolbar'], fields: ManagementInputField[], values: ManagementFormValues): ManagementFormValues {
+  const resolved = { ...values }
+  for (const item of toolbar) {
+    if (item.type !== 'select_field' || item.control !== 'model_select') continue
+    const field = fields.find((candidate) => candidate.key === item.fieldKey)
+    if (!field?.options?.length) continue
+    if (!field.options.some((option) => option.value === resolved[field.key])) {
+      resolved[field.key] = (field.options.find((option) => option.is_default) || field.options[0])!.value
+    }
+    if (item.thinkingFieldKey) {
+      const selected = field.options.find((option) => option.value === resolved[field.key])
+      const thinking = resolved[item.thinkingFieldKey]
+      if (thinking && !selected?.thinking_levels?.includes(String(thinking) as 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max')) resolved[item.thinkingFieldKey] = ''
+    }
+  }
+  return resolved
+}
+
 const absoluteFilePath = /^(?:\/|[A-Za-z]:[\\/]|\\\\[^\\]+\\[^\\]+)/
+
+export function resolveManagementInputFields(fields: ManagementInputField[], source: unknown): ManagementInputField[] {
+  return fields.map((field) => {
+    if (field.type !== 'select' || !field.optionsPath) return field
+    const options = field.optionsPath.split('.').filter(Boolean).reduce<unknown>((value, key) => (
+      value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>)[key] : undefined
+    ), source)
+    const seen = new Set<string>()
+    return { ...field, options: Array.isArray(options) ? options.filter((option): option is NonNullable<ManagementInputField['options']>[number] => {
+      if (!option || typeof option !== 'object' || Array.isArray(option)) return false
+      const entry = option as Record<string, unknown>
+      const label = entry.label
+      if (typeof entry.value !== 'string' || !entry.value || entry.value.length > 200 || seen.has(entry.value)
+        || !label || typeof label !== 'object' || Array.isArray(label)) return false
+      const localized = label as Record<string, unknown>
+      if (typeof localized.en_US !== 'string' || !localized.en_US || localized.en_US.length > 100
+        || typeof localized.zh_Hans !== 'string' || !localized.zh_Hans || localized.zh_Hans.length > 100) return false
+      if (entry.is_default !== undefined && typeof entry.is_default !== 'boolean') return false
+      if (entry.group !== undefined && entry.group !== 'seed' && entry.group !== 'custom') return false
+      if (entry.icon_data_url !== undefined && (typeof entry.icon_data_url !== 'string' || entry.icon_data_url.length > 350_000
+        || !/^data:image\/(?:svg\+xml|png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(entry.icon_data_url))) return false
+      if (entry.thinking_levels !== undefined && (!Array.isArray(entry.thinking_levels) || entry.thinking_levels.length > 7
+        || entry.thinking_levels.some((level) => !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(level)))) return false
+      seen.add(entry.value)
+      return true
+    }).slice(0, 32) : [] }
+  })
+}
 
 export function managementFormArguments(fields: ManagementInputField[], values: ManagementFormValues) {
   const argumentsValue: Record<string, unknown> = {}

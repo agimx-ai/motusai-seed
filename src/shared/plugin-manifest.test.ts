@@ -238,6 +238,25 @@ describe('plugin management view schema', () => {
     expect(seedPluginManagementViewSchema.safeParse({ ...panel, actions: [{ ...panel.actions[0], input: { ...panel.actions[0]!.input, fields: [{ key: 'files', type: 'files', label: text('Files'), choose_label: text('Upload files') }, { key: 'confirmed', type: 'checkbox', label: text('Confirmed'), choose_label: text('Upload') }] } }] }).success).toBe(false)
   })
 
+  it('accepts a view-data path for select options without mixing fixed and dynamic options', () => {
+    const action = { id: 'start', label: text('Start'), target: { capability: 'draft', method: 'start' }, input: {
+      mode: 'inline', fields: [{ key: 'model', type: 'select', label: text('Model'), options_path: 'models' }],
+    } }
+    const view = { id: 'draft', renderer: 'seed.panel', title: text('Draft'), description: text('Draft'),
+      props: { blocks: [{ type: 'text', value_path: 'result' }] }, toolbar: [{ type: 'action', action_id: 'start' }], actions: [action] }
+    expect(seedPluginManagementViewSchema.parse(view).actions[0]?.input?.fields[0]).toMatchObject({ optionsPath: 'models' })
+    expect(seedPluginManagementViewSchema.safeParse({ ...view, actions: [{ ...action, input: { ...action.input, fields: [{ ...action.input.fields[0], options: [{ value: 'one', label: text('One') }] }] } }] }).success).toBe(false)
+    expect(seedPluginManagementViewSchema.safeParse({ ...view, actions: [{ ...action, input: { ...action.input, fields: [{ key: 'model', type: 'select', label: text('Model') }] } }] }).success).toBe(false)
+    const toolbarView = { ...view, show_header: false, toolbar: [{ type: 'select_field', field_key: 'model' }, ...view.toolbar] }
+    expect(seedPluginManagementViewSchema.parse(toolbarView)).toMatchObject({ show_header: false, toolbar: [{ type: 'select_field', fieldKey: 'model' }, { type: 'action', actionId: 'start' }] })
+    expect(seedPluginManagementViewSchema.parse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'model', control: 'model_select' }, ...view.toolbar] }).toolbar[0]).toMatchObject({ type: 'select_field', fieldKey: 'model', control: 'model_select' })
+    expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'model', control: 'model_select', align: 'start', thinking_field_key: 'missing' }, ...view.toolbar] }).success).toBe(false)
+    expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'model', control: 'unknown' }, ...view.toolbar] }).success).toBe(false)
+    expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'missing' }, ...view.toolbar] }).success).toBe(false)
+    expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, toolbar: [toolbarView.toolbar[0], toolbarView.toolbar[0], ...view.toolbar] }).success).toBe(false)
+    expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, actions: [{ ...action, input: { ...action.input, fields: [{ key: 'model', type: 'text', label: text('Model') }] } }] }).success).toBe(false)
+  })
+
   it('accepts common typed action fields and rejects mismatched field metadata', () => {
     const view = {
       id: 'form', renderer: 'seed.collection', title: text('Form'), description: text('Form'),

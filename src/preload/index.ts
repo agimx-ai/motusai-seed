@@ -29,6 +29,7 @@ const ipcChannels = {
   searchPluginCatalog: 'seed:plugins:search-catalog',
   uninstallPlugin: 'seed:plugins:uninstall',
   windowMinimize: 'seed:window:minimize', windowToggleMaximize: 'seed:window:toggle-maximize',
+  windowCopyText: 'seed:window:copy-text',
   windowClose: 'seed:window:close', windowIsMaximized: 'seed:window:is-maximized',
   windowMaximizedChanged: 'seed:window:maximized-changed', event: 'seed:event',
 } as const
@@ -77,6 +78,7 @@ const api: SeedApi = {
 const windowApi: SeedWindowApi = {
   platform: process.platform,
   getPathForFile: (file) => webUtils.getPathForFile(file),
+  copyText: (text) => ipcRenderer.invoke(ipcChannels.windowCopyText, text),
   reportDiagnostic: (input) => ipcRenderer.send('seed:diagnostic:renderer', input),
   minimize: () => ipcRenderer.invoke(ipcChannels.windowMinimize),
   toggleMaximize: () => ipcRenderer.invoke(ipcChannels.windowToggleMaximize),

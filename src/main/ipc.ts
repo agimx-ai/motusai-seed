@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain } from 'electron'
 import { z } from 'zod'
 import { auditQuerySchema, installPluginSchema, pluginIdSchema, terminalLogUploadRangeSchema } from '../shared/validation'
 import { ipcChannels } from '../shared/contracts'
@@ -89,6 +89,9 @@ export function registerIpc(runtime: SeedRuntime) {
     return runtime.installPlugin(input.pluginId, input.version)
   })
   handle(ipcChannels.uninstallPlugin, (_event, pluginId) => runtime.uninstallPlugin(pluginIdSchema.parse(pluginId)))
+  handle(ipcChannels.windowCopyText, (_event, text) => {
+    clipboard.writeText(z.string().max(10_000_000).parse(text))
+  })
   handle(ipcChannels.windowMinimize, (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize()
   })
