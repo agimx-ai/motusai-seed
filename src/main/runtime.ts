@@ -83,6 +83,9 @@ export class SeedRuntime {
   private mascotWorkTimer: ReturnType<typeof setTimeout> | null = null
   private powerSaveBlockerId: number | null = null
   private remotePluginCatalog: SeedCatalogPlugin[] = []
+  private pluginCatalogStatus: SeedSnapshot['pluginCatalogStatus'] = 'loading'
+  private pluginCatalogError: string | undefined
+  private installedPluginsStatus: SeedSnapshot['installedPluginsStatus'] = 'loading'
   private remotePluginCatalogNextCursor: string | null = null
   private readonly verifiedCatalogPlugins = new Map<string, SeedCatalogPlugin>()
   private remotePluginCatalogRevision = ''
@@ -534,7 +537,12 @@ export class SeedRuntime {
     try {
       await this.cloudAccessToken(storedCloudSession.accessToken)
       await this.refreshPluginCatalog().catch(() => undefined)
-    } catch { /* Keep the current session on temporary network failures. */ }
+    } catch (error) {
+      // Keep the current session, but do not report a failed initial load as an empty catalog.
+      this.pluginCatalogStatus = 'error'
+      this.pluginCatalogError = error instanceof Error ? error.message : String(error)
+      await this.publishSnapshot()
+    }
   }
 
   private emit(event: SeedEvent) {
@@ -702,7 +710,10 @@ export class SeedRuntime {
       auth: this.authStatus,
       ...(this.user ? { user: this.user } : {}),
       plugins: this.installedPlugins.filter((plugin) => this.pluginIsAuthorized(plugin.id)),
+      installedPluginsStatus: this.installedPluginsStatus,
       catalogPlugins: this.remotePluginCatalog,
+      pluginCatalogStatus: this.pluginCatalogStatus,
+      ...(this.pluginCatalogError ? { pluginCatalogError: this.pluginCatalogError } : {}),
       ...(this.remotePluginCatalogNextCursor ? { catalogNextCursor: this.remotePluginCatalogNextCursor } : {}),
       localClients: this.localClients,
       ...(this.navigationRequest ? { navigationRequest: this.navigationRequest } : {}),
@@ -852,6 +863,9 @@ export class SeedRuntime {
     this.authorizedInstalledPluginIds.clear()
     this.entitlementExpiresAt = 0
     this.remotePluginCatalog = []
+    this.pluginCatalogStatus = 'loading'
+    this.pluginCatalogError = undefined
+    this.installedPluginsStatus = 'loading'
     this.verifiedCatalogPlugins.clear()
     await this.reloadPlugins()
     this.authStatus = { status: 'signed_out' }
@@ -1276,6 +1290,23 @@ export class SeedRuntime {
   }
 
   private async refreshInstalledEntitlements() {
+    if (this.installedPluginsStatus !== 'ready') {
+      this.installedPluginsStatus = 'loading'
+      await this.publishSnapshot()
+    }
+    try {
+      await this.readInstalledEntitlements()
+      this.installedPluginsStatus = 'ready'
+    } catch (error) {
+      // Preserve an already-loaded list during a failed routine renewal.
+      if (this.installedPluginsStatus !== 'ready') this.installedPluginsStatus = 'error'
+      throw error
+    } finally {
+      await this.publishSnapshot()
+    }
+  }
+
+  private async readInstalledEntitlements() {
     const distribution = await this.currentDistribution()
     if (!distribution.market_url || !this.user) {
       await this.applyExpiredEntitlements()
@@ -1310,7 +1341,6 @@ export class SeedRuntime {
       await this.reloadPlugins()
       this.configureWorker()
     }
-    await this.publishSnapshot()
   }
 
   private async handleDistributionEvent(event: SeedDistributionEvent) {
@@ -1423,6 +1453,21 @@ export class SeedRuntime {
   }
 
   async refreshPluginCatalog(options: { refreshEntitlements?: boolean } = {}) {
+    this.pluginCatalogStatus = 'loading'
+    this.pluginCatalogError = undefined
+    await this.publishSnapshot()
+    try {
+      return await this.readPluginCatalog(options)
+    } catch (error) {
+      this.pluginCatalogStatus = 'error'
+      this.pluginCatalogError = error instanceof Error ? error.message : String(error)
+      throw error
+    } finally {
+      await this.publishSnapshot()
+    }
+  }
+
+  private async readPluginCatalog(options: { refreshEntitlements?: boolean }) {
     const items: SeedCatalogPlugin[] = []
     const visited = new Set<string>()
     let cursor: string | undefined
@@ -1440,7 +1485,7 @@ export class SeedRuntime {
     this.remotePluginCatalogNextCursor = null
     this.remotePluginCatalogRevision = `${Date.now()}`
     if (options.refreshEntitlements !== false) await this.refreshInstalledEntitlements()
-    await this.publishSnapshot()
+    this.pluginCatalogStatus = 'ready'
     return this.remotePluginCatalog
   }
 

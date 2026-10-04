@@ -251,7 +251,10 @@ export type SeedSnapshot = {
   }
   user?: TerminalUserProfile
   plugins: SeedInstalledPlugin[]
+  installedPluginsStatus: 'loading' | 'ready' | 'error'
   catalogPlugins: SeedCatalogPlugin[]
+  pluginCatalogStatus: 'loading' | 'ready' | 'error'
+  pluginCatalogError?: string
   catalogNextCursor?: string
   localClients: LocalClientAuthorization[]
   navigationRequest?: SeedNavigationTarget & { id: string }

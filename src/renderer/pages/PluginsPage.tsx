@@ -13,6 +13,7 @@ import { resourceCardGridClass } from '../components/ResourceCard'
 import { CatalogPluginCard, CatalogPluginMark, McpMark, OfficialMark, PluginMark, PluginVersionTransition } from '../features/plugins/PluginCards'
 import { PluginActionButton } from '../features/plugins/PluginActionButton'
 import { PluginDetailActions } from '../features/plugins/PluginDetailActions'
+import { PluginListSkeleton } from '../features/plugins/PluginListSkeleton'
 import { pluginMcpTools } from '../features/plugins/mcp-tools'
 import { isCatalogPluginInstallable } from '../features/plugins/plugin-updates'
 import { PluginConfigurationPanel } from '../features/plugins/PluginConfigurationPanel'
@@ -37,6 +38,10 @@ type PluginsPageProps = {
   appName: string
   plugins: SeedInstalledPlugin[]
   catalogPlugins: SeedCatalogPlugin[]
+  installedLoading: boolean
+  installedError?: boolean
+  catalogLoading: boolean
+  catalogError?: string
   selectedPlugin?: SeedInstalledPlugin | SeedCatalogPlugin
   query: string
   searchRef: RefObject<HTMLInputElement | null>
@@ -62,7 +67,7 @@ type PluginsPageProps = {
   onInvokeManagementAction: (input: { pluginId: string; viewId: string; actionId: string; arguments: Record<string, unknown> }) => Promise<unknown>
 }
 
-export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, query, searchRef, busy, updateCount, updatesBusy, onUpdateAll, installProgress, hasMore, loadingMore, configurationStates, onQueryChange, onLoadMore, onSelectPlugin, onInstall, onCancelInstall, onUninstall, onUpdateConfiguration, onQueryConfigurationOptions, onQueryConfigurationProfileStatuses, onReconnectConfigurationProfile, onQueryManagementView, onInvokeManagementAction }: PluginsPageProps) {
+export function PluginsPage({ appName, plugins, catalogPlugins, installedLoading, installedError, catalogLoading, catalogError, selectedPlugin, query, searchRef, busy, updateCount, updatesBusy, onUpdateAll, installProgress, hasMore, loadingMore, configurationStates, onQueryChange, onLoadMore, onSelectPlugin, onInstall, onCancelInstall, onUninstall, onUpdateConfiguration, onQueryConfigurationOptions, onQueryConfigurationProfileStatuses, onReconnectConfigurationProfile, onQueryManagementView, onInvokeManagementAction }: PluginsPageProps) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const [confirmation, setConfirmation] = useState<
@@ -268,9 +273,11 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
         value={query}
       />
     </div>
-    {installedPlugins.length > 0 && <section className="mb-7 mt-4">
+    {(installedLoading || installedError || installedPlugins.length > 0) && <section className="mb-7 mt-4" aria-busy={installedLoading}>
       <div className="pb-2 pl-2"><h3 className="m-0 text-[17px] font-medium">{t('plugins.installedSection')}</h3></div>
-      <div className="flex min-h-[52px] flex-wrap items-center gap-3 px-2 py-2">
+      {installedLoading ? <PluginListSkeleton installed label={t('plugins.loadingInstalled')} />
+        : installedError ? <p role="alert" className="m-0 px-2 py-2 text-[12px] text-muted-foreground">{t('plugins.loadFailed')}</p>
+        : <div className="flex min-h-[52px] flex-wrap items-center gap-3 px-2 py-2">
         {installedPlugins.map((plugin) => {
           const name = resolveSeedLocalizedText(plugin.name, locale)
           return (
@@ -281,16 +288,16 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
             </Tooltip>
           )
         })}
-      </div>
+      </div>}
     </section>}
-    <section>
+    <section aria-busy={catalogLoading}>
       <div className="px-1">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <h3 className="m-0 text-[17px] font-medium">{t('plugins.availableSection')}</h3>
           <PluginActionButton
             action="updateAll"
             busy={updatesBusy}
-            disabled={!updatesBusy && (!updateCount || Boolean(busy) || Object.values(installProgress).some((progress) => progress.phase !== 'completed'))}
+            disabled={!updatesBusy && (catalogLoading || !updateCount || Boolean(busy) || Object.values(installProgress).some((progress) => progress.phase !== 'completed'))}
             onStart={onUpdateAll}
           />
         </div>
@@ -330,6 +337,11 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
               />
             })}
           </div>
+        : catalogLoading ? <PluginListSkeleton label={t('plugins.loadingAvailable')} />
+        : catalogError ? <div role="alert" className="flex min-h-[240px] flex-col items-center justify-center text-center text-muted-foreground">
+            <strong className="text-[14px] font-medium text-foreground">{t('plugins.loadFailed')}</strong>
+            <p className="mb-0 mt-2 max-w-full break-words text-[12px]">{catalogError}</p>
+          </div>
         : <div className="flex min-h-[240px] flex-col items-center justify-center text-center text-muted-foreground">
             <PackageCheck size={27} />
             <strong className="mb-1.5 mt-3 text-[14px] font-medium text-foreground">{t('plugins.noMatches')}</strong>
@@ -337,9 +349,9 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
           </div>}
     </div>
     <InfiniteScrollTrigger
-      hasMore={hasMore}
+      hasMore={hasMore && !catalogLoading}
       label={t('common.loadingMore')}
-      loading={loadingMore}
+      loading={loadingMore && !catalogLoading}
       onLoadMore={onLoadMore}
     />
     </section>

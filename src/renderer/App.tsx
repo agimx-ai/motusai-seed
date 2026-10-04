@@ -38,8 +38,10 @@ export default function App() {
   const [view, setView] = useState<View>('overview')
   const [profileEditing, setProfileEditing] = useState(false)
   const [pluginQuery, setPluginQuery] = useState('')
-  const [pluginSearchResults, setPluginSearchResults] = useState<SeedCatalogPage>()
+  const [pluginSearchResults, setPluginSearchResults] = useState<{ query: string; page: SeedCatalogPage; error?: string }>()
   const [pluginSearchLoading, setPluginSearchLoading] = useState(false)
+  const currentPluginQuery = useRef('')
+  currentPluginQuery.current = pluginQuery.trim()
   const [selectedPluginId, setSelectedPluginId] = useState('')
   const [updatingAllPlugins, setUpdatingAllPlugins] = useState(false)
   const updateAllInFlight = useRef(false)
@@ -75,12 +77,12 @@ export default function App() {
       return
     }
     let active = true
+    setPluginSearchLoading(true)
     const timer = window.setTimeout(() => {
-      setPluginSearchLoading(true)
       void window.motusSeed.searchPluginCatalog(query).then((plugins) => {
-        if (active) setPluginSearchResults(plugins)
-      }).catch(() => {
-        if (active) setPluginSearchResults({ items: [] })
+        if (active) setPluginSearchResults({ query, page: plugins })
+      }).catch((reason) => {
+        if (active) setPluginSearchResults({ query, page: { items: [] }, error: userFacingErrorMessage(reason) })
       }).finally(() => {
         if (active) setPluginSearchLoading(false)
       })
@@ -145,7 +147,13 @@ export default function App() {
   </>
 
   const plugins = snapshot.plugins ?? []
-  const catalogPlugins = pluginQuery.trim() ? pluginSearchResults?.items ?? [] : snapshot.catalogPlugins ?? []
+  const searchQuery = pluginQuery.trim()
+  const currentSearch = pluginSearchResults?.query === searchQuery ? pluginSearchResults : undefined
+  const catalogPlugins = searchQuery ? currentSearch?.page.items ?? [] : snapshot.catalogPlugins ?? []
+  const catalogLoading = searchQuery
+    ? !currentSearch || (pluginSearchLoading && !currentSearch.page.items.length)
+    : snapshot.pluginCatalogStatus === 'loading'
+  const catalogError = searchQuery ? currentSearch?.error : snapshot.pluginCatalogError
   const pluginUpdateCount = countAvailablePluginUpdates(plugins, snapshot.catalogPlugins ?? [])
   const updateAllPlugins = async () => {
     if (updateAllInFlight.current || busy || Object.values(pluginInstallProgress).some((progress) => progress.phase !== 'completed')) return
@@ -191,10 +199,14 @@ export default function App() {
     )
     const query = pluginQuery.trim()
     if (!refreshed || !query || !window.motusSeed) return
+    setPluginSearchLoading(true)
     try {
-      setPluginSearchResults(await window.motusSeed.searchPluginCatalog(query))
-    } catch {
-      setPluginSearchResults({ items: [] })
+      const page = await window.motusSeed.searchPluginCatalog(query)
+      if (currentPluginQuery.current === query) setPluginSearchResults({ query, page })
+    } catch (reason) {
+      if (currentPluginQuery.current === query) setPluginSearchResults({ query, page: { items: [] }, error: userFacingErrorMessage(reason) })
+    } finally {
+      if (currentPluginQuery.current === query) setPluginSearchLoading(false)
     }
   }
   const loadMoreCatalog = async () => {
@@ -204,17 +216,20 @@ export default function App() {
       await run('plugin-catalog-load-more', (api) => api.loadMorePluginCatalog())
       return
     }
-    const cursor = pluginSearchResults?.nextCursor
+    const cursor = currentSearch?.page.nextCursor
     if (!cursor || pluginSearchLoading) return
     setPluginSearchLoading(true)
     try {
       const page = await window.motusSeed.searchPluginCatalog(query, cursor)
-      setPluginSearchResults((current) => ({
-        items: [...(current?.items ?? []), ...page.items],
+      if (currentPluginQuery.current !== query) return
+      setPluginSearchResults((current) => current?.query === query ? ({ query, page: {
+        items: [...current.page.items, ...page.items],
         ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
-      }))
+      } }) : current)
+    } catch (reason) {
+      if (currentPluginQuery.current === query) toast.error(userFacingErrorMessage(reason), { id: 'seed-plugin-search-more-error' })
     } finally {
-      setPluginSearchLoading(false)
+      if (currentPluginQuery.current === query) setPluginSearchLoading(false)
     }
   }
   const backToPlugins = () => {
@@ -279,6 +294,10 @@ export default function App() {
           appName={snapshot.appName}
           plugins={plugins}
           catalogPlugins={catalogPlugins}
+          installedLoading={snapshot.installedPluginsStatus === 'loading' && snapshot.pluginCatalogStatus !== 'error'}
+          installedError={snapshot.installedPluginsStatus === 'error' || (snapshot.installedPluginsStatus === 'loading' && snapshot.pluginCatalogStatus === 'error')}
+          catalogLoading={catalogLoading}
+          catalogError={catalogError}
           selectedPlugin={selectedPlugin}
           query={pluginQuery}
           searchRef={pluginSearchRef}
@@ -287,7 +306,7 @@ export default function App() {
           updatesBusy={updatingAllPlugins}
           onUpdateAll={() => void updateAllPlugins()}
           installProgress={pluginInstallProgress}
-          hasMore={pluginQuery.trim() ? Boolean(pluginSearchResults?.nextCursor) : Boolean(snapshot.catalogNextCursor)}
+          hasMore={searchQuery ? Boolean(currentSearch?.page.nextCursor) : Boolean(snapshot.catalogNextCursor)}
           loadingMore={pluginQuery.trim() ? pluginSearchLoading : busy === 'plugin-catalog-load-more'}
           configurationStates={snapshot.pluginConfigurations}
           onQueryChange={setPluginQuery}

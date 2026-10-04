@@ -84,6 +84,9 @@
     "uninstalling": "卸载中…",
     "search": "搜索插件",
     "installedSection": "已安装",
+    "loadingInstalled": "正在加载已安装插件",
+    "loadingAvailable": "正在加载可用插件",
+    "loadFailed": "插件加载失败，请点击右上角刷新重试。",
     "availableSection": "可用插件",
     "sourceFilter": "插件来源",
     "sources": {
