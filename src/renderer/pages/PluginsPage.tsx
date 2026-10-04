@@ -89,9 +89,6 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
     }
   }, [hasOrganizationPlugins, sourceFilter])
   const visiblePlugins = sourcePlugins.filter(matches)
-  const confirmationPackageSha256 = confirmation?.kind === 'install'
-    ? confirmation.plugin.versions.find((version) => version.version === confirmation.version)?.packageSha256 ?? confirmation.plugin.packageSha256
-    : ''
   const selectedInstalledPlugin = selectedPlugin && 'source' in selectedPlugin ? selectedPlugin : undefined
   const selectedCatalogPlugin = selectedPlugin
     ? catalogPlugins.find((plugin) => plugin.id === selectedPlugin.id)
@@ -116,7 +113,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
         name: resolveSeedLocalizedText(confirmation.plugin.name, locale),
       })
       : t('plugins.confirmUninstallTitle', { name: resolveSeedLocalizedText(confirmation.plugin.name, locale) })}
-    description={confirmation.kind === 'install' ? t('plugins.confirmInstallDescription') : t('plugins.confirmUninstallDescription')}
+    description={confirmation.kind === 'uninstall' ? t('plugins.confirmUninstallDescription') : undefined}
     confirmLabel={confirmation.kind === 'install'
       ? t(confirmation.updating ? 'plugins.update' : 'plugins.install')
       : t('plugins.uninstall')}
@@ -136,12 +133,6 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
       <dd className="m-0 text-foreground">{confirmation.updating && confirmation.currentVersion
         ? <PluginVersionTransition currentVersion={confirmation.currentVersion} targetVersion={confirmation.version} large />
         : confirmation.version}</dd>
-      <dt className="text-muted-foreground">{t('plugins.integrity')}</dt>
-      <dd className="m-0 min-w-0">
-        <Tooltip content={confirmationPackageSha256}>
-          <code className="block min-w-0 break-all font-mono text-[11px] leading-5 text-foreground">{confirmationPackageSha256}</code>
-        </Tooltip>
-      </dd>
     </dl>}
   </ConfirmDialog>
 
