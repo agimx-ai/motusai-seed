@@ -13,6 +13,27 @@ function renderNavigation(view: SettingsView, locale: SeedLocale) {
 }
 
 describe('Settings navigation categories', () => {
+  it('matches the measured 30px rows with 1px gaps and preserves other sizing', () => {
+    const html = renderNavigation('settings', 'zh-CN')
+    expect(html.match(/h-\[30px\]/g)).toHaveLength(3)
+    expect(html.match(/width="16" height="16"/g)).toHaveLength(4)
+    expect(html).not.toContain('width="17"')
+    expect(html.match(/px-3 text-left text-\[14px\]/g)).toHaveLength(4)
+    expect(html.match(/grid gap-px/g)).toHaveLength(2)
+    expect(html.match(/gap-2 /g)).toHaveLength(4)
+    expect(html).not.toContain('gap-2.5')
+    expect(html).toContain('mb-2 mt-5 px-1')
+  })
+
+  it('separates muted medium-weight group headings from normal foreground choices', () => {
+    const html = renderNavigation('settings', 'zh-CN')
+    expect(html.match(/text-\[14px\] font-medium text-muted-foreground/g)).toHaveLength(2)
+    const groups = html.match(/<nav[^>]*>(.*?)<\/nav>/g)!.join('')
+    expect(groups.match(/text-\[14px\] font-normal/g)).toHaveLength(3)
+    expect(groups).not.toContain('text-muted-foreground')
+    expect(groups.match(/bg-transparent text-foreground/g)).toHaveLength(2)
+  })
+
   it.each(['zh-CN', 'en-US'] as const)('places plugins under integrations, not personal, in %s', (locale) => {
     const html = renderNavigation('plugin-settings', locale)
     const labels = seedI18nResources[locale].app.nav
