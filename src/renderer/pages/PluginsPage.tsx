@@ -12,6 +12,7 @@ import { MarkdownContent } from '../components/MarkdownContent'
 import { resourceCardGridClass } from '../components/ResourceCard'
 import { CatalogPluginCard, CatalogPluginMark, McpMark, OfficialMark, PluginMark, PluginVersionTransition } from '../features/plugins/PluginCards'
 import { PluginActionButton } from '../features/plugins/PluginActionButton'
+import { PluginDetailActions } from '../features/plugins/PluginDetailActions'
 import { pluginMcpTools } from '../features/plugins/mcp-tools'
 import { isCatalogPluginInstallable } from '../features/plugins/plugin-updates'
 import { PluginConfigurationPanel } from '../features/plugins/PluginConfigurationPanel'
@@ -40,6 +41,9 @@ type PluginsPageProps = {
   query: string
   searchRef: RefObject<HTMLInputElement | null>
   busy: string
+  updateCount: number
+  updatesBusy: boolean
+  onUpdateAll: () => void
   installProgress: Record<string, PluginInstallProgress>
   hasMore: boolean
   loadingMore: boolean
@@ -58,7 +62,7 @@ type PluginsPageProps = {
   onInvokeManagementAction: (input: { pluginId: string; viewId: string; actionId: string; arguments: Record<string, unknown> }) => Promise<unknown>
 }
 
-export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, query, searchRef, busy, installProgress, hasMore, loadingMore, configurationStates, onQueryChange, onLoadMore, onSelectPlugin, onInstall, onCancelInstall, onUninstall, onUpdateConfiguration, onQueryConfigurationOptions, onQueryConfigurationProfileStatuses, onReconnectConfigurationProfile, onQueryManagementView, onInvokeManagementAction }: PluginsPageProps) {
+export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, query, searchRef, busy, updateCount, updatesBusy, onUpdateAll, installProgress, hasMore, loadingMore, configurationStates, onQueryChange, onLoadMore, onSelectPlugin, onInstall, onCancelInstall, onUninstall, onUpdateConfiguration, onQueryConfigurationOptions, onQueryConfigurationProfileStatuses, onReconnectConfigurationProfile, onQueryManagementView, onInvokeManagementAction }: PluginsPageProps) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const [confirmation, setConfirmation] = useState<
@@ -97,7 +101,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
   const selectedLatestRelease = selectedCatalogPlugin?.versions.find((version) => version.version === selectedCatalogPlugin.latestVersion)
   const selectedCatalogInstallable = selectedCatalogPlugin ? isCatalogPluginInstallable(selectedCatalogPlugin) : false
   const selectedVersion = selectedInstalledPlugin?.version ?? selectedCatalogPlugin?.latestVersion
-  const selectedInstallProgress = selectedCatalogPlugin ? installProgress[selectedCatalogPlugin.id] : undefined
+  const selectedInstallProgress = selectedPlugin ? installProgress[selectedPlugin.id] : undefined
   const selectedInstallBusy = Boolean(selectedCatalogPlugin && busy === `plugin-install-${selectedCatalogPlugin.id}`)
   const selectedUpdateAvailable = Boolean(
     selectedInstalledPlugin
@@ -120,6 +124,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
       : t('plugins.uninstall')}
     cancelLabel={t('common.cancel')}
     tone={confirmation.kind === 'install' ? 'primary' : 'danger'}
+    confirmDisabled={updatesBusy}
     onCancel={() => setConfirmation(undefined)}
     onConfirm={() => {
       if (confirmation.kind === 'install') onInstall(confirmation.plugin.id, confirmation.version)
@@ -155,31 +160,25 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
         </div>
         <p className="mb-0 mt-1.5 max-w-[600px] text-[13px] text-muted-foreground">{resolveSeedLocalizedText(selectedPlugin.description, locale)}</p>
       </div>
-      <div className="flex items-center gap-2">
-        {selectedInstalledPlugin ? <>
-          {(selectedUpdateAvailable || selectedInstallProgress || selectedInstallBusy) && selectedCatalogPlugin && <PluginActionButton
-            action="update"
-            progress={selectedInstallProgress}
-            busy={selectedInstallBusy}
-            onStart={() => setConfirmation({
-              kind: 'install',
-              plugin: selectedCatalogPlugin,
-              version: selectedCatalogPlugin.latestVersion,
-              updating: true,
-              currentVersion: selectedInstalledPlugin.version,
-            })}
-            onCancel={() => onCancelInstall(selectedCatalogPlugin.id)}
-          />}
-          <PluginActionButton action="uninstall" busy={busy === `plugin-uninstall-${selectedInstalledPlugin.id}`} onStart={() => setConfirmation({ kind: 'uninstall', plugin: selectedInstalledPlugin })} />
-        </> : selectedCatalogPlugin ? <PluginActionButton
-          action="install"
-          progress={selectedInstallProgress}
-          busy={selectedInstallBusy}
-          disabled={!selectedCatalogInstallable}
-          onStart={() => setConfirmation({ kind: 'install', plugin: selectedCatalogPlugin, version: selectedCatalogPlugin.latestVersion, updating: false })}
-          onCancel={() => onCancelInstall(selectedCatalogPlugin.id)}
-        /> : null}
-      </div>
+      <PluginDetailActions
+        installed={Boolean(selectedInstalledPlugin)}
+        updateAvailable={selectedUpdateAvailable}
+        installable={selectedCatalogInstallable}
+        progress={selectedInstallProgress}
+        installing={selectedInstallBusy}
+        uninstalling={Boolean(selectedInstalledPlugin && busy === `plugin-uninstall-${selectedInstalledPlugin.id}`)}
+        updatesBusy={updatesBusy}
+        onUpdate={() => selectedCatalogPlugin && selectedInstalledPlugin && setConfirmation({
+          kind: 'install',
+          plugin: selectedCatalogPlugin,
+          version: selectedCatalogPlugin.latestVersion,
+          updating: true,
+          currentVersion: selectedInstalledPlugin.version,
+        })}
+        onUninstall={() => selectedInstalledPlugin && setConfirmation({ kind: 'uninstall', plugin: selectedInstalledPlugin })}
+        onInstall={() => selectedCatalogPlugin && setConfirmation({ kind: 'install', plugin: selectedCatalogPlugin, version: selectedCatalogPlugin.latestVersion, updating: false })}
+        onCancel={() => onCancelInstall(selectedPlugin.id)}
+      />
     </div>
     {selectedInstalledPlugin?.status === 'incompatible' && <section className="rounded-[14px] border border-border px-4 py-3">
       <strong className="block text-[14px] font-medium text-foreground">{t('plugins.installedVersionIncompatible')}</strong>
@@ -286,7 +285,15 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
     </section>}
     <section>
       <div className="px-1">
-        <h3 className="m-0 text-[17px] font-medium">{t('plugins.availableSection')}</h3>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <h3 className="m-0 text-[17px] font-medium">{t('plugins.availableSection')}</h3>
+          <PluginActionButton
+            action="updateAll"
+            busy={updatesBusy}
+            disabled={!updatesBusy && (!updateCount || Boolean(busy) || Object.values(installProgress).some((progress) => progress.phase !== 'completed'))}
+            onStart={onUpdateAll}
+          />
+        </div>
         {hasOrganizationPlugins && <div className="mt-4 flex flex-wrap items-center gap-1" aria-label={t('plugins.sourceFilter')}>
           {(['all', 'public', 'organization'] as const).map((source) => <button
             className={`h-7 rounded-full px-3 text-[12px] transition-colors ${sourceFilter === source ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
@@ -309,6 +316,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
                 appName={appName}
                 installedPlugin={installedById.get(plugin.id)}
                 installing={busy === `plugin-install-${plugin.id}`}
+                updatesBusy={updatesBusy}
                 installProgress={installProgress[plugin.id]}
                 onInstall={() => setConfirmation({
                   kind: 'install',

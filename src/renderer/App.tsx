@@ -20,7 +20,8 @@ import { OverviewPage } from './pages/OverviewPage'
 import { PluginsPage } from './pages/PluginsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { UsagePage } from './pages/UsagePage'
-import { countAvailablePluginUpdates } from './features/plugins/plugin-updates'
+import { countAvailablePluginUpdates, getAvailablePluginUpdates, updatePluginsSequentially } from './features/plugins/plugin-updates'
+import { userFacingErrorMessage } from './lib/errors'
 import { useSeedI18n } from './i18n'
 
 const previewStartupScreen = false
@@ -40,6 +41,8 @@ export default function App() {
   const [pluginSearchResults, setPluginSearchResults] = useState<SeedCatalogPage>()
   const [pluginSearchLoading, setPluginSearchLoading] = useState(false)
   const [selectedPluginId, setSelectedPluginId] = useState('')
+  const [updatingAllPlugins, setUpdatingAllPlugins] = useState(false)
+  const updateAllInFlight = useRef(false)
   const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const pluginSearchRef = useRef<HTMLInputElement>(null)
@@ -121,7 +124,7 @@ export default function App() {
           delay={0}
           overlayClassName="brightness-0 invert opacity-90"
         >
-          <AppLogo appearance="system" />
+          <AppLogo />
         </ShimmerIcon>
       </div>
     </main>
@@ -144,6 +147,40 @@ export default function App() {
   const plugins = snapshot.plugins ?? []
   const catalogPlugins = pluginQuery.trim() ? pluginSearchResults?.items ?? [] : snapshot.catalogPlugins ?? []
   const pluginUpdateCount = countAvailablePluginUpdates(plugins, snapshot.catalogPlugins ?? [])
+  const updateAllPlugins = async () => {
+    if (updateAllInFlight.current || busy || Object.values(pluginInstallProgress).some((progress) => progress.phase !== 'completed')) return
+    updateAllInFlight.current = true
+    setUpdatingAllPlugins(true)
+    try {
+      const result = await run('plugin-update-all', async (api) => {
+        const catalog = await api.refreshPluginCatalog()
+        const current = await api.snapshot()
+        const updates = getAvailablePluginUpdates(current.plugins, catalog)
+        return updatePluginsSequentially(updates, (id, version) => api.installPlugin(id, version))
+      })
+      if (!result) return
+      const summary = t('plugins.bulkUpdateResult', {
+        updated: result.updated,
+        failed: result.failed.length,
+        cancelled: result.cancelled,
+      })
+      if (result.failed.length) {
+        toast.error(summary, {
+          id: 'seed-plugin-update-all-result',
+          description: result.failed.map(({ plugin, reason }) => `${resolveSeedLocalizedText(plugin.name, locale)}: ${userFacingErrorMessage(reason)}`).join('\n'),
+        })
+      } else if (result.cancelled) {
+        toast.info(summary, { id: 'seed-plugin-update-all-result' })
+      } else if (result.updated) {
+        toast.success(t('plugins.bulkUpdateComplete', { count: result.updated }), { id: 'seed-plugin-update-all-result' })
+      } else {
+        toast.info(t('plugins.updateNotificationEmpty'), { id: 'seed-plugin-update-all-result' })
+      }
+    } finally {
+      updateAllInFlight.current = false
+      setUpdatingAllPlugins(false)
+    }
+  }
   const selectedPlugin = plugins.find((plugin) => plugin.id === selectedPluginId)
     ?? catalogPlugins.find((plugin) => plugin.id === selectedPluginId)
   const refreshPlugins = async (announce: boolean) => {
@@ -246,6 +283,9 @@ export default function App() {
           query={pluginQuery}
           searchRef={pluginSearchRef}
           busy={busy}
+          updateCount={pluginUpdateCount}
+          updatesBusy={updatingAllPlugins}
+          onUpdateAll={() => void updateAllPlugins()}
           installProgress={pluginInstallProgress}
           hasMore={pluginQuery.trim() ? Boolean(pluginSearchResults?.nextCursor) : Boolean(snapshot.catalogNextCursor)}
           loadingMore={pluginQuery.trim() ? pluginSearchLoading : busy === 'plugin-catalog-load-more'}

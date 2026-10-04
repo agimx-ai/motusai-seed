@@ -98,9 +98,13 @@
     "updateNotificationEmpty": "No plugin updates available",
     "install": "Install",
     "update": "Update",
+    "updatingAll": "Updating…",
+    "bulkUpdateComplete": "Updated {{count}} plugins",
+    "bulkUpdateResult": "Updates finished: {{updated}} succeeded, {{failed}} failed, {{cancelled}} cancelled",
     "storeAction": {
       "get": "Get",
       "update": "Update",
+      "updateAll": "Update All",
       "details": "Details"
     },
     "installProgress": {

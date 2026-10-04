@@ -73,13 +73,14 @@ type CatalogPluginCardProps = {
   appName: string
   installedPlugin?: SeedInstalledPlugin
   installing: boolean
+  updatesBusy: boolean
   installProgress?: PluginInstallProgress
   onInstall: () => void
   onCancelInstall: () => void
   onOpen: () => void
 }
 
-export function CatalogPluginCard({ plugin, appName, installedPlugin, installing, installProgress, onInstall, onCancelInstall, onOpen }: CatalogPluginCardProps) {
+export function CatalogPluginCard({ plugin, appName, installedPlugin, installing, updatesBusy, installProgress, onInstall, onCancelInstall, onOpen }: CatalogPluginCardProps) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const current = installedPlugin?.version === plugin.latestVersion
@@ -104,6 +105,7 @@ export function CatalogPluginCard({ plugin, appName, installedPlugin, installing
             action={current ? 'details' : updateAvailable ? 'update' : 'install'}
             progress={installProgress}
             busy={installing}
+            disabled={updatesBusy && !installProgress && !current}
             onStart={current ? onOpen : onInstall}
             onCancel={onCancelInstall}
           />}

@@ -98,9 +98,13 @@
     "updateNotificationEmpty": "暂无插件更新",
     "install": "安装",
     "update": "更新",
+    "updatingAll": "正在更新…",
+    "bulkUpdateComplete": "已更新 {{count}} 个插件",
+    "bulkUpdateResult": "更新完成：{{updated}} 个成功，{{failed}} 个失败，{{cancelled}} 个取消",
     "storeAction": {
       "get": "获取",
       "update": "更新",
+      "updateAll": "全部更新",
       "details": "详情"
     },
     "installProgress": {

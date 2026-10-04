@@ -6,16 +6,35 @@ export function isCatalogPluginInstallable(plugin: SeedCatalogPlugin) {
     || latestRelease?.runtimeKind === 'native-host' && plugin.publisherType === 'official')
 }
 
-export function countAvailablePluginUpdates(installedPlugins: SeedInstalledPlugin[], catalogPlugins: SeedCatalogPlugin[]) {
+export function getAvailablePluginUpdates(installedPlugins: SeedInstalledPlugin[], catalogPlugins: SeedCatalogPlugin[]) {
   const installedById = new Map(installedPlugins.map((plugin) => [plugin.id, plugin]))
-  return catalogPlugins.reduce((count, plugin) => {
+  return catalogPlugins.filter((plugin) => {
     const installed = installedById.get(plugin.id)
-    const available = Boolean(
+    return Boolean(
       installed
       && installed.status !== 'incompatible'
       && installed.version !== plugin.latestVersion
       && isCatalogPluginInstallable(plugin),
     )
-    return count + Number(available)
-  }, 0)
+  })
+}
+
+export function countAvailablePluginUpdates(installedPlugins: SeedInstalledPlugin[], catalogPlugins: SeedCatalogPlugin[]) {
+  return getAvailablePluginUpdates(installedPlugins, catalogPlugins).length
+}
+
+export async function updatePluginsSequentially(
+  plugins: SeedCatalogPlugin[],
+  install: (pluginId: string, version: string) => Promise<boolean>,
+) {
+  const result = { updated: 0, cancelled: 0, failed: [] as Array<{ plugin: SeedCatalogPlugin; reason: unknown }> }
+  for (const plugin of plugins) {
+    try {
+      if (await install(plugin.id, plugin.latestVersion)) result.updated += 1
+      else result.cancelled += 1
+    } catch (reason) {
+      result.failed.push({ plugin, reason })
+    }
+  }
+  return result
 }

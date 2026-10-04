@@ -6,15 +6,15 @@ import type { PluginInstallProgress } from '../../../shared/contracts'
 import { cx } from '../../lib/display'
 
 type Props = {
-  action: 'install' | 'update' | 'details' | 'uninstall'
+  action: 'install' | 'update' | 'details' | 'uninstall' | 'updateAll'
   progress?: PluginInstallProgress
   busy?: boolean
   disabled?: boolean
+  reserveActions?: readonly Props['action'][]
   onStart: () => void
   onCancel?: () => void
 }
 
-const layoutEase = [0.22, 1, 0.36, 1] as const
 const ringSize = 20
 const ringWidth = 1.5
 const ringRadius = (ringSize - ringWidth) / 2
@@ -118,37 +118,52 @@ function ProgressRing({ phase, percent, cancelable = false }: {
   </span>
 }
 
-export function PluginActionButton({ action, progress, busy = false, disabled = false, onStart, onCancel }: Props) {
+export function PluginActionButton({ action, progress, busy = false, disabled = false, reserveActions, onStart, onCancel }: Props) {
   const { t } = useTranslation()
   const reduceMotion = useReducedMotion()
   const uninstall = action === 'uninstall'
-  const active = !uninstall && (busy || Boolean(progress))
+  const updateAll = action === 'updateAll'
+  const labelBusy = (uninstall || updateAll) && busy
+  const active = !uninstall && !updateAll && (busy || Boolean(progress))
   const cancelable = Boolean(progress?.cancelable)
   const idleLabel = uninstall
     ? t(busy ? 'plugins.uninstalling' : 'plugins.uninstall')
-    : t(`plugins.storeAction.${action === 'install' ? 'get' : action}`)
+    : updateAll && busy ? t('plugins.updatingAll') : t(`plugins.storeAction.${action === 'install' ? 'get' : action}`)
   const statusLabel = progress?.phase === 'downloading' && typeof progress.percent === 'number'
     ? t('plugins.installProgress.downloading', { percent: Math.round(progress.percent) })
     : t(`plugins.installProgress.${progress?.phase || 'preparing'}`)
   const tooltip = active
     ? cancelable ? `${statusLabel} · ${t('plugins.installProgress.cancel')}` : statusLabel
     : undefined
+  // Reserve the same localized action column across every install state. Only
+  // the capsule changes width; neither the card nor the indicator moves.
+  const sizingLabels = reserveActions
+    ? [...reserveActions.map((candidate) => candidate === 'uninstall'
+        ? t('plugins.uninstall')
+        : t(`plugins.storeAction.${candidate === 'install' ? 'get' : candidate}`)), idleLabel]
+    : uninstall || updateAll
+      ? [idleLabel]
+      : [t('plugins.storeAction.get'), t('plugins.storeAction.update'), t('plugins.storeAction.details')]
 
-  return <motion.button
-      layout="size"
+  return <span className="seed-plugin-action-slot relative isolate inline-grid h-[28px] min-w-[64px] shrink-0 place-items-center align-middle">
+    <span aria-hidden="true" className="pointer-events-none invisible grid [grid-area:1/1]">
+      {sizingLabels.map((label, index) => <span key={index} className="whitespace-nowrap px-4 text-[13px] font-medium leading-none [grid-area:1/1]">{label}</span>)}
+    </span>
+    <button
       type="button"
+      style={{ width: active ? 28 : '100%' }}
       className={cx(
-        'seed-plugin-action-button relative z-20 inline-grid h-[28px] shrink-0 place-items-center overflow-hidden rounded-full border-0 font-medium outline-none',
+        'seed-plugin-action-button absolute inset-y-0 left-1/2 z-20 grid h-[28px] min-w-0 -translate-x-1/2 place-items-center overflow-hidden rounded-full border-0 p-0 font-medium outline-none transition-[width] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
         uninstall ? 'text-danger' : 'text-[#007aff] dark:text-[#0a84ff]',
         'focus-visible:ring-2 focus-visible:ring-[#007aff]/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-[#0a84ff]/35',
         active
-          ? 'w-[28px] min-w-[28px] bg-transparent p-0 hover:bg-transparent'
-          : 'min-w-[64px] bg-[rgba(120,120,128,0.12)] px-4 hover:bg-[rgba(120,120,128,0.12)]',
-        (disabled || (uninstall && busy)) && !active && 'cursor-default opacity-55',
-        disabled && !active && 'text-muted-foreground',
+          ? 'bg-transparent hover:bg-transparent'
+          : 'bg-[rgba(120,120,128,0.12)] hover:bg-[rgba(120,120,128,0.12)]',
+        (disabled || labelBusy) && !active && 'cursor-default opacity-55',
+        disabled && !active && 'text-muted-foreground dark:text-muted-foreground',
         active && !cancelable && 'cursor-default',
       )}
-      disabled={disabled || (uninstall && busy) || (active && !cancelable)}
+      disabled={disabled || labelBusy || (active && !cancelable)}
       aria-label={active ? tooltip : idleLabel}
       aria-live="polite"
       onClick={(event) => {
@@ -159,28 +174,28 @@ export function PluginActionButton({ action, progress, busy = false, disabled = 
         }
         onStart()
       }}
-      transition={{ layout: { duration: reduceMotion ? 0 : 0.22, ease: layoutEase } }}
-      whileTap={!reduceMotion && !disabled && !(uninstall && busy) && (!active || cancelable) ? { scale: 0.94 } : undefined}
     >
-      <AnimatePresence initial={false} mode="popLayout">
+      <AnimatePresence initial={false}>
         {active
           ? <motion.span
               key="progress"
-              initial={reduceMotion ? false : { opacity: 0, scale: 0.78 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={reduceMotion ? undefined : { opacity: 0, scale: 0.78 }}
+              className="absolute inset-0 grid place-items-center"
+              initial={reduceMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={reduceMotion ? undefined : { opacity: 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.16 }}
             >
               <ProgressRing phase={progress?.phase} percent={progress?.percent} cancelable={progress?.cancelable} />
             </motion.span>
           : <motion.span
               key="label"
-              className="whitespace-nowrap text-[13px] leading-none"
-              initial={reduceMotion ? false : { opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={reduceMotion ? undefined : { opacity: 0, scale: 0.9 }}
+              className="absolute inset-0 grid place-items-center whitespace-nowrap text-[13px] leading-none"
+              initial={reduceMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={reduceMotion ? undefined : { opacity: 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.14 }}
             >{idleLabel}</motion.span>}
       </AnimatePresence>
-    </motion.button>
+    </button>
+  </span>
 }

@@ -750,33 +750,25 @@
   height: 100%;
 }
 
-.app-logo__dark {
-  display: none !important;
-}
-
-:root[data-theme="dark"] .app-logo__light {
+.app-logo .app-logo__dark {
   display: none;
 }
 
-:root[data-theme="dark"] .app-logo__dark {
-  display: block !important;
+:root[data-theme="dark"] .app-logo:not(.app-logo--system) .app-logo__light {
+  display: none;
 }
 
-.app-logo--system .app-logo__light {
-  display: block !important;
-}
-
-.app-logo--system .app-logo__dark {
-  display: none !important;
+:root[data-theme="dark"] .app-logo:not(.app-logo--system) .app-logo__dark {
+  display: block;
 }
 
 @media (prefers-color-scheme: dark) {
   .app-logo--system .app-logo__light {
-    display: none !important;
+    display: none;
   }
 
   .app-logo--system .app-logo__dark {
-    display: block !important;
+    display: block;
   }
 }
 
