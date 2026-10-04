@@ -6,6 +6,7 @@ import { ActionButton } from './ActionButton'
 type ConfirmDialogProps = {
   open: boolean
   title: string
+  icon?: ReactNode
   description?: string
   confirmLabel: string
   cancelLabel: string
@@ -23,6 +24,7 @@ type ConfirmDialogProps = {
 export function ConfirmDialog({
   open,
   title,
+  icon,
   description,
   confirmLabel,
   cancelLabel,
@@ -92,11 +94,13 @@ export function ConfirmDialog({
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
     >
-      <div className="flex items-start gap-3">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-muted text-foreground" aria-hidden="true">
-          <ShieldCheck size={17} strokeWidth={1.8} />
-        </span>
-        <div className="min-w-0 pt-0.5">
+      <div className={description ? 'flex items-start gap-3' : 'flex items-center gap-3'}>
+        {icon != null
+          ? <span className="shrink-0" aria-hidden="true">{icon}</span>
+          : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-muted text-foreground" aria-hidden="true">
+              <ShieldCheck size={17} strokeWidth={1.8} />
+            </span>}
+        <div className={description ? 'min-w-0 pt-0.5' : 'min-w-0'}>
           <h2 id={titleId} className="m-0 text-[16px] font-medium tracking-[-.01em]">{title}</h2>
           {description && <p id={descriptionId} className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">{description}</p>}
         </div>

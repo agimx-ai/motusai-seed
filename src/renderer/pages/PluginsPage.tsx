@@ -108,6 +108,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
 
   const confirmationDialog = confirmation && <ConfirmDialog
     open
+    icon={confirmation.kind === 'install' ? <CatalogPluginMark plugin={confirmation.plugin} /> : undefined}
     title={confirmation.kind === 'install'
       ? t(confirmation.updating ? 'plugins.confirmUpdateTitle' : 'plugins.confirmInstallTitle', {
         name: resolveSeedLocalizedText(confirmation.plugin.name, locale),
