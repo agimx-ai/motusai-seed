@@ -152,7 +152,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
           {selectedPlugin.publisherType === 'official' && <OfficialMark appName={appName} />}
           {selectedInstalledPlugin && pluginMcpTools(selectedInstalledPlugin).length > 0 && <McpMark />}
           {selectedCatalogPlugin?.visibility === 'organization' && selectedCatalogPlugin.organization && <span className="max-w-[140px] truncate rounded-full bg-info-soft px-2 py-0.5 text-[10px] font-medium text-info">
-            {t('plugins.organizationExclusive', { name: selectedCatalogPlugin.organization.name })}
+            {t('plugins.organizationName', { name: selectedCatalogPlugin.organization.name })}
           </span>}
           {selectedVersion && <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">{selectedVersion}</span>}
           {selectedPlugin.labels.map((label) => <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" key={label}>{t(`plugins.labels.${label}`)}</span>)}
@@ -297,7 +297,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
             aria-pressed={sourceFilter === source}
             onClick={() => setSourceFilter(source)}
           >{source === 'organization'
-              ? t('plugins.organizationExclusive', { name: organizationName })
+              ? t('plugins.organizationName', { name: organizationName })
               : t(`plugins.sources.${source}`)}</button>)}
         </div>}
       </div>

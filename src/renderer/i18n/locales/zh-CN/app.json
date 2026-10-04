@@ -90,7 +90,7 @@
       "all": "全部",
       "public": "通用插件"
     },
-    "organizationExclusive": "{{name}} 专属",
+    "organizationName": "{{name}}",
     "noMatches": "没有匹配的插件",
     "searchHint": "试试搜索插件名称。",
     "versionUpdate": "可从 {{current}} 更新到 {{target}}",

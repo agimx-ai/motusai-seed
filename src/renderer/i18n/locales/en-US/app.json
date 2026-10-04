@@ -90,7 +90,7 @@
       "all": "All",
       "public": "General plugins"
     },
-    "organizationExclusive": "{{name}} only",
+    "organizationName": "{{name}}",
     "noMatches": "No matching plugins",
     "searchHint": "Try searching by plugin name.",
     "versionUpdate": "Update available from {{current}} to {{target}}",

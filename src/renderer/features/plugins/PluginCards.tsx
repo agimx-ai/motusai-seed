@@ -113,7 +113,7 @@ export function CatalogPluginCard({ plugin, appName, installedPlugin, installing
       {plugin.publisherType === 'official' && <OfficialMark appName={appName} />}
       {installedPlugin && pluginMcpTools(installedPlugin).length > 0 && <McpMark />}
       {plugin.visibility === 'organization' && plugin.organization && <span className="max-w-[112px] shrink-0 truncate rounded-full bg-info-soft px-2 py-0.5 text-[10px] font-medium text-info">
-        {t('plugins.organizationExclusive', { name: plugin.organization.name })}
+        {t('plugins.organizationName', { name: plugin.organization.name })}
       </span>}
     </>}
     description={resolveSeedLocalizedText(plugin.description, locale)}
