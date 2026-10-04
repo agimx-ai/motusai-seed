@@ -52,6 +52,11 @@ type InstalledStateStorage = {
   read(): Promise<unknown | undefined>
   write(state: InstalledState): Promise<void>
 }
+type PluginPackageDownloadOptions = {
+  signal?: AbortSignal
+  onProgress?: (progress: { transferred: number; total: number; percent: number }) => void
+  onVerifying?: () => void
+}
 
 async function exists(path: string) {
   try {
@@ -104,14 +109,23 @@ async function readInstalledManifest(root: string) {
   return await loadSeedPluginManifest(async (path) => await readFile(join(root, path)))
 }
 
-async function responseBuffer(response: Response, maxBytes: number) {
+export async function responseBuffer(
+  response: Response,
+  maxBytes: number,
+  options: Pick<PluginPackageDownloadOptions, 'signal' | 'onProgress'> = {},
+) {
   const declared = Number(response.headers.get('content-length') || 0)
   if (!Number.isSafeInteger(declared) || declared <= 0 || declared > maxBytes) throw new Error('服务端返回的插件包大小无效。')
   if (!response.body) throw new Error('服务端没有返回插件包内容。')
   const reader = response.body.getReader()
   const chunks: Buffer[] = []
   let total = 0
+  options.onProgress?.({ transferred: 0, total: declared, percent: 0 })
   while (true) {
+    if (options.signal?.aborted) {
+      await reader.cancel().catch(() => undefined)
+      throw new DOMException('插件安装已取消。', 'AbortError')
+    }
     const item = await reader.read()
     if (item.done) break
     total += item.value.byteLength
@@ -120,6 +134,11 @@ async function responseBuffer(response: Response, maxBytes: number) {
       throw new Error('下载的插件包超过声明大小。')
     }
     chunks.push(Buffer.from(item.value))
+    options.onProgress?.({
+      transferred: total,
+      total: declared,
+      percent: Math.min(100, total / declared * 100),
+    })
   }
   if (total !== declared) throw new Error('下载的插件包长度与服务端声明不一致。')
   return Buffer.concat(chunks)
@@ -210,7 +229,7 @@ export class SeedPluginInstaller {
     await Promise.all(staged.map((inactive) => inactive.discard()))
   }
 
-  async downloadAndVerify(plugin: SeedCatalogPlugin, version: SeedCatalogPluginVersion) {
+  async downloadAndVerify(plugin: SeedCatalogPlugin, version: SeedCatalogPluginVersion, options: PluginPackageDownloadOptions = {}) {
     const url = new URL(version.downloadUrl)
     const marketplaceUrl = typeof this.marketplaceUrl === 'function' ? this.marketplaceUrl() : this.marketplaceUrl
     if (!marketplaceUrl || url.origin !== new URL(marketplaceUrl).origin || url.username || url.password) {
@@ -220,12 +239,14 @@ export class SeedPluginInstaller {
     const response = await fetch(url, {
       headers: { Accept: 'application/vnd.motusai.seed-plugin', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       redirect: 'error',
+      signal: options.signal,
     })
     if (!response.ok) throw new Error(`插件下载失败（${response.status}）。`)
     const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim()
     if (contentType !== 'application/vnd.motusai.seed-plugin') throw new Error('服务端返回了错误的插件内容类型。')
-    const bytes = await responseBuffer(response, MAX_SEED_PLUGIN_PACKAGE_BYTES)
+    const bytes = await responseBuffer(response, MAX_SEED_PLUGIN_PACKAGE_BYTES, options)
     if (bytes.length !== version.packageSize) throw new Error('插件包大小与目录记录不一致。')
+    options.onVerifying?.()
     return await verifySeedPackage(bytes, {
       expectedPackageSha256: version.packageSha256,
       expectedPluginId: plugin.id,

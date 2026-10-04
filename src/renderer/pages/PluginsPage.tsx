@@ -1,6 +1,6 @@
-import { PackageCheck, RefreshCw, Trash2 } from 'lucide-react'
+import { PackageCheck } from 'lucide-react'
 import { useEffect, useState, type RefObject } from 'react'
-import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, SeedCatalogPlugin, SeedInstalledPlugin, UpdatePluginConfigurationInput } from '../../shared/contracts'
+import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, PluginInstallProgress, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, SeedCatalogPlugin, SeedInstalledPlugin, UpdatePluginConfigurationInput } from '../../shared/contracts'
 import { resolveSeedLocalizedText, type SeedLocalizedText } from '../../shared/plugin-manifest'
 import { useTranslation } from 'react-i18next'
 import { ActionButton } from '../components/ActionButton'
@@ -11,6 +11,7 @@ import { Tooltip } from '../components/Tooltip'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { resourceCardGridClass } from '../components/ResourceCard'
 import { CatalogPluginCard, CatalogPluginMark, McpMark, OfficialMark, PluginMark, PluginVersionTransition } from '../features/plugins/PluginCards'
+import { PluginActionButton } from '../features/plugins/PluginActionButton'
 import { pluginMcpTools } from '../features/plugins/mcp-tools'
 import { isCatalogPluginInstallable } from '../features/plugins/plugin-updates'
 import { PluginConfigurationPanel } from '../features/plugins/PluginConfigurationPanel'
@@ -39,14 +40,15 @@ type PluginsPageProps = {
   query: string
   searchRef: RefObject<HTMLInputElement | null>
   busy: string
+  installProgress: Record<string, PluginInstallProgress>
   hasMore: boolean
   loadingMore: boolean
-  updateHighlightRevision: number
   configurationStates: Record<string, PluginConfigurationState>
   onQueryChange: (query: string) => void
   onLoadMore: () => void
   onSelectPlugin: (id: string) => void
   onInstall: (id: string, version: string) => void
+  onCancelInstall: (id: string) => void
   onUninstall: (id: string) => void
   onUpdateConfiguration: (input: UpdatePluginConfigurationInput) => Promise<void>
   onQueryConfigurationOptions: (input: QueryPluginConfigurationOptionsInput) => Promise<PluginConfigurationOption[]>
@@ -56,7 +58,7 @@ type PluginsPageProps = {
   onInvokeManagementAction: (input: { pluginId: string; viewId: string; actionId: string; arguments: Record<string, unknown> }) => Promise<unknown>
 }
 
-export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, query, searchRef, busy, hasMore, loadingMore, updateHighlightRevision, configurationStates, onQueryChange, onLoadMore, onSelectPlugin, onInstall, onUninstall, onUpdateConfiguration, onQueryConfigurationOptions, onQueryConfigurationProfileStatuses, onReconnectConfigurationProfile, onQueryManagementView, onInvokeManagementAction }: PluginsPageProps) {
+export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, query, searchRef, busy, installProgress, hasMore, loadingMore, configurationStates, onQueryChange, onLoadMore, onSelectPlugin, onInstall, onCancelInstall, onUninstall, onUpdateConfiguration, onQueryConfigurationOptions, onQueryConfigurationProfileStatuses, onReconnectConfigurationProfile, onQueryManagementView, onInvokeManagementAction }: PluginsPageProps) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const [confirmation, setConfirmation] = useState<
@@ -98,6 +100,8 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
   const selectedLatestRelease = selectedCatalogPlugin?.versions.find((version) => version.version === selectedCatalogPlugin.latestVersion)
   const selectedCatalogInstallable = selectedCatalogPlugin ? isCatalogPluginInstallable(selectedCatalogPlugin) : false
   const selectedVersion = selectedInstalledPlugin?.version ?? selectedCatalogPlugin?.latestVersion
+  const selectedInstallProgress = selectedCatalogPlugin ? installProgress[selectedCatalogPlugin.id] : undefined
+  const selectedInstallBusy = Boolean(selectedCatalogPlugin && busy === `plugin-install-${selectedCatalogPlugin.id}`)
   const selectedUpdateAvailable = Boolean(
     selectedInstalledPlugin
     && selectedCatalogPlugin
@@ -161,26 +165,28 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
       </div>
       <div className="flex items-center gap-2">
         {selectedInstalledPlugin ? <>
-          {selectedUpdateAvailable && selectedCatalogPlugin && <ActionButton
-            tone="info"
-            icon={<RefreshCw size={14} />}
-            busy={busy === `plugin-install-${selectedCatalogPlugin.id}`}
-            onClick={() => setConfirmation({
+          {(selectedUpdateAvailable || selectedInstallProgress || selectedInstallBusy) && selectedCatalogPlugin && <PluginActionButton
+            action="update"
+            progress={selectedInstallProgress}
+            busy={selectedInstallBusy}
+            onStart={() => setConfirmation({
               kind: 'install',
               plugin: selectedCatalogPlugin,
               version: selectedCatalogPlugin.latestVersion,
               updating: true,
               currentVersion: selectedInstalledPlugin.version,
             })}
-          >
-            {busy === `plugin-install-${selectedCatalogPlugin.id}` ? t('plugins.updating') : t('plugins.update')}
-          </ActionButton>}
-          <ActionButton tone="danger" icon={<Trash2 size={14} />} busy={busy === `plugin-uninstall-${selectedInstalledPlugin.id}`} onClick={() => setConfirmation({ kind: 'uninstall', plugin: selectedInstalledPlugin })}>{busy === `plugin-uninstall-${selectedInstalledPlugin.id}` ? t('plugins.uninstalling') : t('plugins.uninstall')}</ActionButton>
-        </> : selectedCatalogPlugin ? <ActionButton
-          busy={busy === `plugin-install-${selectedCatalogPlugin.id}`}
+            onCancel={() => onCancelInstall(selectedCatalogPlugin.id)}
+          />}
+          <PluginActionButton action="uninstall" busy={busy === `plugin-uninstall-${selectedInstalledPlugin.id}`} onStart={() => setConfirmation({ kind: 'uninstall', plugin: selectedInstalledPlugin })} />
+        </> : selectedCatalogPlugin ? <PluginActionButton
+          action="install"
+          progress={selectedInstallProgress}
+          busy={selectedInstallBusy}
           disabled={!selectedCatalogInstallable}
-          onClick={() => setConfirmation({ kind: 'install', plugin: selectedCatalogPlugin, version: selectedCatalogPlugin.latestVersion, updating: false })}
-        >{busy === `plugin-install-${selectedCatalogPlugin.id}` ? t('plugins.installing') : selectedCatalogInstallable ? t('plugins.install') : t('plugins.incompatible')}</ActionButton> : null}
+          onStart={() => setConfirmation({ kind: 'install', plugin: selectedCatalogPlugin, version: selectedCatalogPlugin.latestVersion, updating: false })}
+          onCancel={() => onCancelInstall(selectedCatalogPlugin.id)}
+        /> : null}
       </div>
     </div>
     {selectedInstalledPlugin?.status === 'incompatible' && <section className="rounded-[14px] border border-border px-4 py-3">
@@ -311,7 +317,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
                 appName={appName}
                 installedPlugin={installedById.get(plugin.id)}
                 installing={busy === `plugin-install-${plugin.id}`}
-                updateHighlightRevision={updateHighlightRevision}
+                installProgress={installProgress[plugin.id]}
                 onInstall={() => setConfirmation({
                   kind: 'install',
                   plugin,
@@ -319,6 +325,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, selectedPlugin, 
                   updating: installedById.has(plugin.id),
                   currentVersion: installedById.get(plugin.id)?.version,
                 })}
+                onCancelInstall={() => onCancelInstall(plugin.id)}
                 onOpen={() => onSelectPlugin(plugin.id)}
               />
             })}

@@ -1,5 +1,5 @@
-import { Check, TriangleAlert } from 'lucide-react'
-import type { SeedCatalogPlugin, SeedInstalledPlugin } from '../../../shared/contracts'
+import { TriangleAlert } from 'lucide-react'
+import type { PluginInstallProgress, SeedCatalogPlugin, SeedInstalledPlugin } from '../../../shared/contracts'
 import { resolveSeedLocalizedText } from '../../../shared/plugin-manifest'
 import { useTranslation } from 'react-i18next'
 import { ActionButton } from '../../components/ActionButton'
@@ -12,6 +12,7 @@ import { cx } from '../../lib/display'
 import { useSeedI18n } from '../../i18n'
 import { isCatalogPluginInstallable } from './plugin-updates'
 import { pluginMcpTools } from './mcp-tools'
+import { PluginActionButton } from './PluginActionButton'
 
 export function OfficialMark({ appName }: { appName: string }) {
   const { t } = useTranslation()
@@ -27,15 +28,6 @@ export function McpMark() {
   return <Tooltip content={t('plugins.mcpToolsAvailable')}>
     <span className="grid h-4 w-4 shrink-0 place-items-center" role="img" aria-label={t('plugins.mcpToolsAvailable')}>
       <img className="h-3.5 w-3.5 dark:invert" src={mcpIconUrl} alt="" aria-hidden="true" />
-    </span>
-  </Tooltip>
-}
-
-function InstalledMark() {
-  const { t } = useTranslation()
-  return <Tooltip content={t('common.installed')}>
-    <span className="grid h-[30px] min-w-[48px] shrink-0 place-items-center text-muted-foreground" role="status" aria-label={t('common.installed')}>
-      <Check size={17} strokeWidth={1.8} />
     </span>
   </Tooltip>
 }
@@ -71,7 +63,7 @@ export function PluginCard({ plugin, appName, onOpen }: { plugin: SeedInstalledP
     description={resolveSeedLocalizedText(plugin.description, locale)}
     trailing={incompatible
       ? <ActionButton tone="muted" icon={<TriangleAlert size={13} />} disabled>{t('plugins.incompatible')}</ActionButton>
-      : <InstalledMark />}
+      : <PluginActionButton action="details" onStart={onOpen} />}
     onOpen={onOpen}
   />
 }
@@ -81,12 +73,13 @@ type CatalogPluginCardProps = {
   appName: string
   installedPlugin?: SeedInstalledPlugin
   installing: boolean
-  updateHighlightRevision: number
+  installProgress?: PluginInstallProgress
   onInstall: () => void
+  onCancelInstall: () => void
   onOpen: () => void
 }
 
-export function CatalogPluginCard({ plugin, appName, installedPlugin, installing, updateHighlightRevision, onInstall, onOpen }: CatalogPluginCardProps) {
+export function CatalogPluginCard({ plugin, appName, installedPlugin, installing, installProgress, onInstall, onCancelInstall, onOpen }: CatalogPluginCardProps) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const current = installedPlugin?.version === plugin.latestVersion
@@ -94,18 +87,6 @@ export function CatalogPluginCard({ plugin, appName, installedPlugin, installing
   const updating = Boolean(installedPlugin && !current)
   const installable = isCatalogPluginInstallable(plugin)
   const updateAvailable = updating && !incompatible && installable
-  const actionLabel = installing
-    ? (updating ? t('plugins.updating') : t('plugins.installing'))
-    : incompatible
-      ? t('plugins.incompatible')
-      : current
-        ? t('common.installed')
-        : !installable
-          ? t('plugins.incompatible')
-          : updating
-            ? t('plugins.update')
-            : t('plugins.install')
-
   return <ResourceCard
     icon={installedPlugin ? <PluginMark plugin={installedPlugin} /> : <CatalogPluginMark plugin={plugin} />}
     title={<>
@@ -117,28 +98,15 @@ export function CatalogPluginCard({ plugin, appName, installedPlugin, installing
       </span>}
     </>}
     description={resolveSeedLocalizedText(plugin.description, locale)}
-    trailing={current
-      ? <InstalledMark />
-      : <div className="relative overflow-visible">
-        {updateAvailable && updateHighlightRevision > 0 && <span className="seed-update-burst motion-reduce:hidden" key={updateHighlightRevision} aria-hidden="true">
-          {Array.from({ length: 8 }, (_, index) => <i key={index} />)}
-        </span>}
-        <ActionButton
-          key={updateHighlightRevision}
-          className={cx(
-            'relative z-20',
-            updateAvailable && updateHighlightRevision > 0 && 'animate-[seedUpdateButtonPulse_900ms_ease-out_both] motion-reduce:animate-none',
-          )}
-          tone={updateAvailable ? 'info' : 'neutral'}
-          icon={incompatible ? <TriangleAlert size={13} /> : undefined}
-          busy={installing}
-          disabled={incompatible || !installable}
-          aria-label={actionLabel}
-          onClick={(event) => { event.stopPropagation(); onInstall() }}
-        >
-          {actionLabel}
-        </ActionButton>
-      </div>}
+    trailing={!installProgress && !installing && !current && (incompatible || !installable)
+        ? <ActionButton tone="muted" icon={<TriangleAlert size={13} />} disabled>{t('plugins.incompatible')}</ActionButton>
+        : <PluginActionButton
+            action={current ? 'details' : updateAvailable ? 'update' : 'install'}
+            progress={installProgress}
+            busy={installing}
+            onStart={current ? onOpen : onInstall}
+            onCancel={onCancelInstall}
+          />}
     onOpen={onOpen}
   />
 }

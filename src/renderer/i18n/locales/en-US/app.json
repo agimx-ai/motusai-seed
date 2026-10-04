@@ -97,9 +97,21 @@
     "updateNotification": "{{count}} plugin updates available",
     "updateNotificationEmpty": "No plugin updates available",
     "install": "Install",
-    "installing": "Installing…",
     "update": "Update",
-    "updating": "Updating…",
+    "storeAction": {
+      "get": "Get",
+      "update": "Update",
+      "details": "Details"
+    },
+    "installProgress": {
+      "preparing": "Preparing…",
+      "downloading": "Downloading, {{percent}}%",
+      "verifying": "Verifying…",
+      "installing": "Installing…",
+      "activating": "Activating…",
+      "completed": "Installation complete",
+      "cancel": "Stop download"
+    },
     "incompatible": "Incompatible",
     "requiresSeedVersion": "This plugin requires Seed {{version}} or later. Update the client first.",
     "missingSeedVersion": "This plugin version lacks a minimum Seed version. Wait for a new release.",

@@ -5,7 +5,7 @@ import { app, BrowserWindow, powerSaveBlocker, shell } from 'electron'
 import { z } from 'zod'
 import { buildConfig } from '../shared/build-config.generated'
 import { isCreditAmount } from '../shared/credit-amount'
-import type { AppUpdateState, AuditQueryInput, LocalClientAuthorization, MascotState, SeedCatalogPage, SeedCatalogPlugin, SeedDistribution, SeedDistributionEvent, SeedEvent, SeedInstalledPlugin, SeedLanguagePreference, SeedPluginRuntimeDefinition, SeedSnapshot, SeedThemePreference, TerminalLogUploadProgress, TerminalLogUploadRange, TerminalUserProfile, UpdatePluginConfigurationInput, UpdateProfileInput, WorkerEvent } from '../shared/contracts'
+import type { AppUpdateState, AuditQueryInput, LocalClientAuthorization, MascotState, PluginInstallProgress, SeedCatalogPage, SeedCatalogPlugin, SeedDistribution, SeedDistributionEvent, SeedEvent, SeedInstalledPlugin, SeedLanguagePreference, SeedPluginRuntimeDefinition, SeedSnapshot, SeedThemePreference, TerminalLogUploadProgress, TerminalLogUploadRange, TerminalUserProfile, UpdatePluginConfigurationInput, UpdateProfileInput, WorkerEvent } from '../shared/contracts'
 import { resolveSeedLocale } from './i18n/locale'
 import { pluginConfigurationKey } from '../shared/contracts'
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation'
@@ -53,6 +53,10 @@ const entitlementResponseSchema = z.object({
 }).strict()
 
 const officialWebsiteUrl = 'https://motusseed.com'
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
 
 export class SeedRuntime {
   readonly store: SeedStore
@@ -111,6 +115,11 @@ export class SeedRuntime {
   })
   private logUploadAbortController: AbortController | null = null
   private logUploadPhase: TerminalLogUploadProgress['phase'] | null = null
+  private readonly pluginInstallOperations = new Map<string, {
+    operationId: string
+    controller: AbortController
+    cancelable: boolean
+  }>()
   private readonly hostServices: Map<string, (argumentsValue: Record<string, unknown>) => Promise<unknown>> = new Map([
     ['seed.billing.prepare', async (argumentsValue) => {
       const input = z.object({
@@ -1451,43 +1460,89 @@ export class SeedRuntime {
   }
 
   async installPlugin(pluginId: string, version: string) {
+    if (this.pluginInstallOperations.has(pluginId)) throw new Error('此插件正在安装或更新。')
+    const operationId = randomUUID()
+    const operation = { operationId, controller: new AbortController(), cancelable: true }
+    this.pluginInstallOperations.set(pluginId, operation)
+    const emitProgress = (progress: Omit<PluginInstallProgress, 'operationId'>) => {
+      this.emit({ type: 'plugin.install.progress', pluginId, progress: { operationId, ...progress } })
+    }
+    const clearProgress = () => this.emit({ type: 'plugin.install.progress', pluginId, operationId, progress: null })
+    emitProgress({ version, phase: 'preparing', cancelable: true })
     let installedSummary = ''
     let installedMetadata: { plugin_id: string; plugin_version: string; plugin_name_en_us: string; plugin_name_zh_hans: string } | undefined
+    let completed = false
     try {
-      const plugin = this.verifiedCatalogPlugins.get(pluginId)
-      if (!plugin) throw new Error('插件不在当前已验证的服务端目录中，请刷新后重试。')
-      const release = plugin.versions.find((candidate) => candidate.version === version)
-      if (!release) throw new Error('所选插件版本不在当前服务端目录中，请刷新后重试。')
-      if (!plugin.compatible) throw new Error(plugin.minSeedVersion
-        ? `此插件需要 Seed ${plugin.minSeedVersion} 或更高版本，请先更新客户端。`
-        : '此插件版本缺少最低 Seed 版本声明，请等待发布新版。')
-      if (release.runtimeKind === 'native-host' && plugin.publisherType !== 'official') {
-        throw new Error('当前 Seed 只允许安装官方 native-host 插件。')
+      try {
+        const plugin = this.verifiedCatalogPlugins.get(pluginId)
+        if (!plugin) throw new Error('插件不在当前已验证的服务端目录中，请刷新后重试。')
+        const release = plugin.versions.find((candidate) => candidate.version === version)
+        if (!release) throw new Error('所选插件版本不在当前服务端目录中，请刷新后重试。')
+        if (!plugin.compatible) throw new Error(plugin.minSeedVersion
+          ? `此插件需要 Seed ${plugin.minSeedVersion} 或更高版本，请先更新客户端。`
+          : '此插件版本缺少最低 Seed 版本声明，请等待发布新版。')
+        if (release.runtimeKind === 'native-host' && plugin.publisherType !== 'official') {
+          throw new Error('当前 Seed 只允许安装官方 native-host 插件。')
+        }
+        let lastDownloadPercent = -1
+        const verified = await this.pluginInstaller.downloadAndVerify(plugin, release, {
+          signal: operation.controller.signal,
+          onProgress: ({ transferred, total, percent }) => {
+            const roundedPercent = Math.floor(percent)
+            if (roundedPercent === lastDownloadPercent && transferred !== total) return
+            lastDownloadPercent = roundedPercent
+            emitProgress({ version, phase: 'downloading', transferred, total, percent, cancelable: true })
+          },
+          onVerifying: () => {
+            operation.cancelable = false
+            emitProgress({ version, phase: 'verifying', cancelable: false })
+          },
+        })
+        emitProgress({ version, phase: 'installing', cancelable: false })
+        await this.pluginInstaller.install(verified, { publisherType: plugin.publisherType, visibility: plugin.visibility, source: 'marketplace', enabled: true })
+        emitProgress({ version, phase: 'activating', cancelable: false })
+        await this.refreshInstalledEntitlements()
+        if (pluginInstallNeedsReload(verified.manifest.id, verified.manifest.version, this.installedPlugins, this.runtimePlugins)) {
+          await this.reloadPlugins()
+          this.configureWorker()
+        }
+        const installed = this.installedPlugins.find((candidate) => candidate.id === verified.manifest.id)
+        const runtime = this.runtimePlugins.find((candidate) => candidate.package_id === verified.manifest.id)
+        if (!installed) throw new Error('插件安装后未通过本地文件完整性校验。')
+        if (installed.status === 'incompatible') throw new Error(installed.incompatibilityReason || '插件格式与当前客户端不兼容。')
+        if (installed.version !== verified.manifest.version || !installed.enabled) throw new Error('插件安装状态与所选版本不一致。')
+        if (!this.pluginIsAuthorized(installed.id)) throw new Error('插件已安装，但当前账号未获得运行权限。')
+        if (runtime?.version !== verified.manifest.version) throw new Error('插件已安装，但对应版本的运行时未能载入。')
+        installedSummary = `已安装 ${installed.name.zh_Hans}（${installed.version}）。`
+        installedMetadata = { plugin_id: installed.id, plugin_version: installed.version, plugin_name_en_us: installed.name.en_US, plugin_name_zh_hans: installed.name.zh_Hans }
+      } catch (error) {
+        if (isAbortError(error)) {
+          await this.store.auditSystem('plugin.install', 'interrupted', `已取消安装 ${pluginId}@${version}。`, 'control')
+          await this.publishSnapshot()
+          return false
+        }
+        const message = error instanceof Error ? error.message : String(error)
+        await this.store.auditSystem('plugin.install', 'failed', `安装 ${pluginId}@${version} 失败：${message}`, 'control')
+        await this.publishSnapshot()
+        throw error
       }
-      const verified = await this.pluginInstaller.downloadAndVerify(plugin, release)
-      await this.pluginInstaller.install(verified, { publisherType: plugin.publisherType, visibility: plugin.visibility, source: 'marketplace', enabled: true })
-      await this.refreshInstalledEntitlements()
-      if (pluginInstallNeedsReload(verified.manifest.id, verified.manifest.version, this.installedPlugins, this.runtimePlugins)) {
-        await this.reloadPlugins()
-        this.configureWorker()
-      }
-      const installed = this.installedPlugins.find((candidate) => candidate.id === verified.manifest.id)
-      const runtime = this.runtimePlugins.find((candidate) => candidate.package_id === verified.manifest.id)
-      if (!installed) throw new Error('插件安装后未通过本地文件完整性校验。')
-      if (installed.status === 'incompatible') throw new Error(installed.incompatibilityReason || '插件格式与当前客户端不兼容。')
-      if (installed.version !== verified.manifest.version || !installed.enabled) throw new Error('插件安装状态与所选版本不一致。')
-      if (!this.pluginIsAuthorized(installed.id)) throw new Error('插件已安装，但当前账号未获得运行权限。')
-      if (runtime?.version !== verified.manifest.version) throw new Error('插件已安装，但对应版本的运行时未能载入。')
-      installedSummary = `已安装 ${installed.name.zh_Hans}（${installed.version}）。`
-      installedMetadata = { plugin_id: installed.id, plugin_version: installed.version, plugin_name_en_us: installed.name.en_US, plugin_name_zh_hans: installed.name.zh_Hans }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      await this.store.auditSystem('plugin.install', 'failed', `安装 ${pluginId}@${version} 失败：${message}`, 'control')
+      await this.store.auditSystem('plugin.install', 'allowed', installedSummary, undefined, installedMetadata)
       await this.publishSnapshot()
-      throw error
+      emitProgress({ version, phase: 'completed', percent: 100, cancelable: false })
+      completed = true
+      setTimeout(clearProgress, 500)
+      return true
+    } finally {
+      if (this.pluginInstallOperations.get(pluginId)?.operationId === operationId) this.pluginInstallOperations.delete(pluginId)
+      if (!completed) clearProgress()
     }
-    await this.store.auditSystem('plugin.install', 'allowed', installedSummary, undefined, installedMetadata)
-    await this.publishSnapshot()
+  }
+
+  cancelPluginInstall(pluginId: string) {
+    const operation = this.pluginInstallOperations.get(pluginId)
+    if (!operation?.cancelable) return false
+    operation.cancelable = false
+    operation.controller.abort()
     return true
   }
 

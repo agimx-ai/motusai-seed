@@ -370,9 +370,21 @@ export type PersonalCreditGrantPage = {
   nextCursor?: string
 }
 
+export type PluginInstallProgress = {
+  operationId: string
+  version: string
+  phase: 'preparing' | 'downloading' | 'verifying' | 'installing' | 'activating' | 'completed'
+  transferred?: number
+  total?: number
+  percent?: number
+  cancelable: boolean
+}
+
 export type SeedEvent =
   | { type: 'snapshot.changed'; snapshot: SeedSnapshot }
   | { type: 'logs.upload.progress'; progress: TerminalLogUploadProgress | null }
+  | { type: 'plugin.install.progress'; pluginId: string; progress: PluginInstallProgress }
+  | { type: 'plugin.install.progress'; pluginId: string; operationId: string; progress: null }
   | { type: 'plugin.management.text'; pluginId: string; viewId: string; valuePath: string; streamId: string; operation: 'append' | 'replace'; text: string; offset?: number }
 
 export type SeedApi = {
@@ -408,6 +420,7 @@ export type SeedApi = {
   loadMorePluginCatalog(): Promise<SeedCatalogPlugin[]>
   searchPluginCatalog(query: string, cursor?: string): Promise<SeedCatalogPage>
   installPlugin(pluginId: string, version: string): Promise<boolean>
+  cancelPluginInstall(pluginId: string): Promise<boolean>
   uninstallPlugin(pluginId: string): Promise<boolean>
   subscribe(listener: (event: SeedEvent) => void): () => void
 }
@@ -457,6 +470,7 @@ export const ipcChannels = {
   loadMorePluginCatalog: 'seed:plugins:load-more-catalog',
   searchPluginCatalog: 'seed:plugins:search-catalog',
   installPlugin: 'seed:plugins:install',
+  cancelPluginInstall: 'seed:plugins:cancel-install',
   uninstallPlugin: 'seed:plugins:uninstall',
   windowMinimize: 'seed:window:minimize',
   windowCopyText: 'seed:window:copy-text',

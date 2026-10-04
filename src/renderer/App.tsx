@@ -30,7 +30,7 @@ const sidebarWidth = 224
 export default function App() {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
-  const { snapshot, busy, run, logUploadProgress, cancelLogUpload } = useSeed()
+  const { snapshot, busy, run, logUploadProgress, cancelLogUpload, pluginInstallProgress, cancelPluginInstall } = useSeed()
   const themePreference = snapshot?.themePreference ?? 'system'
   const presentationThemePreference = !snapshot?.user ? 'system' : themePreference
   const { resolvedTheme } = useTheme(presentationThemePreference)
@@ -40,7 +40,6 @@ export default function App() {
   const [pluginSearchResults, setPluginSearchResults] = useState<SeedCatalogPage>()
   const [pluginSearchLoading, setPluginSearchLoading] = useState(false)
   const [selectedPluginId, setSelectedPluginId] = useState('')
-  const [pluginUpdateHighlightRevision, setPluginUpdateHighlightRevision] = useState(0)
   const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const pluginSearchRef = useRef<HTMLInputElement>(null)
@@ -211,7 +210,6 @@ export default function App() {
         onShowPluginUpdates={() => {
           navigate('plugins')
           setPluginQuery('')
-          setPluginUpdateHighlightRevision((revision) => revision + 1)
         }}
         onLogout={() => void run('logout', (api) => api.logout())}
         onDownloadUpdate={() => void run('update-download', (api) => api.downloadUpdate())}
@@ -248,14 +246,15 @@ export default function App() {
           query={pluginQuery}
           searchRef={pluginSearchRef}
           busy={busy}
+          installProgress={pluginInstallProgress}
           hasMore={pluginQuery.trim() ? Boolean(pluginSearchResults?.nextCursor) : Boolean(snapshot.catalogNextCursor)}
           loadingMore={pluginQuery.trim() ? pluginSearchLoading : busy === 'plugin-catalog-load-more'}
-          updateHighlightRevision={pluginUpdateHighlightRevision}
           configurationStates={snapshot.pluginConfigurations}
           onQueryChange={setPluginQuery}
           onLoadMore={() => void loadMoreCatalog()}
           onSelectPlugin={setSelectedPluginId}
           onInstall={(id, version) => void run(`plugin-install-${id}`, (api) => api.installPlugin(id, version), t('notifications.pluginInstalled'))}
+          onCancelInstall={(id) => void cancelPluginInstall(id)}
           onUninstall={(id) => void run(`plugin-uninstall-${id}`, (api) => api.uninstallPlugin(id), t('notifications.pluginUninstalled'))}
           onUpdateConfiguration={(input) => run(`plugin-config-${input.pluginId}`, (api) => api.updatePluginConfiguration(input), t('plugins.configurationSaved'))}
           onQueryConfigurationOptions={window.motusSeed.queryPluginConfigurationOptions}

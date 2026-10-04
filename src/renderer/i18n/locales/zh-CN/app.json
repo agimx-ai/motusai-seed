@@ -97,9 +97,21 @@
     "updateNotification": "{{count}} 个插件可更新",
     "updateNotificationEmpty": "暂无插件更新",
     "install": "安装",
-    "installing": "安装中…",
     "update": "更新",
-    "updating": "更新中…",
+    "storeAction": {
+      "get": "获取",
+      "update": "更新",
+      "details": "详情"
+    },
+    "installProgress": {
+      "preparing": "正在准备…",
+      "downloading": "正在下载，{{percent}}%",
+      "verifying": "正在校验…",
+      "installing": "正在安装…",
+      "activating": "正在启用…",
+      "completed": "安装完成",
+      "cancel": "停止下载"
+    },
     "incompatible": "不兼容",
     "requiresSeedVersion": "此插件需要 Seed {{version}} 或更高版本，请先更新客户端。",
     "missingSeedVersion": "此插件版本缺少最低 Seed 版本声明，请等待发布新版。",

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { seedCapabilityManifestSchema, seedPluginManifestSchema } from '../shared/plugin-manifest'
-import { SeedPluginInstaller } from './seed-plugin-installer'
+import { responseBuffer, SeedPluginInstaller } from './seed-plugin-installer'
 
 const temporaryDirectories: string[] = []
 afterEach(async () => {
@@ -133,6 +133,36 @@ function packageFiles(manifest: string) {
 }
 
 describe('Seed plugin installer', () => {
+  it('reports streamed download progress from the response body', async () => {
+    const progress: Array<{ transferred: number; total: number; percent: number }> = []
+    const response = new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2]))
+        controller.enqueue(new Uint8Array([3, 4, 5]))
+        controller.close()
+      },
+    }), { headers: { 'Content-Length': '5' } })
+
+    await expect(responseBuffer(response, 10, { onProgress: (value) => progress.push(value) })).resolves.toEqual(Buffer.from([1, 2, 3, 4, 5]))
+    expect(progress).toEqual([
+      { transferred: 0, total: 5, percent: 0 },
+      { transferred: 2, total: 5, percent: 40 },
+      { transferred: 5, total: 5, percent: 100 },
+    ])
+  })
+
+  it('cancels a streamed download before reading the next chunk', async () => {
+    const abortController = new AbortController()
+    const response = new Response(new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new Uint8Array([1, 2]))
+        abortController.abort()
+      },
+    }), { headers: { 'Content-Length': '4' } })
+
+    await expect(responseBuffer(response, 10, { signal: abortController.signal })).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('keeps installed packages but excludes plugins without a current Cloud entitlement from runtime', async () => {
     const userData = await mkdtemp(join(tmpdir(), 'seed-installer-entitlement-test-'))
     temporaryDirectories.push(userData)

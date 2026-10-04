@@ -28,6 +28,7 @@ const ipcChannels = {
   loadMorePluginCatalog: 'seed:plugins:load-more-catalog',
   searchPluginCatalog: 'seed:plugins:search-catalog',
   uninstallPlugin: 'seed:plugins:uninstall',
+  cancelPluginInstall: 'seed:plugins:cancel-install',
   windowMinimize: 'seed:window:minimize', windowToggleMaximize: 'seed:window:toggle-maximize',
   windowCopyText: 'seed:window:copy-text',
   windowClose: 'seed:window:close', windowIsMaximized: 'seed:window:is-maximized',
@@ -67,6 +68,7 @@ const api: SeedApi = {
   loadMorePluginCatalog: () => ipcRenderer.invoke(ipcChannels.loadMorePluginCatalog),
   searchPluginCatalog: (query: string, cursor?: string) => ipcRenderer.invoke(ipcChannels.searchPluginCatalog, query, cursor),
   installPlugin: (pluginId: string, version: string) => ipcRenderer.invoke(ipcChannels.installPlugin, pluginId, version),
+  cancelPluginInstall: (pluginId: string) => ipcRenderer.invoke(ipcChannels.cancelPluginInstall, pluginId),
   uninstallPlugin: (pluginId: string) => ipcRenderer.invoke(ipcChannels.uninstallPlugin, pluginId),
   subscribe(listener: (event: SeedEvent) => void) {
     const handler = (_event: Electron.IpcRendererEvent, payload: SeedEvent) => listener(payload)

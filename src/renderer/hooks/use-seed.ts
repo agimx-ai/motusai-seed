@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import type { SeedApi, SeedSnapshot, TerminalLogUploadProgress } from '../../shared/contracts'
+import type { PluginInstallProgress, SeedApi, SeedSnapshot, TerminalLogUploadProgress } from '../../shared/contracts'
 import { userFacingErrorMessage } from '../lib/errors'
 
 function api(): SeedApi | null {
@@ -13,6 +13,7 @@ export function useSeed() {
   const [snapshot, setSnapshot] = useState<SeedSnapshot | null>(null)
   const [busy, setBusy] = useState('')
   const [logUploadProgress, setLogUploadProgress] = useState<TerminalLogUploadProgress | null>(null)
+  const [pluginInstallProgress, setPluginInstallProgress] = useState<Record<string, PluginInstallProgress>>({})
 
   const refresh = useCallback(async () => {
     const bridge = api()
@@ -25,6 +26,13 @@ export function useSeed() {
     return api()?.subscribe((event) => {
       if (event.type === 'snapshot.changed') setSnapshot(event.snapshot)
       if (event.type === 'logs.upload.progress') setLogUploadProgress(event.progress)
+      if (event.type === 'plugin.install.progress') setPluginInstallProgress((current) => {
+        if (event.progress) return { ...current, [event.pluginId]: event.progress }
+        if (current[event.pluginId]?.operationId !== event.operationId) return current
+        const next = { ...current }
+        delete next[event.pluginId]
+        return next
+      })
     })
   }, [refresh])
 
@@ -56,5 +64,16 @@ export function useSeed() {
     }
   }, [t])
 
-  return { snapshot, busy, run, refresh, logUploadProgress, cancelLogUpload }
+  const cancelPluginInstall = useCallback(async (pluginId: string) => {
+    try {
+      const bridge = api()
+      if (!bridge) throw new Error(t('errors.appUnavailable'))
+      return await bridge.cancelPluginInstall(pluginId)
+    } catch (reason) {
+      toast.error(userFacingErrorMessage(reason), { id: `seed-plugin-install-${pluginId}-cancel-error` })
+      return false
+    }
+  }, [t])
+
+  return { snapshot, busy, run, refresh, logUploadProgress, cancelLogUpload, pluginInstallProgress, cancelPluginInstall }
 }

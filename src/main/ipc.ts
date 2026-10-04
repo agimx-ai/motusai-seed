@@ -88,6 +88,7 @@ export function registerIpc(runtime: SeedRuntime) {
     const input = installPluginSchema.parse({ pluginId, version })
     return runtime.installPlugin(input.pluginId, input.version)
   })
+  handle(ipcChannels.cancelPluginInstall, (_event, pluginId) => runtime.cancelPluginInstall(pluginIdSchema.parse(pluginId)))
   handle(ipcChannels.uninstallPlugin, (_event, pluginId) => runtime.uninstallPlugin(pluginIdSchema.parse(pluginId)))
   handle(ipcChannels.windowCopyText, (_event, text) => {
     clipboard.writeText(z.string().max(10_000_000).parse(text))
