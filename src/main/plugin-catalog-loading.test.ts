@@ -17,6 +17,23 @@ function setup() {
 }
 
 describe('Runtime plugin catalog loading', () => {
+  it('blocks data reset during installation and blocks installation/uninstallation during reset', async () => {
+    const runtime = setup()
+    Reflect.set(runtime, 'pluginInstallOperations', new Map([['example', {}]]))
+    Reflect.set(runtime, 'pluginUninstallOperations', new Set())
+    await expect(runtime.resetOrphanedPluginData([])).rejects.toThrow('请稍后')
+    Reflect.set(runtime, 'pluginInstallOperations', new Map())
+    Reflect.set(runtime, 'pluginUninstallOperations', new Set(['example']))
+    await expect(runtime.resetOrphanedPluginData([])).rejects.toThrow('请稍后')
+    Reflect.set(runtime, 'resettingPluginData', true)
+    await expect(runtime.installPlugin('com.example.test', '1.0.0')).rejects.toThrow('正在重置')
+    await expect(runtime.uninstallPlugin('com.example.test')).rejects.toThrow('正在重置')
+    Reflect.set(runtime, 'resettingPluginData', false)
+    Reflect.set(runtime, 'pluginUninstallOperations', new Set())
+    Reflect.set(runtime, 'pluginDataCleaner', () => ({ reset: async () => { throw new Error('Failed cleanup') } }))
+    await expect(runtime.resetOrphanedPluginData([])).rejects.toThrow('Failed cleanup')
+    expect(Reflect.get(runtime, 'resettingPluginData')).toBe(false)
+  })
   it('starts in loading and reaches ready for a successfully loaded empty catalog', async () => {
     const runtime = setup()
     expect(Reflect.get(runtime, 'pluginCatalogStatus')).toBe('loading')

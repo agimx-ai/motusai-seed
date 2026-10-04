@@ -27,6 +27,22 @@ async function temporaryDirectory() {
 }
 
 describe('SeedStore SQLite persistence', () => {
+  it('enumerates configuration-only and credential-only plugin data and removes exact plugin scopes', async () => {
+    const store = new SeedStore(await temporaryDirectory(), 'MotusAI Seed')
+    await store.load()
+    try {
+      const configuration = { schema_version: 1 as const, profiles: [], default_profile_id: '', values: {} }
+      await store.setPluginConfiguration('com.example.removed:settings', configuration)
+      await store.setPluginConfiguration('com.example.removed-other:settings', configuration)
+      await store.setPluginSecret('com.example.credentials', 'token', 'secret')
+      expect(store.pluginDataIds().sort()).toEqual(['com.example.credentials', 'com.example.removed', 'com.example.removed-other'])
+      await store.removePluginConfigurations('com.example.removed')
+      await store.removePluginSecrets('com.example.credentials')
+      expect(store.pluginDataIds()).toEqual(['com.example.removed-other'])
+      expect(store.pluginConfiguration('com.example.removed-other:settings')).toEqual(configuration)
+      expect(store.pluginSecret('com.example.credentials', 'token')).toBeUndefined()
+    } finally { await store.close() }
+  })
   it('uses the normalized app name and fresh database defaults', async () => {
     const directory = await temporaryDirectory()
 

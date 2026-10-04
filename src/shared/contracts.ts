@@ -390,7 +390,15 @@ export type SeedEvent =
   | { type: 'plugin.install.progress'; pluginId: string; operationId: string; progress: null }
   | { type: 'plugin.management.text'; pluginId: string; viewId: string; valuePath: string; streamId: string; operation: 'append' | 'replace'; text: string; offset?: number }
 
+export type PluginDataResetResult = {
+  reset: string[]
+  skipped: string[]
+  failed: Array<{ id: string; message: string }>
+}
+
 export type SeedApi = {
+  listOrphanedPluginData(): Promise<string[]>
+  resetOrphanedPluginData(pluginIds: string[]): Promise<PluginDataResetResult>
   snapshot(): Promise<SeedSnapshot>
   personalCreditWallet(): Promise<{ available: number }>
   personalCreditGrants(cursor?: string): Promise<PersonalCreditGrantPage>
@@ -441,6 +449,8 @@ export type SeedWindowApi = {
 }
 
 export const ipcChannels = {
+  listOrphanedPluginData: 'seed:plugins:list-orphaned-data',
+  resetOrphanedPluginData: 'seed:plugins:reset-orphaned-data',
   snapshot: 'seed:snapshot',
   personalCreditWallet: 'seed:credits:personal-wallet',
   personalCreditGrants: 'seed:credits:personal-grants',

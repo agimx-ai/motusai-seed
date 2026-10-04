@@ -43,6 +43,7 @@ import { discoverDistribution } from './distribution-discovery'
 import { SeedDistributionEvents } from './distribution-events'
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization'
 import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh'
+import { PluginDataCleaner } from './plugin-data-cleaner'
 
 const entitlementResponseSchema = z.object({
   items: z.array(z.object({
@@ -59,6 +60,8 @@ function isAbortError(error: unknown) {
 }
 
 export class SeedRuntime {
+  private resettingPluginData = false
+  private readonly pluginUninstallOperations = new Set<string>()
   readonly store: SeedStore
   readonly connector: ConnectorManager
   private readonly seedCloudUrl = serverUrlSchema.parse(buildConfig.seedCloudUrl)
@@ -1505,6 +1508,7 @@ export class SeedRuntime {
   }
 
   async installPlugin(pluginId: string, version: string) {
+    if (this.resettingPluginData) throw new Error('正在重置插件数据，请稍后安装。')
     if (this.pluginInstallOperations.has(pluginId)) throw new Error('此插件正在安装或更新。')
     const operationId = randomUUID()
     const operation = { operationId, controller: new AbortController(), cancelable: true }
@@ -1592,6 +1596,17 @@ export class SeedRuntime {
   }
 
   async uninstallPlugin(pluginId: string) {
+    if (this.resettingPluginData) throw new Error('正在重置插件数据，请稍后卸载。')
+    if (this.pluginUninstallOperations.has(pluginId)) throw new Error('插件正在卸载。')
+    this.pluginUninstallOperations.add(pluginId)
+    try {
+      return await this.uninstallPluginPackage(pluginId)
+    } finally {
+      this.pluginUninstallOperations.delete(pluginId)
+    }
+  }
+
+  private async uninstallPluginPackage(pluginId: string) {
     let uninstalledSummary = ''
     let uninstalledMetadata: { plugin_id: string; plugin_version: string; plugin_name_en_us: string; plugin_name_zh_hans: string } | undefined
     try {
@@ -1615,6 +1630,36 @@ export class SeedRuntime {
     await this.store.auditSystem('plugin.uninstall', 'allowed', uninstalledSummary, undefined, uninstalledMetadata)
     await this.publishSnapshot()
     return true
+  }
+
+  private pluginDataCleaner() {
+    return new PluginDataCleaner(app.getPath('userData'),
+      () => this.pluginInstaller.installedPluginIds(),
+      () => this.store.pluginDataIds(),
+      async (id) => {
+        await this.store.removePluginConfigurations(id)
+        await this.store.removePluginSecrets(id)
+      })
+  }
+
+  listOrphanedPluginData() {
+    return this.pluginDataCleaner().list()
+  }
+
+  async resetOrphanedPluginData(ids: string[]) {
+    if (this.resettingPluginData || this.pluginInstallOperations.size || this.pluginUninstallOperations.size) {
+      throw new Error('插件正在安装、卸载或重置，请稍后再试。')
+    }
+    this.resettingPluginData = true
+    try {
+      const result = await this.pluginDataCleaner().reset(ids)
+      await this.store.auditSystem('plugin.data.reset', result.failed.length ? 'failed' : 'allowed',
+        `已重置 ${result.reset.length} 个已卸载插件的数据，跳过 ${result.skipped.length} 个，失败 ${result.failed.length} 个。`, 'control')
+      return result
+    } finally {
+      this.resettingPluginData = false
+      await this.publishSnapshot()
+    }
   }
 
   private async reloadPlugins() {

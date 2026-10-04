@@ -361,6 +361,20 @@ export class SeedStore {
     await this.setSetting('encrypted_plugin_secrets', encrypted)
     this.value.encryptedPluginSecrets = encrypted
   }
+  pluginDataIds() {
+    const ids = new Set<string>()
+    for (const [encrypted, configurations] of [
+      [this.value.encryptedPluginConfigurations, true],
+      [this.value.encryptedPluginSecrets, false],
+    ] as const) {
+      if (!encrypted) continue
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('无法读取安全存储，已停止清理插件数据。')
+      const value: unknown = JSON.parse(safeStorage.decryptString(Buffer.from(encrypted, 'base64')))
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('插件安全存储格式无效，已停止清理。')
+      for (const key of Object.keys(value)) ids.add(configurations ? key.split(':')[0]! : key)
+    }
+    return [...ids]
+  }
   async installedPluginState(): Promise<unknown | undefined> {
     const row = await this.getDatabase()<SettingRow>('app_settings').where({ key: 'installed_plugin_state' }).first()
     if (!row) return undefined

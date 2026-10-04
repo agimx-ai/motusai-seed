@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { AuditQueryInput, InvokePluginManagementActionInput, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, QueryPluginManagementViewInput, ReconnectPluginConfigurationProfileInput, SeedApi, SeedEvent, SeedLanguagePreference, SeedThemePreference, SeedWindowApi, TerminalLogUploadRange, UpdatePluginConfigurationInput } from '../shared/contracts'
 
 const ipcChannels = {
+  listOrphanedPluginData: 'seed:plugins:list-orphaned-data',
+  resetOrphanedPluginData: 'seed:plugins:reset-orphaned-data',
   snapshot: 'seed:snapshot', signIn: 'seed:account:sign-in', cancelSignIn: 'seed:account:cancel-sign-in',
   personalCreditWallet: 'seed:credits:personal-wallet',
   personalCreditGrants: 'seed:credits:personal-grants',
@@ -36,6 +38,8 @@ const ipcChannels = {
 } as const
 
 const api: SeedApi = {
+  listOrphanedPluginData: () => ipcRenderer.invoke(ipcChannels.listOrphanedPluginData),
+  resetOrphanedPluginData: (ids) => ipcRenderer.invoke(ipcChannels.resetOrphanedPluginData, ids),
   snapshot: () => ipcRenderer.invoke(ipcChannels.snapshot),
   personalCreditWallet: () => ipcRenderer.invoke(ipcChannels.personalCreditWallet),
   personalCreditGrants: (cursor?: string) => ipcRenderer.invoke(ipcChannels.personalCreditGrants, cursor),

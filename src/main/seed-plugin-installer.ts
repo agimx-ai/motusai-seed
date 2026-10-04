@@ -366,6 +366,10 @@ export class SeedPluginInstaller {
     await rm(quarantine, { recursive: true, force: true })
   }
 
+  async installedPluginIds() {
+    return (await this.readState()).plugins.map((plugin) => plugin.id)
+  }
+
   async listInstalled(): Promise<SeedInstalledPlugin[]> {
     const state = await this.readState()
     const installed: SeedInstalledPlugin[] = []

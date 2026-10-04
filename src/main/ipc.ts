@@ -90,6 +90,8 @@ export function registerIpc(runtime: SeedRuntime) {
   })
   handle(ipcChannels.cancelPluginInstall, (_event, pluginId) => runtime.cancelPluginInstall(pluginIdSchema.parse(pluginId)))
   handle(ipcChannels.uninstallPlugin, (_event, pluginId) => runtime.uninstallPlugin(pluginIdSchema.parse(pluginId)))
+  handle(ipcChannels.listOrphanedPluginData, () => runtime.listOrphanedPluginData())
+  handle(ipcChannels.resetOrphanedPluginData, (_event, ids) => runtime.resetOrphanedPluginData(z.array(pluginIdSchema).max(500).parse(ids)))
   handle(ipcChannels.windowCopyText, (_event, text) => {
     clipboard.writeText(z.string().max(10_000_000).parse(text))
   })

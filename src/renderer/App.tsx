@@ -21,6 +21,7 @@ import { PluginsPage } from './pages/PluginsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { UsagePage } from './pages/UsagePage'
 import { countAvailablePluginUpdates, getAvailablePluginUpdates, updatePluginsSequentially } from './features/plugins/plugin-updates'
+import { pluginDataCleanupFeedback } from './features/plugins/plugin-data-cleanup-feedback'
 import { userFacingErrorMessage } from './lib/errors'
 import { useSeedI18n } from './i18n'
 
@@ -325,6 +326,15 @@ export default function App() {
         {view === 'activity' && <ActivityPage entries={snapshot.audit} appName={snapshot.appName} />}
         {view === 'settings' && <SettingsPage
           snapshot={snapshot}
+          busy={Boolean(busy)}
+          onListOrphanedPluginData={() => run('plugin-data-scan', (api) => api.listOrphanedPluginData())}
+          onResetOrphanedPluginData={async (ids) => {
+            const result = await run('plugin-data-reset', (api) => api.resetOrphanedPluginData(ids))
+            if (!result) return false
+            const feedback = pluginDataCleanupFeedback(result)
+            toast[feedback.tone](t(feedback.key), { id: 'seed-plugin-data-reset-result' })
+            return true
+          }}
           themePreference={themePreference}
           resolvedTheme={resolvedTheme}
           onThemeChange={(preference) => void run('theme-preference', (api) => api.setThemePreference(preference), t('notifications.settingUpdated'))}
