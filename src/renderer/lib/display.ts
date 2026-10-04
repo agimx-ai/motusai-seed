@@ -1,4 +1,10 @@
-export type View = 'overview' | 'plugins' | 'activity' | 'settings' | 'usage'
+export type View = 'overview' | 'plugins' | 'activity' | 'settings' | 'usage' | 'plugin-settings'
+
+export type SettingsView = Extract<View, 'settings' | 'usage' | 'plugin-settings'>
+
+export function isSettingsView(view: View): view is SettingsView {
+  return view === 'settings' || view === 'usage' || view === 'plugin-settings'
+}
 
 export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ')

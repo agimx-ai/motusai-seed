@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Blocks, CircleGauge, CircleHelp, History, LoaderCircle, LogOut, Settings, Sprout, UserRound, X } from 'lucide-react'
+import { Bell, Blocks, CircleGauge, CircleHelp, History, LoaderCircle, LogOut, Settings, Sprout, UserRound, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SeedSnapshot } from '../../shared/contracts'
@@ -6,7 +6,8 @@ import { NavItem } from '../components/NavItem'
 import { UserAvatar } from '../components/UserAvatar'
 import { SidebarToggleButton } from '../components/SidebarToggleButton'
 import { Tooltip } from '../components/Tooltip'
-import { cx, type View } from '../lib/display'
+import { cx, isSettingsView, type View } from '../lib/display'
+import { SettingsNavigation } from './SettingsNavigation'
 
 const accountMenuSurfaceClass = 'seed-account-menu absolute bottom-[50px] left-3 right-3 origin-bottom overflow-hidden rounded-[12px] border p-1'
 
@@ -158,14 +159,7 @@ export function Sidebar({
           {window.motusWindow.platform !== 'darwin' && <SidebarToggleButton className="h-6 w-6" collapsed={false} onToggle={onToggle} />}
         </div>
       </div>
-      {view === 'settings' || view === 'usage' ? <>
-        <div className="mb-4"><NavItem active={false} icon={<ArrowLeft size={17} strokeWidth={1.8} />} label={t('nav.backToApp')} onClick={() => navigate('overview')} /></div>
-        <span className="mb-2 px-1 text-[12px] font-medium text-muted-foreground">{t('nav.personal')}</span>
-        <nav className="grid gap-0.5">
-          <NavItem active={view === 'settings'} icon={<Settings size={17} strokeWidth={1.8} />} label={t('nav.general')} onClick={() => navigate('settings')} />
-          <NavItem active={view === 'usage'} icon={<UserRound size={17} strokeWidth={1.8} />} label={t('nav.profile')} onClick={() => navigate('usage')} />
-        </nav>
-      </> : <>
+      {isSettingsView(view) ? <SettingsNavigation view={view} onNavigate={navigate} /> : <>
         <nav className="grid gap-0.5">
           <NavItem active={view === 'overview'} icon={<Sprout size={17} strokeWidth={1.8} />} label={t('nav.overview')} onClick={() => navigate('overview')} />
           <NavItem active={view === 'plugins'} icon={<Blocks size={17} strokeWidth={1.8} />} label={t('nav.plugins')} onClick={() => navigate('plugins')} />

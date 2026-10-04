@@ -8,7 +8,6 @@ import { SettingsRow } from '../components/SettingsControls'
 import { ToggleSwitch } from '../components/ToggleSwitch'
 import type { ResolvedTheme, ThemePreference } from '../hooks/use-theme'
 import { useSeedI18n, type SeedLanguagePreference } from '../i18n'
-import { PluginDataResetSetting } from '../features/plugins/PluginDataResetSetting'
 
 type SettingsPageProps = {
   snapshot: SeedSnapshot
@@ -20,9 +19,6 @@ type SettingsPageProps = {
   onCheckForUpdates: () => void
   onDownloadUpdate: () => void
   onInstallUpdate: () => void
-  busy: boolean
-  onListOrphanedPluginData: () => Promise<string[] | undefined>
-  onResetOrphanedPluginData: (ids: string[]) => Promise<boolean>
 }
 
 function formatRuntimePlatform(platform: NodeJS.Platform, architecture: NodeJS.Architecture) {
@@ -37,7 +33,7 @@ function formatRuntimePlatform(platform: NodeJS.Platform, architecture: NodeJS.A
   return `${platformName} ${architectureName}`
 }
 
-export function SettingsPage({ snapshot, themePreference, resolvedTheme, onThemeChange, onPreventSystemSleepChange, onLaunchAtLoginChange, onCheckForUpdates, onDownloadUpdate, onInstallUpdate, busy, onListOrphanedPluginData, onResetOrphanedPluginData }: SettingsPageProps) {
+export function SettingsPage({ snapshot, themePreference, resolvedTheme, onThemeChange, onPreventSystemSleepChange, onLaunchAtLoginChange, onCheckForUpdates, onDownloadUpdate, onInstallUpdate }: SettingsPageProps) {
   const { t } = useTranslation()
   const { languagePreference, setLanguagePreference } = useSeedI18n()
   const themeOptions: Array<SegmentedControlOption<ThemePreference>> = [
@@ -90,7 +86,6 @@ export function SettingsPage({ snapshot, themePreference, resolvedTheme, onTheme
       <div className="rounded-[14px] border border-border bg-card px-5">
         <SettingsRow title={t('settings.theme')} description={t('settings.currentTheme', { theme: resolvedTheme === 'dark' ? t('settings.themeDark') : t('settings.themeLight') })} action={<SegmentedControl value={themePreference} options={themeOptions} onValueChange={onThemeChange} label={t('settings.theme')} />} />
         <SettingsRow title={t('settings.language')} description={t('settings.languageDescription')} action={<SelectControl label={t('settings.language')} value={languagePreference} options={languageOptions} onValueChange={setLanguagePreference} />} />
-        <PluginDataResetSetting catalog={snapshot.catalogPlugins} disabled={busy} onList={onListOrphanedPluginData} onReset={onResetOrphanedPluginData} />
         <SettingsRow
           title={t('settings.version')}
           description={`${snapshot.appName} ${snapshot.appVersion} · ${formatRuntimePlatform(snapshot.platform, snapshot.architecture)} · ${updateDescription}`}

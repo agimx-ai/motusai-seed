@@ -19,6 +19,7 @@ import { LoginPage } from './pages/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { PluginsPage } from './pages/PluginsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { PluginSettingsPage } from './pages/PluginSettingsPage'
 import { UsagePage } from './pages/UsagePage'
 import { countAvailablePluginUpdates, getAvailablePluginUpdates, updatePluginsSequentially } from './features/plugins/plugin-updates'
 import { pluginDataCleanupFeedback } from './features/plugins/plugin-data-cleanup-feedback'
@@ -324,8 +325,8 @@ export default function App() {
           onInvokeManagementAction={window.motusSeed.invokePluginManagementAction}
         />}
         {view === 'activity' && <ActivityPage entries={snapshot.audit} appName={snapshot.appName} />}
-        {view === 'settings' && <SettingsPage
-          snapshot={snapshot}
+        {view === 'plugin-settings' && <PluginSettingsPage
+          catalog={snapshot.catalogPlugins}
           busy={Boolean(busy)}
           onListOrphanedPluginData={() => run('plugin-data-scan', (api) => api.listOrphanedPluginData())}
           onResetOrphanedPluginData={async (ids) => {
@@ -335,6 +336,9 @@ export default function App() {
             toast[feedback.tone](t(feedback.key), { id: 'seed-plugin-data-reset-result' })
             return true
           }}
+        />}
+        {view === 'settings' && <SettingsPage
+          snapshot={snapshot}
           themePreference={themePreference}
           resolvedTheme={resolvedTheme}
           onThemeChange={(preference) => void run('theme-preference', (api) => api.setThemePreference(preference), t('notifications.settingUpdated'))}

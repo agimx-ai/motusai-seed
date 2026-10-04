@@ -25,7 +25,7 @@ export function AppHeader({ sidebarCollapsed, view, selectedPlugin, refreshing, 
   const { locale } = useSeedI18n()
   const isWindows = window.motusWindow.platform === 'win32'
   const isMac = window.motusWindow.platform === 'darwin'
-  const title = view === 'plugins' ? t('nav.plugins') : view === 'activity' ? t('nav.activity') : view === 'usage' ? t('nav.profile') : view === 'settings' ? t('nav.general') : ''
+  const title = view === 'plugins' || view === 'plugin-settings' ? t('nav.plugins') : view === 'activity' ? t('nav.activity') : view === 'usage' ? t('nav.profile') : view === 'settings' ? t('nav.general') : ''
   const profileButton = <ActionButton
     icon={<Pencil />}
     onClick={onEditProfile}
