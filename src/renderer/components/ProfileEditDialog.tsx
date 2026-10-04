@@ -8,6 +8,8 @@ import { userFacingErrorMessage } from '../lib/errors'
 import { ActionButton } from './ActionButton'
 import { UserAvatar } from './UserAvatar'
 
+const profileErrorToastId = 'profile-edit-error'
+
 type Props = {
   user: TerminalUserProfile
   onClose: () => void
@@ -24,7 +26,6 @@ export function ProfileEditDialog({ user, onClose }: Props) {
   const [busy, setBusy] = useState(false)
   const [processingAvatar, setProcessingAvatar] = useState(false)
   const [pendingAvatarDataUrl, setPendingAvatarDataUrl] = useState<string>()
-  const [error, setError] = useState('')
   const unchanged = displayName.trim() === user.displayName && username.trim() === user.username && !pendingAvatarDataUrl
   busyRef.current = busy
 
@@ -51,16 +52,17 @@ export function ProfileEditDialog({ user, onClose }: Props) {
     return () => {
       cancelAnimationFrame(frame)
       document.removeEventListener('keydown', onKeyDown)
+      toast.dismiss(profileErrorToastId)
       previousFocus?.focus()
     }
   }, [onClose])
 
   async function chooseAvatar(file: File | undefined) {
     if (!file) return
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return setError(t('profile.avatarInvalid'))
-    if (file.size > 10 * 1024 * 1024) return setError(t('profile.avatarTooLarge'))
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) return toast.error(t('profile.avatarInvalid'), { id: profileErrorToastId })
+    if (file.size > 10 * 1024 * 1024) return toast.error(t('profile.avatarTooLarge'), { id: profileErrorToastId })
     setProcessingAvatar(true)
-    setError('')
+    toast.dismiss(profileErrorToastId)
     try {
       const image = await createImageBitmap(file)
       try {
@@ -80,7 +82,7 @@ export function ProfileEditDialog({ user, onClose }: Props) {
         image.close()
       }
     } catch {
-      setError(t('profile.avatarInvalid'))
+      toast.error(t('profile.avatarInvalid'), { id: profileErrorToastId })
     } finally {
       setProcessingAvatar(false)
     }
@@ -90,16 +92,22 @@ export function ProfileEditDialog({ user, onClose }: Props) {
     event.preventDefault()
     const name = displayName.trim()
     const handle = username.trim()
-    if (!name || name.length > 120) return setError(t('profile.displayNameInvalid'))
-    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{2,79}$/.test(handle)) return setError(t('profile.usernameInvalid'))
+    if (!name || name.length > 120) {
+      panelRef.current?.querySelector<HTMLInputElement>('#profile-display-name')?.focus()
+      return toast.error(t('profile.displayNameInvalid'), { id: profileErrorToastId })
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{2,79}$/.test(handle)) {
+      panelRef.current?.querySelector<HTMLInputElement>('#profile-username')?.focus()
+      return toast.error(t('profile.usernameInvalid'), { id: profileErrorToastId })
+    }
     setBusy(true)
-    setError('')
+    toast.dismiss(profileErrorToastId)
     try {
       await window.motusSeed.updateProfile({ displayName: name, username: handle, ...(pendingAvatarDataUrl ? { avatarDataUrl: pendingAvatarDataUrl } : {}) })
       onClose()
       toast.success(t('profile.saved'))
     } catch (reason) {
-      setError(userFacingErrorMessage(reason))
+      toast.error(userFacingErrorMessage(reason), { id: profileErrorToastId })
     } finally {
       setBusy(false)
     }
@@ -124,14 +132,13 @@ export function ProfileEditDialog({ user, onClose }: Props) {
       </button>
       <form className="mt-6" onSubmit={(event) => void save(event)}>
         <label className="block text-[13px] font-medium" htmlFor="profile-display-name">{t('profile.displayName')}</label>
-        <input id="profile-display-name" className="seed-text-input mt-2 w-full" value={displayName} maxLength={120} disabled={busy} onChange={(event) => setDisplayName(event.target.value)} />
+        <input id="profile-display-name" className="seed-text-input mt-2 w-full" value={displayName} maxLength={120} disabled={busy} onChange={(event) => { toast.dismiss(profileErrorToastId); setDisplayName(event.target.value) }} />
         <label className="mt-5 block text-[13px] font-medium" htmlFor="profile-username">{t('profile.username')}</label>
         <div className="seed-text-input mt-2 w-full">
           <span aria-hidden="true">@</span>
-          <input id="profile-username" value={username} maxLength={80} disabled={busy} onChange={(event) => setUsername(event.target.value)} />
+          <input id="profile-username" value={username} maxLength={80} disabled={busy} onChange={(event) => { toast.dismiss(profileErrorToastId); setUsername(event.target.value) }} />
         </div>
         <p className="mb-0 mt-2 text-[11px] text-muted-foreground">{t('profile.usernameHint')}</p>
-        {error && <p className="mb-0 mt-3 text-[12px] text-danger" role="alert">{error}</p>}
         <div className="mt-6 flex justify-end gap-2">
           <ActionButton type="button" disabled={busy} onClick={onClose}>{t('common.cancel')}</ActionButton>
           <ActionButton type="submit" tone="primary" busy={busy || processingAvatar} disabled={unchanged}>{t('profile.save')}</ActionButton>

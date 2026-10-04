@@ -411,7 +411,7 @@
     "edit": "Edit profile",
     "displayName": "Display name",
     "username": "Username",
-    "usernameHint": "3–80 letters, numbers, underscores, periods, or hyphens; start with a letter or number.",
+    "usernameHint": "3–80 characters using letters, numbers, _, ., or -; start with a letter or number.",
     "displayNameInvalid": "Display name must be 1–120 characters.",
     "usernameInvalid": "Enter a valid username.",
     "changeAvatar": "Change avatar",

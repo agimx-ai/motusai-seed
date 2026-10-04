@@ -411,7 +411,7 @@
     "edit": "编辑个人资料",
     "displayName": "显示名称",
     "username": "用户名",
-    "usernameHint": "3–80 个字符，可使用英文字母、数字、下划线、点和连字符；须以字母或数字开头。",
+    "usernameHint": "3–80 个字符，支持英文字母、数字和 _ . -，请以字母或数字开头。",
     "displayNameInvalid": "显示名称需为 1–120 个字符。",
     "usernameInvalid": "请填写有效的用户名。",
     "changeAvatar": "更换头像",
