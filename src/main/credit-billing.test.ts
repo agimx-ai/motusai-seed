@@ -130,9 +130,11 @@ describe('generic Cloud relay client', () => {
     const { stream_id } = await client.startRelayStream(input)
     await expect(client.nextRelayStream('com.other.plugin', stream_id)).rejects.toThrow()
     const firstChunk = await client.nextRelayStream(input.plugin_id, stream_id)
+    if (firstChunk.done) throw new Error('Expected the first chunk')
     expect(Buffer.from(firstChunk.chunk!, 'base64').toString()).toBe(first)
     sendSecond()
     const secondChunk = await client.nextRelayStream(input.plugin_id, stream_id)
+    if (secondChunk.done) throw new Error('Expected the second chunk')
     expect(Buffer.from(secondChunk.chunk!, 'base64').toString()).toBe(second)
     expect(await client.nextRelayStream(input.plugin_id, stream_id)).toEqual({ done: true })
     expect(await client.nextRelayStream(input.plugin_id, stream_id)).toEqual({ done: true })
@@ -154,6 +156,58 @@ describe('generic Cloud relay client', () => {
       client.nextRelayStream(input.plugin_id, stream_id),
     ])).resolves.toEqual([{ done: true }, { done: true }])
     await expect(client.nextRelayStream(input.plugin_id, stream_id)).resolves.toEqual({ done: true })
+    await client.closeAllRelayStreams()
+  })
+
+  it.each([0, 0.01, 12.34])('returns the actual settled charge %s at EOF and replays it without another lookup', async (amount) => {
+    const callId = 'a9505c1e-9f5d-4658-a3e1-594a8bab2432'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } }))
+      .mockResolvedValueOnce(Response.json({ billable: true, call_id: callId, amount: 999,
+        charged_amount: amount, price_revision: 1, state: 'settled' }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    const { stream_id } = await client.startRelayStream({ call_id: callId, plugin_id: 'com.example.plugin',
+      capability_id: 'any_relay', method: 'execute', payload: { stream: true } })
+    await client.nextRelayStream('com.example.plugin', stream_id)
+    const expected = { done: true, billing: { state: 'settled', charged_amount: amount } }
+    await expect(Promise.all([client.nextRelayStream('com.example.plugin', stream_id),
+      client.nextRelayStream('com.example.plugin', stream_id)])).resolves.toEqual([expected, expected])
+    await expect(client.nextRelayStream('com.example.plugin', stream_id)).resolves.toEqual(expected)
+    await expect(client.nextRelayStream('com.other.plugin', stream_id)).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`https://cloud.example.com/api/v1/credits/invocations/${callId}`)
+    await client.closeAllRelayStreams()
+  })
+
+  it.each([
+    { state: 'uncertain', charged_amount: null },
+    { state: 'executing', charged_amount: null },
+    { state: 'released', charged_amount: 0 },
+    { state: 'settled', charged_amount: null },
+    { state: 'settled', charged_amount: 0.001 },
+    { state: 'settled', charged_amount: -1 },
+  ])('does not fabricate a charge for $state / $charged_amount', async (settlement) => {
+    const callId = 'a9505c1e-9f5d-4658-a3e1-594a8bab2432'
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response('', { headers: { 'Content-Type': 'text/event-stream' } }))
+      .mockResolvedValueOnce(Response.json({ billable: true, call_id: callId, amount: 999,
+        price_revision: 1, ...settlement })))
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    const { stream_id } = await client.startRelayStream({ call_id: callId, plugin_id: 'com.example.plugin',
+      capability_id: 'any_relay', method: 'execute', payload: {} })
+    await expect(client.nextRelayStream('com.example.plugin', stream_id)).resolves.toEqual({ done: true })
+    await client.closeAllRelayStreams()
+  })
+
+  it('keeps a completed response usable when the settlement lookup fails', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response('', { headers: { 'Content-Type': 'text/event-stream' } }))
+      .mockRejectedValueOnce(new Error('Cloud unavailable')))
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    const { stream_id } = await client.startRelayStream({ call_id: 'a9505c1e-9f5d-4658-a3e1-594a8bab2432',
+      plugin_id: 'com.example.plugin', capability_id: 'any_relay', method: 'execute', payload: {} })
+    await expect(client.nextRelayStream('com.example.plugin', stream_id)).resolves.toEqual({ done: true })
     await client.closeAllRelayStreams()
   })
 

@@ -115,7 +115,7 @@ export class SeedRuntime {
   private readonly logUploader = new CloudDiagnosticUploader()
   private readonly creditBilling = new CreditBillingClient(this.seedCloudUrl,
     (rejectedToken) => this.cloudAccessToken(rejectedToken))
-  private readonly billedRelayStreams = new Map<string, { callId: string; pluginId: string }>()
+  private readonly billedRelayStreams = new Map<string, string>()
   private readonly pluginBrowserAuthorization = new PluginBrowserAuthorization(buildConfig.appId, async (url) => {
     await shell.openExternal(url)
   })
@@ -1714,9 +1714,9 @@ export class SeedRuntime {
         if (service.endsWith('.next')) {
           const result = await this.creditBilling.nextRelayStream(packageId, streamId)
           if (result.done) {
-            const billing = this.billedRelayStreams.get(streamId)
+            const billingPluginId = this.billedRelayStreams.get(streamId)
             this.billedRelayStreams.delete(streamId)
-            if (billing) await this.recordRelaySettlement(billing.callId, billing.pluginId).catch(() => undefined)
+            if (billingPluginId && result.billing) this.recordRelayCharge(billingPluginId, result.billing.charged_amount)
           }
           return result
         }
@@ -1769,7 +1769,7 @@ export class SeedRuntime {
         })
         if (service === 'seed.cloud.relay.stream.start') {
           const streamId = z.string().uuid().parse((result as { stream_id?: unknown }).stream_id)
-          this.billedRelayStreams.set(streamId, { callId: preparation.call_id, pluginId: packageId })
+          this.billedRelayStreams.set(streamId, packageId)
         } else {
           await this.recordRelaySettlement(preparation.call_id, packageId).catch(() => undefined)
         }
@@ -1858,12 +1858,16 @@ export class SeedRuntime {
     const settlement = await this.creditBilling.status(callId)
     if (!settlement.billable || settlement.state !== 'settled' ||
       !isCreditAmount(settlement.charged_amount) || settlement.charged_amount < 0) return
+    this.recordRelayCharge(pluginId, settlement.charged_amount)
+  }
+
+  private recordRelayCharge(pluginId: string, chargedAmount: number) {
     const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === pluginId)
     this.diagnostics.record({
       level: 'info', source: 'main', event: 'credit.settled', message: 'Cloud relay credit settlement recorded.',
       plugin_id: pluginId, plugin_version: plugin?.version, operation: 'credit.settled',
       details: {
-        credit_charged_amount: Number(settlement.charged_amount),
+        credit_charged_amount: chargedAmount,
         ...(plugin?.name ? { plugin_name_en_us: plugin.name.en_US, plugin_name_zh_hans: plugin.name.zh_Hans } : {}),
       },
     })

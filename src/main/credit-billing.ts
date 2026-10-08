@@ -46,6 +46,7 @@ export function relayBillingModelId(billingProduct: unknown, payload: Record<str
 
 const relaySchema = z.object({ payload: z.unknown() })
 const RELAY_STREAM_TERMINAL_TTL_MS = 60_000
+type RelayStreamEnd = { done: true; billing?: { state: 'settled'; charged_amount: number } }
 const relayModelsSchema = z.array(z.object({
   model_id: z.string(), display_name: z.string(), badge: z.string().nullable(),
   icon_data_url: z.string().nullable(),
@@ -67,11 +68,12 @@ const relayModelsSchema = z.array(z.object({
 
 export class CreditBillingClient {
   private readonly relayStreams = new Map<string, {
-    packageId: string; reader: ReadableStreamDefaultReader<Uint8Array>;
+    packageId: string; callId: string; reader: ReadableStreamDefaultReader<Uint8Array>;
     controller: AbortController; timer: ReturnType<typeof setTimeout>
+    completion?: Promise<RelayStreamEnd>
   }>()
   private readonly terminalRelayStreams = new Map<string, {
-    packageId: string; timer: ReturnType<typeof setTimeout>
+    packageId: string; timer: ReturnType<typeof setTimeout>; result: RelayStreamEnd
   }>()
 
   constructor(private readonly cloudUrl: string, private readonly accessToken: AccessTokenProvider) {}
@@ -80,28 +82,28 @@ export class CreditBillingClient {
     return response.status === 401 && body?.code === 'invalid_token'
   }
 
-  private rememberTerminalRelayStream(packageId: string, streamId: string) {
+  private rememberTerminalRelayStream(packageId: string, streamId: string, result: RelayStreamEnd = { done: true }) {
     const previous = this.terminalRelayStreams.get(streamId)
     if (previous) clearTimeout(previous.timer)
     const timer = setTimeout(() => { this.terminalRelayStreams.delete(streamId) }, RELAY_STREAM_TERMINAL_TTL_MS)
     timer.unref()
-    this.terminalRelayStreams.set(streamId, { packageId, timer })
+    this.terminalRelayStreams.set(streamId, { packageId, timer, result })
   }
 
-  private terminalRelayStreamOwnedBy(packageId: string, streamId: string) {
+  private terminalRelayStreamResult(packageId: string, streamId: string) {
     const terminal = this.terminalRelayStreams.get(streamId)
-    if (!terminal) return false
+    if (!terminal) return undefined
     if (terminal.packageId !== packageId) throw new Error('云转发流不存在或不属于该插件。')
-    return true
+    return terminal.result
   }
 
-  private completeRelayStream(packageId: string, streamId: string) {
+  private completeRelayStream(packageId: string, streamId: string, result: RelayStreamEnd) {
     const stream = this.relayStreams.get(streamId)
     if (stream?.packageId === packageId) {
       this.relayStreams.delete(streamId)
       clearTimeout(stream.timer)
     }
-    this.rememberTerminalRelayStream(packageId, streamId)
+    this.rememberTerminalRelayStream(packageId, streamId, result)
   }
 
   private async expireRelayStream(packageId: string, streamId: string) {
@@ -196,22 +198,35 @@ export class CreditBillingClient {
     const streamId = randomUUID()
     const timer = setTimeout(() => { void this.expireRelayStream(input.plugin_id, streamId) }, 10 * 60_000)
     timer.unref()
-    this.relayStreams.set(streamId, { packageId: input.plugin_id, reader: response.body.getReader(), controller, timer })
+    this.relayStreams.set(streamId, { packageId: input.plugin_id, callId: input.call_id,
+      reader: response.body.getReader(), controller, timer })
     return { stream_id: streamId }
   }
 
-  async nextRelayStream(packageId: string, streamId: string) {
+  async nextRelayStream(packageId: string, streamId: string): Promise<RelayStreamEnd | { done: false; chunk: string }> {
     const stream = this.relayStreams.get(streamId)
     if (!stream) {
-      if (this.terminalRelayStreamOwnedBy(packageId, streamId)) return { done: true }
+      const terminal = this.terminalRelayStreamResult(packageId, streamId)
+      if (terminal) return terminal
       throw new Error('云转发流不存在或不属于该插件。')
     }
     if (stream.packageId !== packageId) throw new Error('云转发流不存在或不属于该插件。')
     try {
       const part = await stream.reader.read()
       if (part.done) {
-        this.completeRelayStream(packageId, streamId)
-        return { done: true }
+        if (!this.relayStreams.has(streamId)) return { done: true }
+        stream.completion ??= (async (): Promise<RelayStreamEnd> => {
+          // Cloud settles before ending the response body. Never infer a charge from tokens.
+          const settlement = await this.status(stream.callId).catch(() => undefined)
+          const result: RelayStreamEnd = { done: true }
+          if (settlement?.billable && settlement.state === 'settled' &&
+            isCreditAmount(settlement.charged_amount) && settlement.charged_amount >= 0) {
+            result.billing = { state: 'settled', charged_amount: settlement.charged_amount }
+          }
+          if (this.relayStreams.has(streamId)) this.completeRelayStream(packageId, streamId, result)
+          return result
+        })()
+        return stream.completion
       }
       return { done: false, chunk: Buffer.from(part.value).toString('base64') }
     } catch (error) {
