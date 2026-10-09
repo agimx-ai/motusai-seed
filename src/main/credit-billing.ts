@@ -45,6 +45,27 @@ export function relayBillingModelId(billingProduct: unknown, payload: Record<str
 }
 
 const relaySchema = z.object({ payload: z.unknown() })
+// Match Cloud's /credits/relay and /credits/relay/stream HTTP envelope limit.
+const RELAY_REQUEST_MAX_BYTES = 64 * 1024 * 1024
+function serializeRelayRequest(input: Record<string, unknown>) {
+  const body = JSON.stringify(input)
+  if (Buffer.byteLength(body) > RELAY_REQUEST_MAX_BYTES) {
+    throw Object.assign(new Error('云转发请求超过大小限制，请减少内容后重试。'), {
+      code: 'credit_relay_request_too_large',
+    })
+  }
+  return body
+}
+
+function creditRequestError(response: Response, body: Record<string, unknown> | null) {
+  const tooLarge = response.status === 413
+  return Object.assign(new Error(typeof body?.message === 'string' ? body.message
+    : tooLarge ? '云转发请求超过大小限制，请减少内容后重试。' : `积分服务请求失败（${response.status}）。`), {
+    code: tooLarge ? 'credit_relay_request_too_large'
+      : typeof body?.code === 'string' ? body.code : 'credit_service_error',
+  })
+}
+
 const RELAY_STREAM_TERMINAL_TTL_MS = 60_000
 type RelayStreamEnd = { done: true; billing?: { state: 'settled'; charged_amount: number } }
 const relayModelsSchema = z.array(z.object({
@@ -133,9 +154,7 @@ export class CreditBillingClient {
         continue
       }
       if (!response.ok) {
-        const error = new Error(typeof body?.message === 'string' ? body.message : `积分服务请求失败（${response.status}）。`) as Error & { code?: string }
-        error.code = typeof body?.code === 'string' ? body.code : 'credit_service_error'
-        throw error
+        throw creditRequestError(response, body)
       }
       return schema.parse(body)
     }
@@ -154,12 +173,13 @@ export class CreditBillingClient {
     return this.request(`/invocations/${encodeURIComponent(callId)}`, invocationSchema, { method: 'DELETE' })
   }
 
-  relay(input: { call_id: string; plugin_id: string; capability_id: string; method: string; payload: Record<string, unknown> }) {
-    return this.request('/relay', relaySchema, { method: 'POST', body: JSON.stringify(input) }, 135_000)
+  async relay(input: { call_id: string; plugin_id: string; capability_id: string; method: string; payload: Record<string, unknown> }) {
+    return this.request('/relay', relaySchema, { method: 'POST', body: serializeRelayRequest(input) }, 135_000)
   }
 
   async startRelayStream(input: { call_id: string; plugin_id: string; capability_id: string;
     method: string; payload: Record<string, unknown> }) {
+    const body = serializeRelayRequest(input)
     const controller = new AbortController()
     let token = await this.accessToken()
     const headerTimer = setTimeout(() => controller.abort(), 120_000)
@@ -171,7 +191,7 @@ export class CreditBillingClient {
         response = await fetch(`${this.cloudUrl.replace(/\/+$/, '')}/api/v1/credits/relay/stream`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream', 'Content-Type': 'application/json' },
-          body: JSON.stringify(input),
+          body,
           signal: controller.signal,
         })
         if (attempt === 0 && response.status === 401) {
@@ -187,9 +207,7 @@ export class CreditBillingClient {
     if (!response) throw new Error('积分服务请求失败。')
     if (!response.ok) {
       const body = responseBody ?? await response.json().catch(() => null) as Record<string, unknown> | null
-      const error = new Error(typeof body?.message === 'string' ? body.message : `积分服务请求失败（${response.status}）。`) as Error & { code?: string }
-      error.code = typeof body?.code === 'string' ? body.code : 'credit_service_error'
-      throw error
+      throw creditRequestError(response, body)
     }
     if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
       await response.body?.cancel().catch(() => undefined)

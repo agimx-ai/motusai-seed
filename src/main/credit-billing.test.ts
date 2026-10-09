@@ -3,6 +3,45 @@ import { CreditBillingClient, relayBillingModelId } from './credit-billing'
 
 afterEach(() => vi.unstubAllGlobals())
 
+describe('Cloud relay request limits', () => {
+  const input = { call_id: 'a9505c1e-9f5d-4658-a3e1-594a8bab2432', plugin_id: 'com.example.plugin',
+    capability_id: 'hosted_models', method: 'complete', payload: { text: '' } }
+
+  it.each(['relay', 'startRelayStream'] as const)('forwards a request above 1 MiB through %s', async (method) => {
+    const fetchMock = vi.fn<typeof fetch>(async () => method === 'relay'
+      ? Response.json({ payload: {} })
+      : new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    try {
+      await client[method]({ ...input, payload: { text: '内容'.repeat(200_000) } })
+      expect(fetchMock).toHaveBeenCalledOnce()
+      expect(Buffer.byteLength(fetchMock.mock.calls[0]![1]!.body as string)).toBeGreaterThan(1024 * 1024)
+    } finally { await client.closeAllRelayStreams() }
+  })
+
+  it.each(['relay', 'startRelayStream'] as const)('bounds the complete UTF-8 envelope before sending %s', async (method) => {
+    const fetchMock = vi.fn()
+    const accessToken = vi.fn(async () => 'access-token')
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new CreditBillingClient('https://cloud.example.com', accessToken)
+    const emptyBytes = Buffer.byteLength(JSON.stringify(input))
+    const text = '中'.repeat(Math.floor((64 * 1024 * 1024 - emptyBytes) / 3) + 1)
+    await expect(client[method]({ ...input, payload: { text } }))
+      .rejects.toMatchObject({ code: 'credit_relay_request_too_large' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(accessToken).not.toHaveBeenCalled()
+  })
+
+  it.each(['relay', 'startRelayStream'] as const)('preserves an HTTP 413 without a JSON error body from %s', async (method) => {
+    const fetchMock = vi.fn(async () => new Response('Request Entity Too Large', { status: 413 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    await expect(client[method](input)).rejects.toMatchObject({ code: 'credit_relay_request_too_large' })
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+})
+
 describe('personal credit wallet', () => {
   it('accepts a wallet balance with two decimal places', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ available: 999.99 })))

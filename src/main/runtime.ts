@@ -1762,7 +1762,6 @@ export class SeedRuntime {
         call_id?: string; payload: Record<string, unknown>
       }
       const body = JSON.stringify(payload)
-      if (Buffer.byteLength(body) > 1024 * 1024) throw new Error('云转发请求过大。')
       const relay = service === 'seed.cloud.relay.stream.start'
         ? this.creditBilling.startRelayStream.bind(this.creditBilling)
         : this.creditBilling.relay.bind(this.creditBilling)
