@@ -21,10 +21,16 @@ env:
   MOTUSAI_ALLOW_INSECURE_HTTP: 'false'
   MOTUSAI_UPDATE_CHANNEL: stable
 
+concurrency:
+  group: seed-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   metadata:
     name: Validate release metadata
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.release.outputs.version }}
 
@@ -33,6 +39,11 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+      - name: Set up Node.js for release checks
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
 
       - name: Validate tag and package version
         id: release
@@ -46,11 +57,54 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Check out shared release tooling
+        uses: actions/checkout@v5
+        with:
+          repository: agimx-ai/motusai-seed-website
+          ref: main
+          token: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+          path: .release-tooling
+          persist-credentials: false
+
+      - name: Require bilingual release notes
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_NOTES_OUTPUT: website-release-notes
+        run: node .release-tooling/scripts/release/source.mjs .
+
+      - name: Create or resume draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(website-release-notes/RELEASE_NOTES.md website-release-notes/website-release-notes.json)
+          if gh release view "$RELEASE_VERSION" --json isDraft --jq '.isDraft' >/dev/null 2>&1; then
+            draft="$(gh release view "$RELEASE_VERSION" --json isDraft --jq '.isDraft')"
+            if [ "$draft" != true ]; then
+              echo "Published Release already exists: $RELEASE_VERSION" >&2
+              exit 1
+            fi
+            gh release edit "$RELEASE_VERSION" \
+              --title "MotusAI Seed $RELEASE_VERSION" \
+              --notes-file website-release-notes/RELEASE_NOTES.md
+            gh release upload "$RELEASE_VERSION" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_VERSION" "${assets[@]}" \
+              --draft \
+              --title "MotusAI Seed $RELEASE_VERSION" \
+              --notes-file website-release-notes/RELEASE_NOTES.md \
+              --verify-tag
+          fi
+
   macos:
     name: Build macOS ARM64
     needs: metadata
     runs-on: macos-26
     timeout-minutes: 90
+    permissions:
+      contents: write
     env:
       MOTUSAI_RELEASE_PLATFORM: mac-arm64
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -98,24 +152,28 @@ jobs:
           for file in "${files[@]}"; do test -s "$file" || { echo "Missing $file" >&2; exit 1; }; done
           grep -Fq "version: ${version}" release/latest-mac.yml
 
-      - name: Upload macOS release assets
-        uses: actions/upload-artifact@v6
-        with:
-          name: macos-arm64-${{ needs.metadata.outputs.version }}
-          path: |
-            release/latest-mac.yml
-            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-mac-arm64.dmg
-            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-mac-arm64.dmg.blockmap
-            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-mac-arm64.zip
-            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-mac-arm64.zip.blockmap
-          if-no-files-found: error
-          retention-days: 7
+      - name: Upload macOS assets to draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_VERSION" \
+            release/latest-mac.yml \
+            "release/MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg" \
+            "release/MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg.blockmap" \
+            "release/MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.zip" \
+            "release/MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.zip.blockmap" \
+            --clobber
 
   windows:
     name: Build Windows x64
     needs: metadata
     runs-on: windows-latest
     timeout-minutes: 90
+    permissions:
+      contents: write
     env:
       MOTUSAI_RELEASE_PLATFORM: win-x64
 
@@ -169,39 +227,85 @@ jobs:
             throw 'latest.yml does not contain the release version.'
           }
 
-      - name: Upload Windows release assets
-        uses: actions/upload-artifact@v6
-        with:
-          name: windows-x64-${{ needs.metadata.outputs.version }}
-          path: |
-            release/latest.yml
-            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-win-x64.exe
-            release/MotusAI-Seed-${{ needs.metadata.outputs.version }}-win-x64.exe.blockmap
-          if-no-files-found: error
-          retention-days: 7
+      - name: Upload Windows assets to draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          gh release upload $env:RELEASE_VERSION `
+            release/latest.yml `
+            "release/MotusAI-Seed-$env:RELEASE_VERSION-win-x64.exe" `
+            "release/MotusAI-Seed-$env:RELEASE_VERSION-win-x64.exe.blockmap" `
+            --clobber
 
   publish:
     name: Publish GitHub release
-    needs: [metadata, macos, windows]
+    needs:
+      - metadata
+      - macos
+      - windows
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    outputs:
+      tag: ${{ steps.publication.outputs.tag }}
 
     steps:
-      - name: Download release assets
-        uses: actions/download-artifact@v7
-        with:
-          path: release-assets
-          merge-multiple: true
-
-      - name: Create GitHub release
+      - name: Verify and publish draft Release
+        id: publication
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
         shell: bash
         run: |
-          gh release create "$RELEASE_VERSION" release-assets/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "MotusAI Seed $RELEASE_VERSION" \
-            --generate-notes \
-            --verify-tag
+          set -euo pipefail
+          expected=(
+            RELEASE_NOTES.md
+            website-release-notes.json
+            latest-mac.yml
+            "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg"
+            "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg.blockmap"
+            "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.zip"
+            "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.zip.blockmap"
+            latest.yml
+            "MotusAI-Seed-${RELEASE_VERSION}-win-x64.exe"
+            "MotusAI-Seed-${RELEASE_VERSION}-win-x64.exe.blockmap"
+          )
+          release="$(gh release view "$RELEASE_VERSION" --json assets,isDraft)"
+          if [ "$(jq -r '.isDraft' <<< "$release")" != true ]; then
+            echo "Release is not a draft: $RELEASE_VERSION" >&2
+            exit 1
+          fi
+          for name in "${expected[@]}"; do
+            jq -e --arg name "$name" \
+              '[.assets[] | select(.name == $name and .size > 0)] | length == 1' \
+              <<< "$release" >/dev/null || {
+                echo "Missing or empty Release asset: $name" >&2
+                exit 1
+              }
+          done
+          gh release edit "$RELEASE_VERSION" --draft=false --latest
+          echo "tag=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+
+  notify-website:
+    name: Notify website after publication
+    needs: publish
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: agimx-ai/motusai-seed-website
+          ref: main
+          token: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Notify website
+        env:
+          WEBSITE_SYNC_TOKEN: ${{ secrets.WEBSITE_SYNC_TOKEN }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.publish.outputs.tag }}
+        run: node scripts/release/notify.mjs
