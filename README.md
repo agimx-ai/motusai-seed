@@ -10,8 +10,6 @@
   </p>
 </div>
 
-![MotusAI Seed 伙伴首页](./docs/assets/readme/partner-home.png)
-
 ## 认识 Seed
 
 MotusAI Seed 是可扩展的桌面插件客户端。登录 Seed Cloud 后，你可以按需安装插件，把 AI 对话与本机文件、应用和系统能力连接起来。
