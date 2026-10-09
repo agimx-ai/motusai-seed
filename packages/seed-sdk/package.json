@@ -1,12 +1,13 @@
 {
   "name": "@motus-ai/seed-sdk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Public runtime types and lifecycle APIs for MotusAI Seed plugins",
   "type": "commonjs",
   "license": "UNLICENSED",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "exports": {
     ".": {
