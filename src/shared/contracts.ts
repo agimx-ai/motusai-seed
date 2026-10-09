@@ -510,6 +510,7 @@ export type CapsMethodRisk = 'read' | 'write' | 'control'
 
 export type CapsMethodDescriptor = {
   name: string
+  display_name?: SeedLocalizedText
   platforms?: Array<'darwin' | 'linux' | 'win32'>
   risk: CapsMethodRisk
   description?: SeedLocalizedText

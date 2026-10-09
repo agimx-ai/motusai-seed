@@ -9,7 +9,7 @@ export class SeedLocalMcpServer {
     const server = new McpServer({ name: 'MotusAI Seed', version: '1.0.0' }, { capabilities: { tools: {} } })
     for (const tool of this.pluginHost().mcpTools()) {
       server.registerTool(tool.name, {
-        title: tool.method.description?.zh_Hans || tool.name,
+        title: tool.method.display_name?.en_US || tool.name,
         description: tool.method.description?.en_US || tool.method.description?.zh_Hans || tool.name,
         inputSchema: z.fromJSONSchema(tool.method.inputSchema as Parameters<typeof z.fromJSONSchema>[0]),
         annotations: {

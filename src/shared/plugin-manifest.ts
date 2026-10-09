@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { seedNetworkPermissions } from '@motus-ai/seed-sdk'
+import { seedNetworkPermissions, type SeedLocalizedText } from '@motus-ai/seed-sdk'
 import { seedVersionPattern } from './seed-version'
 
 const identifier = z.string().regex(/^[a-z][a-z0-9_.-]{0,127}$/)
 const pluginIdentifier = z.string().regex(/^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/)
 export const seedPluginRuntimeEntry = './dist/index.mjs'
-export type SeedLocalizedText = { en_US: string; zh_Hans: string }
+export type { SeedLocalizedText } from '@motus-ai/seed-sdk'
 
 export function seedLocalizedTextSchema(max: number) {
   const text = z.string().min(1).max(max)
@@ -581,6 +581,7 @@ export const seedPluginManagementViewSchema = z.object({
 
 export const seedCapabilityMethodSchema = z.object({
   name: identifier,
+  display_name: seedLocalizedTextSchema(100).refine((text) => Boolean(text.en_US.trim() && text.zh_Hans.trim()), '显示名称不能为空白').optional(),
   platforms: z.array(z.enum(['darwin', 'linux', 'win32'])).min(1).max(3).optional(),
   description: seedLocalizedTextSchema(500).optional(),
   risk: z.enum(['read', 'write', 'control']),

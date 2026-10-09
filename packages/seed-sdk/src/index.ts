@@ -37,8 +37,12 @@ export class SeedPluginError extends Error {
   }
 }
 
+/** Plugin-owned bilingual presentation text. Keep both languages across adapter boundaries. */
+export type SeedLocalizedText = { en_US: string; zh_Hans: string }
+
 export type SeedCapabilityMethod = {
   name: string
+  display_name?: SeedLocalizedText
   risk: SeedCapabilityRisk
   description?: string
   input_schema?: Record<string, unknown>

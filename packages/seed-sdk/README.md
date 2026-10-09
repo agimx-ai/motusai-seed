@@ -46,6 +46,12 @@ export function apply(ctx: SeedPluginContext) {
 
 `ctx.capabilities.invoke()` 只能调用插件在根 Manifest 的 `consumes` 中声明的能力与方法。存在多个提供方时，调用需指定 `provider_plugin_id`。能力参数和结果由 Seed 按声明的 Schema 校验；写入与控制操作仍须经过确认。
 
+### 能力方法的显示名称
+
+`SeedCapabilityMethod.display_name?: SeedLocalizedText` 是插件声明的双语短名称：`{ en_US: string; zh_Hans: string }`。两种语言均不能为空，最多各 100 个字符；YAML 声明必须使用 block style。官方插件全部方法都提供该字段。`name` 仍是稳定的调用标识，`description` 仍是详细说明；不要将显示名称作为调用名称。
+
+`ctx.capabilities.list()` 保留 `display_name` 的完整语言映射，不按 Seed 当前语言提前折叠。消费插件应继续透传给接入客户端，由客户端按自身语言显示。Seed 提供通用契约，不内置具体工具的翻译表。
+
 ### 管理面板的实时文本
 
 `seed.panel` 的 Markdown 块从数据源结果读取快照；需要实时输出时，声明 `stream_id_path` 并调用 `ctx.management.publishText()`：

@@ -1051,6 +1051,7 @@ export class SeedPluginHost {
         ...(capability.description ? { description: resolveSeedLocalizedText(capability.description, this.runtime.configuration()?.locale || 'zh-CN') } : {}),
         methods: methods.map((method) => ({
           name: method.name,
+          ...(method.display_name ? { display_name: method.display_name } : {}),
           risk: method.risk,
           provider_plugin_id: provider.package_id,
           ...(method.description ? { description: resolveSeedLocalizedText(method.description, this.runtime.configuration()?.locale || 'zh-CN') } : {}),

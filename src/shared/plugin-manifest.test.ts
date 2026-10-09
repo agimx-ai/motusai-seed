@@ -3,6 +3,21 @@ import { seedCapabilityMethodSchema, seedPluginConfigurationSchema, seedPluginMa
 
 const text = (value: string) => ({ en_US: value, zh_Hans: value })
 
+describe('capability method display names', () => {
+  const method = { name: 'read_file', risk: 'read', display_name: { en_US: 'Read file', zh_Hans: '读取文件' } }
+
+  it('preserves both languages without changing the stable method identifier', () => {
+    expect(seedCapabilityMethodSchema.parse(method)).toMatchObject(method)
+  })
+
+  it('rejects incomplete, empty, oversized and non-localized display names', () => {
+    for (const display_name of ['Read file', { en_US: 'Read file' }, { en_US: '', zh_Hans: '读取文件' }, { en_US: ' ', zh_Hans: '读取文件' },
+      { en_US: 'x'.repeat(101), zh_Hans: '读取文件' }, { ...method.display_name, fr: 'Lire' }]) {
+      expect(seedCapabilityMethodSchema.safeParse({ ...method, display_name }).success).toBe(false)
+    }
+  })
+})
+
 describe('capability billing settlement annotation', () => {
   const method = { name: 'search', risk: 'read', annotations: {
     'billing.settlement': 'cloud_relay', 'billing.relay_template': 'searxng_search', 'billing.product': 'web.search',

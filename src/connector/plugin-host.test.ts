@@ -27,6 +27,7 @@ const plugin: SeedPluginRuntimeDefinition = {
     },
     methods: [{
       name: 'echo',
+      display_name: { en_US: 'Echo value', zh_Hans: '回显内容' },
       risk: 'read',
       inputSchema: {
         type: 'object', properties: { value: { type: 'string' } }, required: ['value'], additionalProperties: false,
@@ -871,6 +872,7 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
       expect(stored.result).toEqual({ value: 'through-broker' })
       expect(stored.available).toEqual([expect.objectContaining({
         id: 'probe',
+        methods: [expect.objectContaining({ name: 'echo', display_name: { en_US: 'Echo value', zh_Hans: '回显内容' } })],
         provider_plugin_id: plugin.package_id,
         provider_plugin: {
           plugin_id: plugin.package_id,
