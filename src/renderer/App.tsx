@@ -5,6 +5,8 @@ import type { SeedCatalogPage } from '../shared/contracts'
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest'
 import { AppHeader } from './layouts/AppHeader'
 import { ProfileEditDialog } from './components/ProfileEditDialog'
+import { ClientReleaseNotesDialog } from './components/ClientReleaseNotesDialog'
+import { useClientReleaseNotes } from './hooks/use-client-release-notes'
 import { Sidebar } from './layouts/Sidebar'
 import { AppLogo } from './components/AppBrand'
 import { ShimmerIcon } from './components/Shimmer'
@@ -53,6 +55,11 @@ export default function App() {
   const handledNavigationId = useRef('')
   const knownLocalClientScopes = useRef<Set<string> | null>(null)
   const isMac = window.motusWindow.platform === 'darwin'
+  const releaseNotes = useClientReleaseNotes(Boolean(minimumStartupElapsed && snapshot?.startup.status === 'ready'))
+  const releaseNotesDialog = releaseNotes.notes && <ClientReleaseNotesDialog
+    notes={releaseNotes.notes} appName={snapshot?.appName || ''} busy={releaseNotes.busy}
+    onClose={() => void releaseNotes.close()}
+  />
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMinimumStartupElapsed(true), minimumStartupDurationMs)
@@ -146,6 +153,7 @@ export default function App() {
       onCancel={() => void run('cancel-sign-in', (api) => api.cancelSignIn())}
     />
     {globalToaster}
+    {releaseNotesDialog}
   </>
 
   const plugins = snapshot.plugins ?? []
@@ -357,5 +365,6 @@ export default function App() {
     </div>
     {globalToaster}
     {profileEditing && <ProfileEditDialog user={snapshot.user} onClose={() => setProfileEditing(false)} />}
+    {releaseNotesDialog}
   </>
 }

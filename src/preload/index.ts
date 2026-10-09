@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { AuditQueryInput, InvokePluginManagementActionInput, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, QueryPluginManagementViewInput, ReconnectPluginConfigurationProfileInput, SeedApi, SeedEvent, SeedLanguagePreference, SeedThemePreference, SeedWindowApi, TerminalLogUploadRange, UpdatePluginConfigurationInput } from '../shared/contracts'
 
 const ipcChannels = {
+  clientReleaseNotes: 'seed:updates:release-notes',
+  acknowledgeClientReleaseNotes: 'seed:updates:acknowledge-release-notes',
   listOrphanedPluginData: 'seed:plugins:list-orphaned-data',
   resetOrphanedPluginData: 'seed:plugins:reset-orphaned-data',
   snapshot: 'seed:snapshot', signIn: 'seed:account:sign-in', cancelSignIn: 'seed:account:cancel-sign-in',
@@ -38,6 +40,8 @@ const ipcChannels = {
 } as const
 
 const api: SeedApi = {
+  clientReleaseNotes: () => ipcRenderer.invoke(ipcChannels.clientReleaseNotes),
+  acknowledgeClientReleaseNotes: (version) => ipcRenderer.invoke(ipcChannels.acknowledgeClientReleaseNotes, version),
   listOrphanedPluginData: () => ipcRenderer.invoke(ipcChannels.listOrphanedPluginData),
   resetOrphanedPluginData: (ids) => ipcRenderer.invoke(ipcChannels.resetOrphanedPluginData, ids),
   snapshot: () => ipcRenderer.invoke(ipcChannels.snapshot),

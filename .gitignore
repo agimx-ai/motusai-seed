@@ -10,5 +10,6 @@ resources/python/
 !.env.example
 !.env.*.example
 src/shared/build-config.generated.ts
+src/shared/client-release-notes.generated.ts
 coverage/
 .codex-mascot-preview

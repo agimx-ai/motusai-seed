@@ -10,12 +10,16 @@ type ConfirmDialogProps = {
   description?: string
   confirmLabel: string
   cancelLabel: string
+  hideCancel?: boolean
+  size?: 'compact' | 'wide'
+  role?: 'alertdialog' | 'dialog'
   tone?: 'primary' | 'danger'
   busy?: boolean
   confirmDisabled?: boolean
   busyActionLabel?: string
   busyActionDisabled?: boolean
   children?: ReactNode
+  contentPadding?: boolean
   onConfirm: () => void
   onCancel: () => void
   onBusyAction?: () => void
@@ -28,12 +32,16 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   cancelLabel,
+  hideCancel = false,
+  size = 'compact',
+  role = 'alertdialog',
   tone = 'primary',
   busy = false,
   confirmDisabled = false,
   busyActionLabel,
   busyActionDisabled = false,
   children,
+  contentPadding = true,
   onConfirm,
   onCancel,
   onBusyAction,
@@ -88,14 +96,14 @@ export function ConfirmDialog({
   >
     <div
       ref={panelRef}
-      className="w-full max-w-[390px] rounded-[18px] border border-border bg-card p-5 text-foreground shadow-[0_18px_55px_rgba(0,0,0,.18)] animate-[rise_.18s_ease_both]"
-      role="alertdialog"
+      className={`w-full ${size === 'wide' ? 'max-w-[520px]' : 'max-w-[390px]'} rounded-[18px] border border-border bg-card p-5 text-foreground shadow-[0_18px_55px_rgba(0,0,0,.18)] animate-[rise_.18s_ease_both]`}
+      role={role}
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
     >
       <div className={description ? 'flex items-start gap-3' : 'flex items-center gap-3'}>
-        {icon != null
+        {icon === null ? null : icon != null
           ? <span className="shrink-0" aria-hidden="true">{icon}</span>
           : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-muted text-foreground" aria-hidden="true">
               <ShieldCheck size={17} strokeWidth={1.8} />
@@ -105,12 +113,12 @@ export function ConfirmDialog({
           {description && <p id={descriptionId} className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">{description}</p>}
         </div>
       </div>
-      {children && <div className="mt-4 rounded-[12px] bg-muted/65 px-3.5 py-3 text-[12px] leading-5">{children}</div>}
+      {children && <div className={`mt-4 rounded-[12px] bg-muted/65 text-[12px] leading-5 ${contentPadding ? 'px-3.5 py-3' : 'overflow-hidden'}`}>{children}</div>}
       <div className="mt-5 flex justify-end gap-2">
         {busy && onBusyAction
           ? <ActionButton tone="danger" disabled={busyActionDisabled} onClick={onBusyAction}>{busyActionLabel || cancelLabel}</ActionButton>
           : <>
-              <ActionButton disabled={busy} onClick={onCancel}>{cancelLabel}</ActionButton>
+              {!hideCancel && <ActionButton disabled={busy} onClick={onCancel}>{cancelLabel}</ActionButton>}
               <ActionButton tone={tone} busy={busy} disabled={confirmDisabled} onClick={onConfirm}>{confirmLabel}</ActionButton>
             </>}
       </div>
