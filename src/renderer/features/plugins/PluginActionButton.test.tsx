@@ -28,11 +28,12 @@ describe('Plugin action geometry', () => {
     ]
     const sizingMarkup = states.map((html) => html.slice(0, html.indexOf('<button')))
     expect(new Set(sizingMarkup).size).toBe(1)
-    expect(sizingMarkup[0]).toContain('min-w-[64px]')
+    expect(sizingMarkup[0]).toContain('min-w-[56px]')
+    expect(sizingMarkup[0]).toContain('px-3 text-[13px] font-normal')
     expect(sizingMarkup[0]).toContain('aria-hidden="true"')
     expect(states[0]).toContain('width:100%')
     expect(states[1]).toContain('width:100%')
-    expect(states[2]).toContain('width:28px')
+    expect(states[2]).toContain('width:26px')
     expect(states[3]).toContain('width:100%')
   })
 
@@ -52,6 +53,23 @@ describe('Plugin action geometry', () => {
     const html = renderAction({ action: 'updateAll' })
     expect(html.slice(0, html.indexOf('<button'))).toContain('relative isolate inline-grid')
   })
+
+  it('keeps Details secondary while install and update retain the blue action color', () => {
+    const details = renderAction({ action: 'details' })
+    expect(details).toContain('text-foreground')
+    expect(details).not.toContain('text-[#007aff]')
+    for (const action of ['install', 'update'] as const) {
+      expect(renderAction({ action })).toContain('text-[#007aff] dark:text-[#0a84ff]')
+    }
+  })
+
+  it.each(['install', 'update', 'details', 'uninstall', 'updateAll'] as const)('uses compact regular-weight capsules for %s', (action) => {
+    const html = renderAction({ action })
+    expect(html).toContain('h-[26px]')
+    expect(html).toContain('font-normal')
+    expect(html).not.toContain('font-medium')
+    expect(html).toContain('bg-[rgba(120,120,128,0.12)]')
+  })
 })
 
 describe('Update All capsule', () => {
@@ -59,7 +77,7 @@ describe('Update All capsule', () => {
     const html = renderUpdateAll()
     expect(html).toContain('aria-label="全部更新"')
     expect(html).toContain('rounded-full')
-    expect(html).toContain('h-[28px]')
+    expect(html).toContain('h-[26px]')
     expect(html).not.toContain('disabled=""')
     expect(renderUpdateAll({ locale: 'en-US' })).toContain('aria-label="Update All"')
   })

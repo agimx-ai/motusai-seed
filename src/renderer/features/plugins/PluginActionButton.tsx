@@ -145,16 +145,16 @@ export function PluginActionButton({ action, progress, busy = false, disabled = 
       ? [idleLabel]
       : [t('plugins.storeAction.get'), t('plugins.storeAction.update'), t('plugins.storeAction.details')]
 
-  return <span className="seed-plugin-action-slot relative isolate inline-grid h-[28px] min-w-[64px] shrink-0 place-items-center align-middle">
+  return <span className="seed-plugin-action-slot relative isolate inline-grid h-[26px] min-w-[56px] shrink-0 place-items-center align-middle">
     <span aria-hidden="true" className="pointer-events-none invisible grid [grid-area:1/1]">
-      {sizingLabels.map((label, index) => <span key={index} className="whitespace-nowrap px-4 text-[13px] font-medium leading-none [grid-area:1/1]">{label}</span>)}
+      {sizingLabels.map((label, index) => <span key={index} className="whitespace-nowrap px-3 text-[13px] font-normal leading-none [grid-area:1/1]">{label}</span>)}
     </span>
     <button
       type="button"
-      style={{ width: active ? 28 : '100%' }}
+      style={{ width: active ? 26 : '100%' }}
       className={cx(
-        'seed-plugin-action-button absolute inset-y-0 left-1/2 z-20 grid h-[28px] min-w-0 -translate-x-1/2 place-items-center overflow-hidden rounded-full border-0 p-0 font-medium outline-none transition-[width] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-        uninstall ? 'text-danger' : 'text-[#007aff] dark:text-[#0a84ff]',
+        'seed-plugin-action-button absolute inset-y-0 left-1/2 z-20 grid h-[26px] min-w-0 -translate-x-1/2 place-items-center overflow-hidden rounded-full border-0 p-0 font-normal outline-none transition-[width] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+        uninstall ? 'text-danger' : action === 'details' && !active ? 'text-foreground' : 'text-[#007aff] dark:text-[#0a84ff]',
         'focus-visible:ring-2 focus-visible:ring-[#007aff]/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-[#0a84ff]/35',
         active
           ? 'bg-transparent hover:bg-transparent'
