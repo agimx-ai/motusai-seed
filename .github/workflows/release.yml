@@ -256,6 +256,7 @@ jobs:
         id: publication
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
         shell: bash
         run: |
