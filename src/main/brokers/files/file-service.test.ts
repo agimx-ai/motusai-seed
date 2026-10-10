@@ -49,6 +49,46 @@ describe('LocalFileService', () => {
     expect(read.sha256).toMatch(/^[a-f0-9]{64}$/)
   })
 
+  it('publishes create-only snapshots without replacing concurrent creators', async () => {
+    const results = await Promise.allSettled(Array.from({ length: 8 }, (_, index) => service.execute('write', filesystemRoot.id, {
+      path: 'new.json', content: JSON.stringify({ index }), create_only: true,
+    })))
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    for (const result of results.filter((r) => r.status === 'rejected')) expect(result.reason).toMatchObject({ code: 'destination_exists' })
+    expect(JSON.parse(await readFile(join(root, 'new.json'), 'utf8')).index).toBeGreaterThanOrEqual(0)
+    expect((await readdir(root)).filter((p) => p.endsWith('.motusai-tmp'))).toEqual([])
+    await expect(service.execute('write', filesystemRoot.id, { path: 'new.json', content: 'replace', create_only: true }))
+      .rejects.toMatchObject({ code: 'destination_exists' })
+  })
+
+  it('serializes revision-checked writes so only one concurrent editor wins', async () => {
+    await writeFile(join(root, 'shared.json'), 'original')
+    const revision = createHash('sha256').update('original').digest('hex')
+    const results = await Promise.allSettled(['one', 'two'].map((content) => service.execute('write', filesystemRoot.id, {
+      path: 'shared.json', content, expected_sha256: revision,
+    })))
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { code: 'content_conflict' } })
+    expect(['one', 'two']).toContain(await readFile(join(root, 'shared.json'), 'utf8'))
+  })
+
+  it('does not replace a racing creator from a separate service instance', async () => {
+    const other = new LocalFileService([filesystemRoot], backupRoot, async () => undefined)
+    const results = await Promise.allSettled([service, other].map((instance, index) => instance.execute('write', filesystemRoot.id, {
+      path: 'racing.json', content: JSON.stringify({ index }), create_only: true,
+    })))
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { code: 'destination_exists' } })
+    expect((await readdir(root)).filter((p) => p.endsWith('.motusai-tmp'))).toEqual([])
+  })
+
+  it('does not recreate removed files when a revision was supplied', async () => {
+    await expect(service.execute('write', filesystemRoot.id, { path: 'gone.json', content: 'new', expected_sha256: 'old' }))
+      .rejects.toMatchObject({ code: 'content_conflict' })
+    await expect(service.execute('write', filesystemRoot.id, { path: 'invalid.json', content: 'new', create_only: 'yes' }))
+      .rejects.toMatchObject({ code: 'invalid_arguments' })
+  })
+
   it('reads binary files without exposing an absolute path', async () => {
     const body = Buffer.from([0, 1, 2, 3, 254, 255])
     await mkdir(join(root, 'resumes'))

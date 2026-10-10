@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import {
   copyFile,
   lstat,
+  link,
   mkdir,
   open,
   readFile,
@@ -141,6 +142,7 @@ function isIgnored(absolutePath: string, rules: IgnoreRule[], directory = false)
 }
 
 export class LocalFileService {
+  private readonly writes = new Map<string, Promise<unknown>>()
   constructor(
     private roots: FilesystemRoot[],
     private backupRoot: string,
@@ -459,20 +461,47 @@ export class LocalFileService {
   private async write(rootId: string, args: Record<string, unknown>) {
     const root = this.root(rootId, 'write')
     const location = await this.target(root, args.path, { existing: false })
+    const previous = this.writes.get(location.target) ?? Promise.resolve()
+    const operation = previous.catch(() => undefined).then(() => this.writeSnapshot(root, location, args))
+    this.writes.set(location.target, operation)
+    try {
+      return await operation
+    } finally {
+      if (this.writes.get(location.target) === operation) this.writes.delete(location.target)
+    }
+  }
+
+  private async writeSnapshot(root: FilesystemRoot, location: { target: string; relativePath: string }, args: Record<string, unknown>) {
     const content = asString(args.content, 'content')
     if (Buffer.byteLength(content) > maxWriteBytes) throw new LocalFileError('file_too_large', '单次写入内容不能超过 16 MiB。')
+    if (args.create_only !== undefined && typeof args.create_only !== 'boolean') throw new LocalFileError('invalid_arguments', 'create_only 必须是布尔值。')
     const current = await lstat(location.target).catch(() => null)
+    if (current && args.create_only === true) throw new LocalFileError('destination_exists', '目标文件已经存在，拒绝覆盖。')
     if (current?.isSymbolicLink()) throw new LocalFileError('symlink_forbidden', '不允许通过符号链接写入文件。')
     if (current && !current.isFile()) throw new LocalFileError('regular_file_required', '目标路径不是普通文件。')
+    if (!current && (args.expected_sha256 !== undefined || args.expected_hash !== undefined)) throw new LocalFileError('content_conflict', '文件已被移除，拒绝重新创建。')
     if (current) {
       const expected = expectedHash(args)
       if (await sha256(location.target) !== expected) throw new LocalFileError('content_conflict', '文件已发生变化，拒绝覆盖新版本。')
     }
     const backupId = await this.backup(root, location.target)
     const temporary = resolve(dirname(location.target), `.${basename(location.target)}.${randomUUID()}.motusai-tmp`)
-    await writeFile(temporary, content, { encoding: 'utf8', mode: 0o600 })
-    await rename(temporary, location.target)
-    return { path: location.relativePath, size: Buffer.byteLength(content), sha256: await sha256(location.target), backup_id: backupId }
+    try {
+      await writeFile(temporary, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+      if (args.create_only === true) {
+        // Publish a complete snapshot without ever replacing a racing creator.
+        await link(temporary, location.target).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'EEXIST') throw new LocalFileError('destination_exists', '目标文件已经存在，拒绝覆盖。')
+          throw error
+        })
+      } else {
+        if (current && await sha256(location.target).catch(() => null) !== expectedHash(args)) throw new LocalFileError('content_conflict', '文件已发生变化，拒绝覆盖新版本。')
+        await rename(temporary, location.target)
+      }
+    } finally {
+      await rm(temporary, { force: true })
+    }
+    return { path: location.relativePath, size: Buffer.byteLength(content), sha256: createHash('sha256').update(content).digest('hex'), backup_id: backupId }
   }
 
   private async edit(rootId: string, args: Record<string, unknown>) {
