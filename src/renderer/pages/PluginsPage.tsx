@@ -274,7 +274,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, installedLoading
       />
     </div>
     {(installedLoading || installedError || installedPlugins.length > 0) && <section className="mb-7 mt-4" aria-busy={installedLoading}>
-      <div className="pb-2 pl-2"><h3 className="m-0 text-[17px] font-medium">{t('plugins.installedSection')}</h3></div>
+      <div className="pb-2 pl-2"><h3 className="m-0 text-[16px] font-medium">{t('plugins.installedSection')}</h3></div>
       {installedLoading ? <PluginListSkeleton installed label={t('plugins.loadingInstalled')} />
         : installedError ? <p role="alert" className="m-0 px-2 py-2 text-[12px] text-muted-foreground">{t('plugins.loadFailed')}</p>
         : <div className="flex min-h-[52px] flex-wrap items-center gap-3 px-2 py-2">
@@ -293,7 +293,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, installedLoading
     <section aria-busy={catalogLoading}>
       <div className="px-1">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-          <h3 className="m-0 text-[17px] font-medium">{t('plugins.availableSection')}</h3>
+          <h3 className="m-0 text-[16px] font-medium">{t('plugins.availableSection')}</h3>
           <PluginActionButton
             action="updateAll"
             busy={updatesBusy}
