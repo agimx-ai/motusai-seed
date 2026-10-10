@@ -12,6 +12,8 @@ import { resolveSeedLocalizedText, seedPluginConfigurationSchema, seedPluginMana
 import type { GlobalTaskActivityObserver } from './global-task-activity-observer'
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace'
 import { isCreditAmount } from '../shared/credit-amount'
+import { BillingReceipt } from './billing-receipt'
+import type { SeedBilledCapabilityResult } from '@motus-ai/seed-sdk'
 
 type MethodValidators = { input?: ValidateFunction; output?: ValidateFunction }
 type NativePluginRuntime = SeedPlugin
@@ -187,6 +189,7 @@ export class SeedPluginHost {
   private readonly invocationChain = new AsyncLocalStorage<string[]>()
   private readonly diagnosticTrace = new AsyncLocalStorage<DiagnosticTraceContext>()
   private readonly invocationTasks = new AsyncLocalStorage<InvocationTaskScope>()
+  private readonly billingReceipts = new AsyncLocalStorage<BillingReceipt>()
   private readonly pluginTaskControllers = new Map<string, Set<AbortController>>()
   private readonly pluginConnections = new Map<string, Map<string, ConnectionRegistration>>()
   private readonly remoteSnapshots = new Map<string, NativePluginRuntimeSnapshot>()
@@ -203,6 +206,22 @@ export class SeedPluginHost {
   ) {}
 
   activeDiagnosticTrace() { return this.diagnosticTrace.getStore() }
+
+  async withBillingReceipt(work: () => Promise<unknown>): Promise<SeedBilledCapabilityResult> {
+    const parent = this.billingReceipts.getStore()
+    const receipt = new BillingReceipt()
+    parent?.begin()
+    try {
+      const result = await this.billingReceipts.run(receipt, work)
+      return { result, billing: receipt.snapshot() }
+    } catch (error) {
+      receipt.uncertain()
+      throw error
+    } finally {
+      parent?.merge(receipt.snapshot())
+      parent?.end()
+    }
+  }
 
   async withDiagnosticTrace<T>(trace: DiagnosticTraceContext | undefined, work: () => Promise<T> | T): Promise<T> {
     return trace ? await this.diagnosticTrace.run(trace, work) : await work()
@@ -269,11 +288,17 @@ export class SeedPluginHost {
         }).catch(() => undefined) }
         context.signal?.addEventListener('abort', cancel, { once: true })
         try {
-          return await this.runtime.invoke_host('seed.native.invoke', {
+          const includeBilling = Boolean(this.billingReceipts.getStore())
+          const response = await this.runtime.invoke_host('seed.native.invoke', {
             package_id: packageId, capability: id, method,
             invocation: { ...context, signal: undefined }, chain: this.invocationChain.getStore() || [],
             trace: this.activeDiagnosticTrace(),
+            include_billing: includeBilling,
           })
+          if (!includeBilling) return response
+          const billed = response as SeedBilledCapabilityResult
+          this.billingReceipts.getStore()!.merge(billed.billing)
+          return billed.result
         } finally { context.signal?.removeEventListener('abort', cancel) }
       },
     }])))
@@ -493,12 +518,29 @@ export class SeedPluginHost {
   }
 
   private pluginContext(plugin: SeedPluginRuntimeDefinition, base: CapsContext, dataPath: string): SeedPluginContext {
-    const invokeRuntimeHost = async (service: string, argumentsValue: Record<string, unknown>) => await this.runtime.invoke_host(service, {
-      ...argumentsValue,
-      package_id: plugin.package_id,
-      ...(['seed.plugin.audit', 'seed.plugin.diagnostic'].includes(service)
-        ? { plugin_version: plugin.version, trace: this.activeDiagnosticTrace() } : {}),
-    })
+    const invokeRuntimeHost = async (service: string, argumentsValue: Record<string, unknown>) => {
+      const receipt = this.billingReceipts.getStore()
+      const tracksBilling = service.startsWith('seed.cloud.relay') || service === 'seed.native.capabilities.invoke'
+      if (tracksBilling) receipt?.begin()
+      try {
+        const result = await this.runtime.invoke_host(service, {
+          ...argumentsValue,
+          package_id: plugin.package_id,
+          ...(['seed.plugin.audit', 'seed.plugin.diagnostic'].includes(service)
+            ? { plugin_version: plugin.version, trace: this.activeDiagnosticTrace() } : {}),
+        })
+        if (service.startsWith('seed.cloud.relay')) {
+          receipt?.relay(service, result)
+          if (service === 'seed.cloud.relay.stream.next' && (result as { done?: boolean }).done) {
+            receipt?.endStream(String(argumentsValue.stream_id))
+          }
+        }
+        return result
+      } catch (error) {
+        if (tracksBilling) receipt?.uncertain()
+        throw error
+      } finally { if (tracksBilling) receipt?.end() }
+    }
     const invokeHost = async (service: string, argumentsValue: Record<string, unknown>) => {
       if (service === 'seed.plugin.invoke' || service.startsWith('seed.plugin-capability.')) {
         throw new Error(`原生插件 ${plugin.package_id} 不能直接调用 Seed 内部能力代理服务。`)
@@ -732,11 +774,21 @@ export class SeedPluginHost {
     const listCapabilities = async () => this.nativeExecution === 'local' && this.runtimeChanged
       ? await invokeRuntimeHost('seed.native.capabilities.list', {}) as Awaited<ReturnType<typeof this.consumedCapabilities>>
       : this.consumedCapabilities(plugin)
-    const invokeCapability = async (invocation: SeedPluginCapabilityInvocation) => this.nativeExecution === 'local' && this.runtimeChanged
-      ? await invokeRuntimeHost('seed.native.capabilities.invoke', {
-        invocation: { ...invocation, signal: undefined }, chain: this.invocationChain.getStore() || [],
-      })
-      : this.invokeConsumedCapability(plugin, invocation)
+    const invokeCapability = async (invocation: SeedPluginCapabilityInvocation) => {
+      const includeBilling = invocation.include_billing === true || Boolean(this.billingReceipts.getStore())
+      const input = { ...invocation, include_billing: includeBilling }
+      const remote = this.nativeExecution === 'local' && Boolean(this.runtimeChanged)
+      const response = remote
+        ? await invokeRuntimeHost('seed.native.capabilities.invoke', {
+          invocation: { ...input, signal: undefined }, chain: this.invocationChain.getStore() || [],
+        })
+        : await (includeBilling ? this.withBillingReceipt(() => this.invokeConsumedCapability(plugin, input))
+          : this.invokeConsumedCapability(plugin, input))
+      if (!includeBilling) return response
+      const billed = response as SeedBilledCapabilityResult
+      if (remote) this.billingReceipts.getStore()?.merge(billed.billing)
+      return invocation.include_billing === true ? billed : billed.result
+    }
     return {
       package: {
         package_id: plugin.package_id,
@@ -1081,7 +1133,8 @@ export class SeedPluginHost {
   invokeConsumedByPackage(packageId: string, invocation: SeedPluginCapabilityInvocation, chain: string[]) {
     const plugin = this.plugins.find((candidate) => candidate.package_id === packageId)
     if (!plugin) throw new Error(`插件 ${packageId} 当前不可用。`)
-    return this.invocationChain.run(chain.length ? chain : [packageId], () => this.invokeConsumedCapability(plugin, invocation))
+    const work = () => this.invocationChain.run(chain.length ? chain : [packageId], () => this.invokeConsumedCapability(plugin, invocation))
+    return invocation.include_billing === true ? this.withBillingReceipt(work) : work()
   }
 
   invokeNativeWithChain(capability: string, method: string, context: CapsInvokeContext, chain: string[], trace?: DiagnosticTraceContext) {
@@ -1314,9 +1367,16 @@ export class SeedPluginHost {
           throw error
         }
         if (isCreditAmount(settlement.charged_amount) && settlement.charged_amount >= 0) {
+          this.billingReceipts.getStore()?.add(billingContext.call_id, settlement.charged_amount)
           const trace = this.activeDiagnosticTrace()
           if (trace) trace.credit_charged_amount = Number(settlement.charged_amount)
         }
+        else this.billingReceipts.getStore()?.uncertain()
+      }
+      // Browser contexts cannot correlate arbitrary asynchronous Broker calls with
+      // a capability invocation. Never claim those unobserved charges are zero.
+      if (declared.plugin.runtime_kind === 'sandboxed-web' && declared.plugin.permissions.includes('cloud.relay')) {
+        this.billingReceipts.getStore()?.uncertain()
       }
       scope.handlerReturned = true
       this.finishInvocationScope(scope)

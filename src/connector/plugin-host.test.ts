@@ -51,6 +51,80 @@ const resourcePlugin: SeedPluginRuntimeDefinition = {
 }
 
 describe('SeedPluginHost protocol and Cordis runtime', () => {
+  it('captures internal relay charges through nested native calls, independently for concurrent invocations', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'seed-billing-receipt-'))
+    const providerPath = join(directory, 'provider.mjs')
+    const middlePath = join(directory, 'middle.mjs')
+    await writeFile(providerPath, `export function apply(ctx) {
+      ctx.effect(() => ctx.capabilities.register('probe', { async invoke(method, invocation) {
+        const response = await ctx.invokeHost('seed.cloud.relay', { capability_id: 'probe', method: 'echo', payload: invocation.arguments });
+        return response.payload;
+      } }));
+    }`)
+    await writeFile(middlePath, `export function apply(ctx) {
+      ctx.effect(() => ctx.capabilities.register('middle', { async invoke(method, invocation) {
+        return await ctx.capabilities.invoke({ capability: 'probe', method: 'echo', arguments: invocation.arguments });
+      } }));
+    }`)
+    const provider = { ...plugin, runtime_kind: 'native-host' as const, entry_path: providerPath }
+    const middle = { ...plugin, package_id: 'com.example.middle', runtime_kind: 'native-host' as const,
+      entry_path: middlePath, consumes: [{ capability: 'probe', methods: ['echo'] }],
+      capabilities: plugin.capabilities.map((capability) => ({ ...capability, id: 'middle' })) }
+    const consumer = { ...plugin, package_id: 'com.example.consumer', capabilities: [],
+      consumes: [{ capability: 'middle', methods: ['echo'] }, { capability: 'probe', methods: ['echo'] }] }
+    let confirmed = true
+    const host = new SeedPluginHost({ configuration: () => ({ type: 'configure', appVersion: '1', locale: 'en-US',
+      backupRoot: join(directory, 'backups'), pluginDataRoot: join(directory, 'data'), plugins: [] }),
+    invoke_host: async (service, args) => {
+      if (service === 'seed.cloud.relay') {
+        const value = String((args.payload as { value: string }).value)
+        return { payload: { value }, ...(confirmed
+          ? { billing: { state: 'settled', call_id: value, charged_amount: value === 'free' ? 0 : 2 } } : {}) }
+      }
+      return null
+    } })
+    try {
+      expect(await host.start([provider, middle, consumer])).toEqual([])
+      const invoke = (value: string, capability = 'middle', include_billing = true) => host.invokeConsumedByPackage(consumer.package_id,
+        { capability, method: 'echo', arguments: { value }, include_billing }, [])
+      expect(await Promise.all([invoke('first'), invoke('second')])).toEqual(['first', 'second'].map((value) => ({
+        result: { value }, billing: { version: 1, complete: true, charges: [{ call_id: value, charged_amount: 2 }] },
+      })))
+      await expect(invoke('free', 'probe')).resolves.toMatchObject({ billing: { complete: true,
+        charges: [{ call_id: 'free', charged_amount: 0 }] } })
+      await expect(invoke('raw', 'probe', false)).resolves.toEqual({ value: 'raw' })
+      confirmed = false
+      await expect(invoke('unknown')).resolves.toMatchObject({ billing: { complete: false, charges: [] } })
+      await expect(host.invokeConsumedByPackage(consumer.package_id,
+        { capability: 'forbidden', method: 'echo', arguments: {}, include_billing: true }, []))
+        .rejects.toMatchObject({ code: 'capability_unavailable' })
+      await expect(invoke('bad', 'probe')).resolves.toMatchObject({ billing: { complete: false } })
+      await expect(host.invokeConsumedByPackage(consumer.package_id,
+        { capability: 'probe', method: 'echo', arguments: { value: 123 }, include_billing: true }, []))
+        .rejects.toMatchObject({ code: 'invalid_arguments' })
+    } finally {
+      await host.stop()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('merges native-process receipts before validating the business result schema', async () => {
+    const nativePlugin = { ...plugin, runtime_kind: 'native-host' as const, entry_path: '/not-loaded/in-connector.mjs' }
+    const invoke_host = vi.fn(async (service: string, args: Record<string, unknown>): Promise<unknown> => {
+      if (service === 'seed.native.start') return { capabilities: ['probe'], configurations: [], managementViews: [], connections: [] }
+      if (service === 'seed.native.invoke') {
+        expect(args.include_billing).toBe(true)
+        return { result: { value: 'ok' }, billing: { version: 1, complete: true, charges: [{ call_id: 'nested-charge', charged_amount: 2 }] } }
+      }
+      return null
+    })
+    const host = new SeedPluginHost({ configuration: () => null, invoke_host }, undefined, undefined, 'remote')
+    try {
+      await host.start([nativePlugin])
+      await expect(host.withBillingReceipt(() => host.invoke('probe', 'echo', { request_id: 'call', arguments: { value: 'ok' } })))
+        .resolves.toEqual({ result: { value: 'ok' }, billing: { version: 1, complete: true, charges: [{ call_id: 'nested-charge', charged_amount: 2 }] } })
+    } finally { await host.stop() }
+  })
   it('lists and invokes only methods available on the current platform', async () => {
     const otherPlatform = process.platform === 'win32' ? 'darwin' : 'win32'
     const thisPlatform = process.platform === 'win32' ? 'win32' : process.platform === 'linux' ? 'linux' : 'darwin'

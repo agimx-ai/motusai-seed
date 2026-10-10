@@ -3,7 +3,7 @@ import type { NativePluginRuntimeSnapshot, SeedPluginRuntimeDefinition, WorkerCo
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from './diagnostic-trace'
 
 export type NativePluginOperation =
-  | { type: 'invoke'; capability: string; method: string; invocation: SeedInvocation; chain: string[]; trace?: DiagnosticTraceContext }
+  | { type: 'invoke'; capability: string; method: string; invocation: SeedInvocation; chain: string[]; trace?: DiagnosticTraceContext; include_billing?: boolean }
   | { type: 'local-api'; url: string; method: string; headers: Array<[string, string]>; body?: Uint8Array; client: SeedLocalApiClient | null; trace?: DiagnosticTraceContext }
   | { type: 'local-api-read'; stream_id: string }
   | { type: 'local-api-close'; stream_id: string }

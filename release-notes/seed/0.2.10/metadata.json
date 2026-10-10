@@ -1,0 +1,7 @@
+{
+  "version": "0.2.10",
+  "documentation": {
+    "pages": ["/docs/plugins/capability", "/docs/plugins/reference"],
+    "screenshots": false
+  }
+}

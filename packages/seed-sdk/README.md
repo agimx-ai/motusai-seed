@@ -46,6 +46,14 @@ export function apply(ctx: SeedPluginContext) {
 
 `ctx.capabilities.invoke()` 只能调用插件在根 Manifest 的 `consumes` 中声明的能力与方法。存在多个提供方时，调用需指定 `provider_plugin_id`。能力参数和结果由 Seed 按声明的 Schema 校验；写入与控制操作仍须经过确认。
 
+### 能力调用的积分回执
+
+SDK 0.2.3 / Seed 0.2.10 起，`ctx.capabilities.invoke({ ...invocation, include_billing: true })` 返回 `SeedBilledCapabilityResult`：`{ result, billing: { version: 1, complete, charges: [{ call_id, charged_amount }] } }`。`result` 仍是提供方的原始业务结果，按原 Schema 校验；不传此选项时只返回业务结果。失败仍按原契约抛错，审批、权限、取消和循环检查不变。
+
+回执由宿主采集，包含该次原生能力调用及其嵌套能力和内部云转发的已确认实际扣费，按 `call_id` 去重；插件业务结果中的计费字段不会被当作宿主回执。金额单位是积分，不是美元或 Token。`complete: true` 且 `charges: []` 表示确认没有 Cloud 费用；`complete: false` 不能当作免费或完整总额。并发调用分别隔离，回执不包含工作区路径、正文或凭据。
+
+已开启但没有读取到可信结算终态的云转发流、结算查询失败，以及不能完整关联内部 Broker 调用的 `sandboxed-web` 云转发能力会标记为不完整。消费方应把回执保存为会话元数据，不加入模型工具正文；旧历史没有回执时不得估价补算。插件使用此新增选项时须在发布阶段同步 SDK 和最低 Seed 版本。
+
 ### 能力方法的显示名称
 
 `SeedCapabilityMethod.display_name?: SeedLocalizedText` 是插件声明的双语短名称：`{ en_US: string; zh_Hans: string }`。两种语言均不能为空，最多各 100 个字符；YAML 声明必须使用 block style。官方插件全部方法都提供该字段。`name` 仍是稳定的调用标识，`description` 仍是详细说明；不要将显示名称作为调用名称。

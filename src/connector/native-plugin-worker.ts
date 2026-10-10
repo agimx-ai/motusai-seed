@@ -42,9 +42,11 @@ async function call(operation: NativePluginOperation, signal: AbortSignal) {
   if (!host || !configuration) throw new Error('Native plugin is not ready.')
   const packageId = configuration.plugins[0]!.package_id
   switch (operation.type) {
-    case 'invoke':
-      return await host.invokeNativeWithChain(operation.capability, operation.method,
+    case 'invoke': {
+      const invoke = () => host!.invokeNativeWithChain(operation.capability, operation.method,
         { ...operation.invocation, signal }, operation.chain, operation.trace)
+      return await (operation.include_billing ? host.withBillingReceipt(invoke) : invoke())
+    }
     case 'configuration-options':
       return await host.resolveConfigurationOptions(packageId, operation.configuration_id, operation.field_key, operation.values)
     case 'reconnect':

@@ -67,7 +67,7 @@ function creditRequestError(response: Response, body: Record<string, unknown> | 
 }
 
 const RELAY_STREAM_TERMINAL_TTL_MS = 60_000
-type RelayStreamEnd = { done: true; billing?: { state: 'settled'; charged_amount: number } }
+type RelayStreamEnd = { done: true; billing?: { state: 'settled'; call_id: string; charged_amount: number } }
 const relayModelsSchema = z.array(z.object({
   model_id: z.string(), display_name: z.string(), badge: z.string().nullable(),
   icon_data_url: z.string().nullable(),
@@ -174,7 +174,12 @@ export class CreditBillingClient {
   }
 
   async relay(input: { call_id: string; plugin_id: string; capability_id: string; method: string; payload: Record<string, unknown> }) {
-    return this.request('/relay', relaySchema, { method: 'POST', body: serializeRelayRequest(input) }, 135_000)
+    const result = await this.request('/relay', relaySchema, { method: 'POST', body: serializeRelayRequest(input) }, 135_000)
+    const settlement = await this.status(input.call_id).catch(() => undefined)
+    return { ...result, ...(settlement?.billable && settlement.state === 'settled'
+      && isCreditAmount(settlement.charged_amount) && settlement.charged_amount >= 0
+      ? { billing: { state: 'settled' as const, call_id: input.call_id, charged_amount: settlement.charged_amount } }
+      : {}) }
   }
 
   async startRelayStream(input: { call_id: string; plugin_id: string; capability_id: string;
@@ -239,7 +244,7 @@ export class CreditBillingClient {
           const result: RelayStreamEnd = { done: true }
           if (settlement?.billable && settlement.state === 'settled' &&
             isCreditAmount(settlement.charged_amount) && settlement.charged_amount >= 0) {
-            result.billing = { state: 'settled', charged_amount: settlement.charged_amount }
+            result.billing = { state: 'settled', call_id: stream.callId, charged_amount: settlement.charged_amount }
           }
           if (this.relayStreams.has(streamId)) this.completeRelayStream(packageId, streamId, result)
           return result

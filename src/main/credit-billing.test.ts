@@ -15,7 +15,7 @@ describe('Cloud relay request limits', () => {
     const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
     try {
       await client[method]({ ...input, payload: { text: '内容'.repeat(200_000) } })
-      expect(fetchMock).toHaveBeenCalledOnce()
+      expect(fetchMock).toHaveBeenCalledTimes(method === 'relay' ? 2 : 1)
       expect(Buffer.byteLength(fetchMock.mock.calls[0]![1]!.body as string)).toBeGreaterThan(1024 * 1024)
     } finally { await client.closeAllRelayStreams() }
   })
@@ -124,6 +124,29 @@ describe('personal credit grants', () => {
 })
 
 describe('generic Cloud relay client', () => {
+  it.each([0, 2, 9.21])('returns actual JSON relay settlement %s separately from payload and quote', async (amount) => {
+    const callId = 'a9505c1e-9f5d-4658-a3e1-594a8bab2432'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ payload: { value: 'business' }, billing: { charged_amount: 999 } }))
+      .mockResolvedValueOnce(Response.json({ billable: true, call_id: callId, amount: 999,
+        charged_amount: amount, price_revision: 1, state: 'settled' }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    await expect(client.relay({ call_id: callId, plugin_id: 'com.example.plugin', capability_id: 'probe', method: 'echo', payload: {} }))
+      .resolves.toEqual({ payload: { value: 'business' }, billing: { state: 'settled', call_id: callId, charged_amount: amount } })
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`https://cloud.example.com/api/v1/credits/invocations/${callId}`)
+  })
+
+  it.each(['uncertain', 'released', 'lookup_failed'])('does not fabricate JSON relay settlement: %s', async (state) => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ payload: { value: 'business' } }))
+    if (state === 'lookup_failed') fetchMock.mockRejectedValueOnce(new Error('Offline'))
+    else fetchMock.mockResolvedValueOnce(Response.json({ billable: true,
+      call_id: 'a9505c1e-9f5d-4658-a3e1-594a8bab2432', amount: 999, charged_amount: 2, price_revision: 1, state }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
+    await expect(client.relay({ call_id: 'a9505c1e-9f5d-4658-a3e1-594a8bab2432', plugin_id: 'com.example.plugin',
+      capability_id: 'probe', method: 'echo', payload: {} })).resolves.toEqual({ payload: { value: 'business' } })
+  })
   it('accepts a fractional settled charge from Cloud', async () => {
     const callId = 'a9505c1e-9f5d-4658-a3e1-594a8bab2432'
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({
@@ -209,7 +232,7 @@ describe('generic Cloud relay client', () => {
     const { stream_id } = await client.startRelayStream({ call_id: callId, plugin_id: 'com.example.plugin',
       capability_id: 'any_relay', method: 'execute', payload: { stream: true } })
     await client.nextRelayStream('com.example.plugin', stream_id)
-    const expected = { done: true, billing: { state: 'settled', charged_amount: amount } }
+    const expected = { done: true, billing: { state: 'settled', call_id: callId, charged_amount: amount } }
     await expect(Promise.all([client.nextRelayStream('com.example.plugin', stream_id),
       client.nextRelayStream('com.example.plugin', stream_id)])).resolves.toEqual([expected, expected])
     await expect(client.nextRelayStream('com.example.plugin', stream_id)).resolves.toEqual(expected)
@@ -290,7 +313,7 @@ describe('generic Cloud relay client', () => {
     const input = { call_id: 'a9505c1e-9f5d-4658-a3e1-594a8bab2432', plugin_id: 'com.example.plugin',
       capability_id: 'search', method: 'run', payload: { query: 'hello' } }
     expect(await client.relay(input)).toEqual({ payload: { results: [] } })
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://cloud.example.com/api/v1/credits/relay')
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST',
       body: JSON.stringify(input), headers: { Authorization: 'Bearer access-token' } })

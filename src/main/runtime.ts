@@ -479,7 +479,8 @@ export class SeedRuntime {
       const packageId = String(args.package_id || '')
       return await this.nativeHost.call(packageId, { type: 'invoke', capability: String(args.capability || ''),
         method: String(args.method || ''), invocation, chain: Array.isArray(args.chain) ? args.chain.filter((x): x is string => typeof x === 'string') : [],
-        trace: args.trace as import('../shared/diagnostic-trace').DiagnosticTraceContext | undefined }, invocation.request_id)
+        trace: args.trace as import('../shared/diagnostic-trace').DiagnosticTraceContext | undefined,
+        include_billing: args.include_billing === true }, invocation.request_id)
     })
     this.hostServices.set('seed.native.cancel', async (args) => {
       this.nativeHost.cancel(String(args.package_id || ''), String(args.request_id || ''))
@@ -1770,7 +1771,8 @@ export class SeedRuntime {
           const streamId = z.string().uuid().parse((result as { stream_id?: unknown }).stream_id)
           this.billedRelayStreams.set(streamId, packageId)
         } else {
-          await this.recordRelaySettlement(preparation.call_id, packageId).catch(() => undefined)
+          const billing = 'billing' in result ? result.billing : undefined
+          if (billing) this.recordRelayCharge(packageId, billing.charged_amount)
         }
         return result
       } catch (error) {
@@ -1851,13 +1853,6 @@ export class SeedRuntime {
       return this.store.pluginConfiguration(key) || initialPluginConfiguration(declaration)
     }
     throw new Error(`Seed 不支持 Broker 服务：${service}`)
-  }
-
-  private async recordRelaySettlement(callId: string, pluginId: string) {
-    const settlement = await this.creditBilling.status(callId)
-    if (!settlement.billable || settlement.state !== 'settled' ||
-      !isCreditAmount(settlement.charged_amount) || settlement.charged_amount < 0) return
-    this.recordRelayCharge(pluginId, settlement.charged_amount)
   }
 
   private recordRelayCharge(pluginId: string, chargedAmount: number) {

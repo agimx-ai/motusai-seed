@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3
+
+- Add opt-in `include_billing` to capability invocations and export `SeedBillingReceipt` and `SeedBilledCapabilityResult`.
+- Return host-owned, confirmed settlement receipts separately from business results, with call IDs for deduplication and an explicit completeness flag.
+- Document nested invocation accounting, incomplete receipts, and persistence outside model-visible content. Default capability results remain unchanged.
+- Requires Seed 0.2.10 for billing receipts. Publish this SDK version before installing the updated official plugins' dependencies.
+
+中文：新增跨插件调用的实际结算回执，支持嵌套调用去重与完整性标记；默认业务结果不变。回执能力需要 Seed 0.2.10，官方插件依赖安装前须先发布 SDK 0.2.3。
+
 ## 0.2.2
 
 - Export `SeedLocalizedText` with required `en_US` and `zh_Hans` strings.

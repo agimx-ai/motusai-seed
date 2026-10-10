@@ -159,6 +159,8 @@ export function canonicalSeedCapabilityApprovalPayload(input: {
 }
 
 export type SeedPluginCapabilityInvocation = {
+  /** Return a host-owned result envelope with confirmed charges, including nested calls. */
+  include_billing?: boolean
   /** Required when multiple installed providers expose the requested capability method. */
   provider_plugin_id?: string
   capability: string
@@ -168,6 +170,18 @@ export type SeedPluginCapabilityInvocation = {
   approval?: SeedLocalClientCapabilityApproval
   context?: unknown
   signal?: AbortSignal
+}
+
+/** Missing/incomplete settlement is not a confirmed zero. Amounts are credits, not USD. */
+export type SeedBillingReceipt = {
+  version: 1
+  complete: boolean
+  charges: Array<{ call_id: string; charged_amount: number }>
+}
+
+export type SeedBilledCapabilityResult = {
+  result: unknown
+  billing: SeedBillingReceipt
 }
 
 export type SeedPluginCapabilityService = {

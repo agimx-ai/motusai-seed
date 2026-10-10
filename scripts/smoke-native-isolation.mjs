@@ -16,7 +16,7 @@ function runtime(name, entryPath) {
   return {
     package_id: `com.example.${name}`, version: '1.0.0', name: { en_US: name, zh_Hans: name },
     publisher_type: 'official', runtime_kind: 'native-host', root_path: join(root, name), entry_path: entryPath,
-    sidecars: [], permissions: name === 'one' ? ['local.http-api', 'network.connect.loopback'] : [],
+    sidecars: [], permissions: name === 'one' ? ['local.http-api', 'network.connect.loopback'] : ['cloud.relay'],
     consumes: name === 'one' ? [{ capability: 'probe_two', methods: ['echo'] }] : [],
     capabilities: [{ id: `probe_${name}`, version: 1, exposure: 'terminal',
       methods: [{ name: 'echo', risk: 'read' }, { name: 'crash', risk: 'read' },
@@ -61,6 +61,9 @@ app.whenReady().then(async () => {
           invoke: async (method, request) => {
             if (method === 'crash') process.exit(7)
             if (method === 'delegate') return await ctx.capabilities.invoke({ capability: 'probe_two', method: 'echo', arguments: request.arguments })
+            if (request.arguments.billing_case) return (await ctx.invokeHost('seed.cloud.relay', {
+              capability_id: 'probe_two', method: 'echo', payload: request.arguments,
+            })).payload
             return request.arguments
           },
         }))
@@ -72,6 +75,8 @@ app.whenReady().then(async () => {
     manager = new NativePluginManager('Seed Smoke', async (packageId, service, args) => {
       if (service === 'seed.native.capabilities.list') return router.consumedCapabilitiesByPackage(packageId)
       if (service === 'seed.native.capabilities.invoke') return router.invokeConsumedByPackage(packageId, args.invocation, args.chain)
+      if (service === 'seed.cloud.relay') return { payload: args.payload,
+        billing: { state: 'settled', call_id: args.payload.billing_case, charged_amount: 2 } }
       return undefined
     },
       (packageId, snapshot) => {
@@ -89,7 +94,8 @@ app.whenReady().then(async () => {
         if (service === 'seed.native.start') return manager.start(args.plugin, args.configuration)
         if (service === 'seed.native.stop') return manager.stop(packageId)
         if (service === 'seed.native.invoke') return manager.call(packageId, { type: 'invoke',
-          capability: args.capability, method: args.method, invocation: args.invocation, chain: args.chain }, args.invocation.request_id)
+          capability: args.capability, method: args.method, invocation: args.invocation, chain: args.chain,
+          include_billing: args.include_billing }, args.invocation.request_id)
         if (service === 'seed.native.cancel') return manager.cancel(packageId, args.request_id)
         if (service === 'seed.plugin.diagnostic' || service === 'seed.plugin.audit') return undefined
         throw new Error(`Unexpected routing service: ${service}`)
@@ -99,6 +105,16 @@ app.whenReady().then(async () => {
     const delegated = await router.invoke('probe_one', 'delegate', { request_id: 'delegated',
       arguments: { cross_process: true } })
     if (delegated?.cross_process !== true) throw new Error('Cross-plugin capability routing failed.')
+    const billed = await Promise.all(['charge-one', 'charge-two'].map((id) => router.withBillingReceipt(() =>
+      router.invoke('probe_one', 'delegate', { request_id: id, arguments: { billing_case: id } }))))
+    for (const [index, response] of billed.entries()) {
+      const id = ['charge-one', 'charge-two'][index]
+      if (response.result?.billing_case !== id || !response.billing.complete
+        || response.billing.charges.length !== 1 || response.billing.charges[0].call_id !== id
+        || response.billing.charges[0].charged_amount !== 2) {
+        throw new Error(`Cross-process billing receipt was lost or duplicated: ${JSON.stringify(response)}`)
+      }
+    }
     if (firstSnapshot.configurations[0]?.id !== 'source' || firstSnapshot.connections[0]?.state !== 'connected'
       || firstSnapshot.localApi?.routes[0]?.path !== '/events') throw new Error('Native runtime contributions were not transferred.')
     const options = await manager.call(entries[0].package_id, { type: 'configuration-options',
@@ -134,7 +150,7 @@ app.whenReady().then(async () => {
     if (!router.supports('probe_one', 'echo') || !router.supports('probe_two', 'echo')) {
       throw new Error('Router did not recover the crashed plugin while retaining the healthy one.')
     }
-    process.stdout.write('Independent native processes, crash isolation, and restart passed.\n')
+    process.stdout.write('Independent native processes, nested billing receipts, crash isolation, and restart passed.\n')
   } catch (error) {
     failed = true
     process.stderr.write(`${error instanceof Error ? error.stack || error.message : String(error)}\n`)
