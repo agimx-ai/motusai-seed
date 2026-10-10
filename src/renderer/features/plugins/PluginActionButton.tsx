@@ -125,6 +125,7 @@ export function PluginActionButton({ action, progress, busy = false, disabled = 
   const updateAll = action === 'updateAll'
   const labelBusy = (uninstall || updateAll) && busy
   const active = !uninstall && !updateAll && (busy || Boolean(progress))
+  const filled = !active && (action === 'install' || action === 'update' || (updateAll && !disabled && !busy))
   const cancelable = Boolean(progress?.cancelable)
   const idleLabel = uninstall
     ? t(busy ? 'plugins.uninstalling' : 'plugins.uninstall')
@@ -154,13 +155,14 @@ export function PluginActionButton({ action, progress, busy = false, disabled = 
       style={{ width: active ? 26 : '100%' }}
       className={cx(
         'seed-plugin-action-button absolute inset-y-0 left-1/2 z-20 grid h-[26px] min-w-0 -translate-x-1/2 place-items-center overflow-hidden rounded-full border-0 p-0 font-normal outline-none transition-[width] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-        uninstall ? 'text-danger' : action === 'details' && !active ? 'text-foreground' : 'text-[#007aff] dark:text-[#0a84ff]',
+        filled ? 'text-white' : uninstall ? 'text-danger' : action === 'details' && !active ? 'text-foreground' : 'text-[#007aff] dark:text-[#0a84ff]',
         'focus-visible:ring-2 focus-visible:ring-[#007aff]/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-[#0a84ff]/35',
         active
           ? 'bg-transparent hover:bg-transparent'
+          : filled ? 'bg-[#007aff] hover:bg-[#007aff] dark:bg-[#0a84ff] dark:hover:bg-[#0a84ff]'
           : 'bg-[rgba(120,120,128,0.12)] hover:bg-[rgba(120,120,128,0.12)]',
         (disabled || labelBusy) && !active && 'cursor-default opacity-55',
-        disabled && !active && 'text-muted-foreground dark:text-muted-foreground',
+        disabled && !active && !filled && 'text-muted-foreground dark:text-muted-foreground',
         active && !cancelable && 'cursor-default',
       )}
       disabled={disabled || labelBusy || (active && !cancelable)}

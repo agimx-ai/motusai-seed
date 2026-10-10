@@ -54,13 +54,17 @@ describe('Plugin action geometry', () => {
     expect(html.slice(0, html.indexOf('<button'))).toContain('relative isolate inline-grid')
   })
 
-  it('keeps Details secondary while install and update retain the blue action color', () => {
+  it('keeps Details secondary while install and update use blue backgrounds with white labels', () => {
     const details = renderAction({ action: 'details' })
     expect(details).toContain('text-foreground')
     expect(details).not.toContain('text-[#007aff]')
-    for (const action of ['install', 'update'] as const) {
-      expect(renderAction({ action })).toContain('text-[#007aff] dark:text-[#0a84ff]')
+    for (const action of ['install', 'update', 'updateAll'] as const) {
+      const html = renderAction({ action })
+      expect(html).toContain('text-white')
+      expect(html).toContain('bg-[#007aff] hover:bg-[#007aff] dark:bg-[#0a84ff] dark:hover:bg-[#0a84ff]')
+      expect(html).not.toContain('bg-[rgba(120,120,128,0.12)]')
     }
+    expect(details).toContain('bg-[rgba(120,120,128,0.12)]')
   })
 
   it.each(['install', 'update', 'details', 'uninstall', 'updateAll'] as const)('uses compact regular-weight capsules for %s', (action) => {
@@ -68,7 +72,21 @@ describe('Plugin action geometry', () => {
     expect(html).toContain('h-[26px]')
     expect(html).toContain('font-normal')
     expect(html).not.toContain('font-medium')
-    expect(html).toContain('bg-[rgba(120,120,128,0.12)]')
+  })
+
+  it.each(['install', 'update'] as const)('preserves the transparent progress state for %s', (action) => {
+    const html = renderAction({ action, busy: true })
+    expect(html).toContain('bg-transparent hover:bg-transparent')
+    expect(html).not.toContain('text-white')
+    expect(html).not.toContain('dark:bg-[#0a84ff]')
+  })
+
+  it.each(['install', 'update'] as const)('dims disabled %s without changing its white label', (action) => {
+    const html = renderAction({ action, disabled: true })
+    expect(html).toContain('disabled=""')
+    expect(html).toContain('opacity-55')
+    expect(html).toContain('text-white')
+    expect(html).not.toContain('text-muted-foreground')
   })
 })
 
@@ -87,12 +105,17 @@ describe('Update All capsule', () => {
     expect(html).toContain('aria-label="正在更新…"')
     expect(html).toContain('disabled=""')
     expect(html).not.toContain('<canvas')
+    expect(html).toContain('bg-[rgba(120,120,128,0.12)]')
+    expect(html).not.toContain('text-white')
     expect(renderUpdateAll({ busy: true, locale: 'en-US' })).toContain('aria-label="Updating…"')
   })
 
   it('supports disabling the action when no updates are available', () => {
     const html = renderUpdateAll({ disabled: true })
     expect(html).toContain('disabled=""')
+    expect(html).toContain('opacity-55')
+    expect(html).toContain('bg-[rgba(120,120,128,0.12)]')
     expect(html).toContain('text-muted-foreground dark:text-muted-foreground')
+    expect(html).not.toContain('text-white')
   })
 })
