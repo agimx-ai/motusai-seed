@@ -361,6 +361,7 @@ describe('SeedLocalHttpGateway', () => {
           buffer = buffer.slice(boundary + 2)
           const data = block.split('\n').filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n')
           if (data) return JSON.parse(data) as Record<string, unknown>
+          continue
         }
         const chunk = await reader.read()
         if (chunk.done) throw new Error('SSE stream closed before the expected event.')
