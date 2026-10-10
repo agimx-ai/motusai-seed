@@ -234,7 +234,7 @@ app.on('second-instance', (_event, commandLine) => {
 })
 
 app.whenReady().then(async () => {
-  app.dock?.setIcon(nativeImage.createFromPath(appAsset('app-icon.png')))
+  if (!app.isPackaged) app.dock?.setIcon(nativeImage.createFromPath(appAsset('app-icon.png')))
   app.setAboutPanelOptions({ applicationName: buildConfig.appName, applicationVersion: app.getVersion() })
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const development = Boolean(process.env.VITE_DEV_SERVER_URL)

@@ -9,6 +9,7 @@ const {
 const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { app, BrowserWindow } = require("electron");
+const { renderImage } = require("./icon-rendering.cjs");
 
 const projectDirectory = resolve(__dirname, "..");
 const resourcesDirectory = join(projectDirectory, "resources");
@@ -17,14 +18,15 @@ const theme = JSON.parse(
   readFileSync(join(appDirectory, "theme.json"), "utf8"),
 );
 
-app.commandLine.appendSwitch("force-device-scale-factor", "1");
+function staticLogoSvg(appearance) {
+  return readFileSync(
+    join(appDirectory, appearance === "dark" ? "app-dark.svg" : "app-light.svg"),
+    "utf8",
+  ).replace(/<style>[\s\S]*?<\/style>/g, "");
+}
 
 function selfContainedIconSvg(appearance = "light") {
-  const logoSvgPath = join(
-    appDirectory,
-    appearance === "dark" ? "app-dark.svg" : "app-light.svg",
-  );
-  const logoSvg = readFileSync(logoSvgPath, "utf8");
+  const logoSvg = staticLogoSvg(appearance);
   const logoDataUrl = `data:image/svg+xml;base64,${Buffer.from(logoSvg).toString("base64")}`;
   const background = theme.appIcon.background?.[appearance] || "#F4F6F1";
   const logoSize = Math.round(1024 * (theme.appIcon.legacyLogoScale || 0.655));
@@ -42,13 +44,7 @@ function iconComposerBackgroundSvg(appearance) {
 }
 
 function iconComposerLogoSvg(appearance) {
-  const logoSvg = readFileSync(
-    join(
-      appDirectory,
-      appearance === "dark" ? "app-dark.svg" : "app-light.svg",
-    ),
-    "utf8",
-  );
+  const logoSvg = staticLogoSvg(appearance);
   const logoDataUrl = `data:image/svg+xml;base64,${Buffer.from(logoSvg).toString("base64")}`;
   const logoSize = Math.round(1024 * (theme.appIcon?.logoScale || 0.625));
   const logoOffset = Math.round((1024 - logoSize) / 2);
@@ -154,33 +150,18 @@ function writeIconset(sourceImage, iconsetDirectory) {
   }
 }
 
-async function renderSvg(window, svg) {
-  const html = `<!doctype html><style>html,body{margin:0;width:100%;height:100%;background:transparent}svg{display:block;width:100%;height:100%}svg *{animation-play-state:paused!important;animation-delay:0s!important}</style>${svg}`;
-  await window.loadURL(
-    `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
+async function renderSvg(window, svg, requiresLogo = true) {
+  return renderImage(
+    window,
+    `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
+    requiresLogo,
   );
-  const capturedImage = await window.webContents.capturePage({
-    x: 0,
-    y: 0,
-    width: 1024,
-    height: 1024,
-  });
-  if (capturedImage.isEmpty()) throw new Error("Rendered image is empty.");
-  return capturedImage.getSize().width === 1024 &&
-    capturedImage.getSize().height === 1024
-    ? capturedImage
-    : capturedImage.resize({ width: 1024, height: 1024, quality: "best" });
 }
 
 async function generate() {
   const window = new BrowserWindow({
-    width: 1024,
-    height: 1024,
     show: false,
-    frame: false,
-    transparent: true,
-    backgroundColor: "#00000000",
-    webPreferences: { offscreen: true, sandbox: true },
+    webPreferences: { sandbox: true },
   });
 
   try {
@@ -188,10 +169,12 @@ async function generate() {
     const iconComposerBackgroundLightImage = await renderSvg(
       window,
       iconComposerBackgroundSvg("light"),
+      false,
     );
     const iconComposerBackgroundDarkImage = await renderSvg(
       window,
       iconComposerBackgroundSvg("dark"),
+      false,
     );
     const iconComposerLogoLightImage = await renderSvg(
       window,

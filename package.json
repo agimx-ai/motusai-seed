@@ -11,6 +11,7 @@
   "main": "dist/electron/main/index.js",
   "scripts": {
     "icons:generate": "electron scripts/generate-icons.cjs",
+    "icons:verify": "electron scripts/verify-icons.cjs",
     "python:prepare": "node scripts/prepare-python-runtime.mjs",
     "version:client": "node scripts/update-client-version.mjs",
     "config:dev": "node scripts/generate-build-config.mjs development",
