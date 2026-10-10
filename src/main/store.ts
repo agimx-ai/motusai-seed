@@ -7,7 +7,6 @@ import { activityCategory, activityRisk } from '../shared/activity'
 import type { AuditCategory, AuditEntry, AuditMetadata, AuditOutcome, AuditPage, AuditQueryInput, LocalClientAuthorization, SeedLanguagePreference, SeedThemePreference, StoredPluginConfiguration, UsageSummary } from '../shared/contracts'
 import type { CloudSessionCredential } from './cloud-auth'
 import { ObservationStore, observationDatabaseFileName } from './observation-store'
-import type { ClientReleaseReadState } from './client-release-notes'
 
 type StoredConfig = { encryptedCloudSession?: string; encryptedPluginConfigurations?: string; encryptedPluginSecrets?: string; preventSystemSleep: boolean; languagePreference: SeedLanguagePreference; themePreference: SeedThemePreference }
 type SettingRow = { key: string; value: string }
@@ -293,13 +292,6 @@ export class SeedStore {
   languagePreference() { return this.value.languagePreference }
   async setLanguagePreference(preference: SeedLanguagePreference) { await this.setSetting('language_preference', preference); this.value.languagePreference = preference }
   themePreference() { return this.value.themePreference }
-  async clientReleaseReadState(): Promise<ClientReleaseReadState | undefined> {
-    const row = await this.getDatabase()<SettingRow>('app_settings').where({ key: 'client_release_read_state' }).first()
-    return row ? JSON.parse(row.value) as ClientReleaseReadState : undefined
-  }
-  async setClientReleaseReadState(state: ClientReleaseReadState) {
-    await this.setSetting('client_release_read_state', JSON.stringify(state))
-  }
   async setThemePreference(preference: SeedThemePreference) { await this.setSetting('theme_preference', preference); this.value.themePreference = preference }
   private pluginConfigurations(): Record<string, StoredPluginConfiguration> {
     if (!this.value.encryptedPluginConfigurations || !safeStorage.isEncryptionAvailable()) return {}

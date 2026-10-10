@@ -27,23 +27,6 @@ async function temporaryDirectory() {
 }
 
 describe('SeedStore SQLite persistence', () => {
-  it('persists device-wide release acknowledgement across restart and logout', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
-    expect(await store.clientReleaseReadState()).toBeUndefined()
-    await store.setClientReleaseReadState({ highestVersion: '0.2.7', pendingVersion: '0.2.7' })
-    await store.clearCloudSession()
-    await store.close()
-    const reopened = new SeedStore(directory, 'MotusAI Seed')
-    await reopened.load()
-    try {
-      expect(await reopened.clientReleaseReadState()).toEqual({ highestVersion: '0.2.7', pendingVersion: '0.2.7' })
-      await reopened.setClientReleaseReadState({ highestVersion: '0.2.7' })
-      await reopened.clearCloudSession()
-      expect(await reopened.clientReleaseReadState()).toEqual({ highestVersion: '0.2.7' })
-    } finally { await reopened.close() }
-  })
   it('enumerates configuration-only and credential-only plugin data and removes exact plugin scopes', async () => {
     const store = new SeedStore(await temporaryDirectory(), 'MotusAI Seed')
     await store.load()

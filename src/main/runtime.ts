@@ -44,8 +44,6 @@ import { SeedDistributionEvents } from './distribution-events'
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization'
 import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh'
 import { PluginDataCleaner } from './plugin-data-cleaner'
-import { ClientReleaseNotesService } from './client-release-notes'
-import { clientReleaseNotes } from '../shared/client-release-notes.generated'
 
 const entitlementResponseSchema = z.object({
   items: z.array(z.object({
@@ -62,7 +60,6 @@ function isAbortError(error: unknown) {
 }
 
 export class SeedRuntime {
-  private releaseNotesService: ClientReleaseNotesService | undefined
   private resettingPluginData = false
   private readonly pluginUninstallOperations = new Set<string>()
   readonly store: SeedStore
@@ -511,11 +508,6 @@ export class SeedRuntime {
 
   async initialize() {
     await this.store.load()
-    this.releaseNotesService = new ClientReleaseNotesService(clientReleaseNotes, {
-      read: () => this.store.clientReleaseReadState(),
-      write: (state) => this.store.setClientReleaseReadState(state),
-    })
-    await this.releaseNotesService.initialize(app.getVersion(), app.isPackaged)
     this.localClients = await this.store.localClients()
     this.languagePreferenceChanged(this.store.languagePreference())
     this.syncPreventSystemSleep()
@@ -751,16 +743,6 @@ export class SeedRuntime {
         activeTaskCount: new Set(this.activeTaskIds.values()).size,
       },
     }
-  }
-
-  clientReleaseNotes() {
-    if (!this.releaseNotesService || this.startupStatus !== 'ready') throw new Error('Client release notes are not ready.')
-    return this.releaseNotesService.snapshot()
-  }
-
-  async acknowledgeClientReleaseNotes(version: string) {
-    if (!this.releaseNotesService || this.startupStatus !== 'ready') throw new Error('Client release notes are not ready.')
-    await this.releaseNotesService.acknowledge(version)
   }
 
   async publishSnapshot() {

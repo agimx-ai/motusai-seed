@@ -1,7 +1,7 @@
 {
   "name": "motusai-seed",
   "productName": "MotusAI Seed",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -13,9 +13,8 @@
     "icons:generate": "electron scripts/generate-icons.cjs",
     "python:prepare": "node scripts/prepare-python-runtime.mjs",
     "version:client": "node scripts/update-client-version.mjs",
-    "config:dev": "node scripts/generate-build-config.mjs development && npm run release-notes:generate",
-    "config:build": "node scripts/generate-build-config.mjs production && npm run release-notes:generate",
-    "release-notes:generate": "node scripts/generate-client-release-notes.mjs",
+    "config:dev": "node scripts/generate-build-config.mjs development",
+    "config:build": "node scripts/generate-build-config.mjs production",
     "dev": "npm run config:dev && npm run build:sdk && concurrently -k \"npm:dev:renderer\" \"npm:dev:electron:compile\" \"npm:dev:electron:run\"",
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:electron:compile": "tsc -p tsconfig.electron.json --watch --preserveWatchOutput",

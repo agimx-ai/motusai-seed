@@ -18,8 +18,6 @@ function handle<T extends unknown[], R>(channel: string, action: (event: Electro
 }
 
 export function registerIpc(runtime: SeedRuntime) {
-  handle(ipcChannels.clientReleaseNotes, () => runtime.clientReleaseNotes())
-  handle(ipcChannels.acknowledgeClientReleaseNotes, (_event, version) => runtime.acknowledgeClientReleaseNotes(z.string().max(100).parse(version)))
   handle(ipcChannels.snapshot, () => runtime.snapshot())
   handle(ipcChannels.personalCreditWallet, () => runtime.personalCreditWallet())
   handle(ipcChannels.personalCreditGrants, (_event, cursor) => runtime.personalCreditGrants(

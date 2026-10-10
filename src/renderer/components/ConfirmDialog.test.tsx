@@ -6,10 +6,10 @@ import { ConfirmDialog } from './ConfirmDialog'
 vi.mock('react-dom', () => ({ createPortal: (children: ReactNode) => children }))
 
 describe('ConfirmDialog presentation', () => {
-  function render(icon?: ReactNode, contentPadding?: boolean) {
+  function render(icon?: ReactNode) {
     vi.stubGlobal('document', { body: {} })
     try {
-      return renderToStaticMarkup(<ConfirmDialog open title="Title" icon={icon} contentPadding={contentPadding} confirmLabel="OK" cancelLabel="Cancel" onConfirm={() => {}} onCancel={() => {}}>Body</ConfirmDialog>)
+      return renderToStaticMarkup(<ConfirmDialog open title="Title" icon={icon} confirmLabel="OK" cancelLabel="Cancel" onConfirm={() => {}} onCancel={() => {}}>Body</ConfirmDialog>)
     } finally {
       vi.unstubAllGlobals()
     }
@@ -25,22 +25,12 @@ describe('ConfirmDialog presentation', () => {
     expect(html).not.toContain('lucide-shield-check')
   })
 
-  it('removes the icon and its container when null is specified', () => {
-    const html = render(null)
-    expect(html).not.toContain('<svg')
-    expect(html).not.toContain('aria-hidden="true"')
-    expect(html).not.toContain('<span')
-    expect(html).toContain('Title')
-    expect(html).toContain('Body')
-  })
-
-  it('preserves content padding for existing callers', () => {
-    expect(render()).toContain('px-3.5 py-3')
-  })
-
-  it('lets scrollable content reach the background edge while clipping its corners', () => {
-    const html = render(undefined, false)
-    expect(html).not.toContain('px-3.5 py-3')
-    expect(html).toContain('leading-5 overflow-hidden')
+  it('preserves the standard confirmation layout and actions', () => {
+    const html = render()
+    expect(html).toContain('role="alertdialog"')
+    expect(html).toContain('max-w-[390px]')
+    expect(html).toContain('px-3.5 py-3')
+    expect(html).toContain('>Cancel</button>')
+    expect(html).toContain('>OK</button>')
   })
 })

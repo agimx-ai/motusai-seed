@@ -9,13 +9,6 @@
     "loadingMore": "正在加载更多…",
     "listSeparator": "、"
   },
-  "releaseNotes": {
-    "label": "更新内容",
-    "title": "{{appName}} {{version}} 更新内容",
-    "dismiss": "知道了",
-    "loadFailed": "更新内容暂时无法显示，请重新打开应用。",
-    "saveFailed": "暂时无法保存已读状态，请重试。"
-  },
   "window": {
     "titleBar": "窗口标题栏",
     "minimize": "最小化",

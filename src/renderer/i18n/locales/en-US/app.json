@@ -9,13 +9,6 @@
     "loadingMore": "Loading more…",
     "listSeparator": ", "
   },
-  "releaseNotes": {
-    "label": "What's New",
-    "title": "What's New in {{appName}} {{version}}",
-    "dismiss": "Got it",
-    "loadFailed": "What's new couldn't be displayed. Please reopen the app.",
-    "saveFailed": "Couldn't save your acknowledgement. Please try again."
-  },
   "window": {
     "titleBar": "Window title bar",
     "minimize": "Minimize",

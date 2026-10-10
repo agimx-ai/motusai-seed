@@ -100,11 +100,6 @@ export function pluginConfigurationKey(pluginId: string, configurationId: string
   return `${pluginId}:${configurationId}`
 }
 export type AppUpdateStatus = 'disabled' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error'
-export type ClientReleaseNotes = {
-  version: string
-  notes: { 'zh-CN': string; en: string }
-  unread: boolean
-}
 export type AppUpdateState = {
   status: AppUpdateStatus
   currentVersion: string
@@ -402,8 +397,6 @@ export type PluginDataResetResult = {
 }
 
 export type SeedApi = {
-  clientReleaseNotes(): Promise<ClientReleaseNotes>
-  acknowledgeClientReleaseNotes(version: string): Promise<void>
   listOrphanedPluginData(): Promise<string[]>
   resetOrphanedPluginData(pluginIds: string[]): Promise<PluginDataResetResult>
   snapshot(): Promise<SeedSnapshot>
@@ -456,8 +449,6 @@ export type SeedWindowApi = {
 }
 
 export const ipcChannels = {
-  clientReleaseNotes: 'seed:updates:release-notes',
-  acknowledgeClientReleaseNotes: 'seed:updates:acknowledge-release-notes',
   listOrphanedPluginData: 'seed:plugins:list-orphaned-data',
   resetOrphanedPluginData: 'seed:plugins:reset-orphaned-data',
   snapshot: 'seed:snapshot',
