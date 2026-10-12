@@ -4,6 +4,7 @@ import { utilityProcess, type UtilityProcess } from 'electron'
 import type { NativePluginRuntimeSnapshot, SeedPluginRuntimeDefinition, WorkerCommand } from '../shared/contracts'
 import type { NativePluginCommand, NativePluginEvent, NativePluginOperation } from '../shared/native-plugin-process'
 import type { HostDiagnosticEvent } from '../shared/diagnostic-trace'
+import { pluginErrorParams } from '../shared/plugin-error'
 
 type Configuration = Extract<WorkerCommand, { type: 'configure' }>
 type Pending = { resolve(value: unknown): void; reject(error: Error): void; timer: NodeJS.Timeout }
@@ -21,8 +22,8 @@ type Slot = {
   retryCount: number
 }
 
-function remoteError(message: string, code?: string) {
-  return Object.assign(new Error(message), { code: code || 'native_plugin_error' })
+function remoteError(message: string, code?: string, params?: Record<string, string | number | boolean>) {
+  return Object.assign(new Error(message), { code: code || 'native_plugin_error', params })
 }
 
 /** One Electron utility process per native plugin. Only Main may own or restart these processes. */
@@ -127,7 +128,7 @@ export class NativePluginManager {
       if (cancellationTimer) clearTimeout(cancellationTimer)
       slot.cancellationTimers.delete(event.requestId)
       if (event.ok) pending.resolve(event.result)
-      else pending.reject(remoteError(event.error || 'Native plugin call failed.', event.errorCode))
+      else pending.reject(remoteError(event.error || 'Native plugin call failed.', event.errorCode, event.errorParams))
       return
     }
     if (event.type === 'host.invoke') {
@@ -137,7 +138,8 @@ export class NativePluginManager {
           if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: true, result } satisfies NativePluginCommand)
         } catch (error) {
           if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: false,
-            error: error instanceof Error ? error.message : String(error), errorCode: 'native_broker_error' } satisfies NativePluginCommand)
+            error: error instanceof Error ? error.message : String(error), errorCode: 'native_broker_error',
+            errorParams: pluginErrorParams(error) } satisfies NativePluginCommand)
         }
         return
       }
@@ -161,6 +163,7 @@ export class NativePluginManager {
         if (!this.onDiagnostic) this.onFailure(packageId, 'native.host.invoke.failed', error instanceof Error ? error : new Error(String(error)))
         if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: false,
           error: error instanceof Error ? error.message : String(error),
+          errorParams: pluginErrorParams(error),
           errorCode: error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
             ? String((error as { code: string }).code) : 'native_broker_error' } satisfies NativePluginCommand)
       }

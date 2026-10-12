@@ -14,13 +14,13 @@ export type NativePluginCommand =
   | { type: 'start'; plugin: SeedPluginRuntimeDefinition; configuration: Extract<WorkerCommand, { type: 'configure' }> }
   | { type: 'call'; requestId: string; operation: NativePluginOperation }
   | { type: 'cancel'; requestId: string }
-  | { type: 'host.result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string }
+  | { type: 'host.result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string; errorParams?: Record<string, string | number | boolean> }
   | { type: 'stop' }
 
 export type NativePluginEvent =
   | { type: 'ready'; snapshot: NativePluginRuntimeSnapshot }
   | { type: 'snapshot'; snapshot: NativePluginRuntimeSnapshot }
-  | { type: 'result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string }
+  | { type: 'result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string; errorParams?: Record<string, string | number | boolean> }
   | { type: 'host.invoke'; requestId: string; service: string; arguments: Record<string, unknown>; trace?: DiagnosticTraceContext }
   | { type: 'diagnostic'; event: string; message: string; error_name?: string; error_stack?: string }
   | { type: 'host.diagnostic'; entry: HostDiagnosticEvent }

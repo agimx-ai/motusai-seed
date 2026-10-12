@@ -39,6 +39,19 @@ import { ConnectorManager } from './connector-manager'
 describe('ConnectorManager', () => {
   beforeEach(() => { state.children.length = 0 })
 
+  it('preserves parameters returned by the capability router', async () => {
+    const manager = new ConnectorManager('Seed', (event) => {
+      if (event.type === 'host.invoke') manager.send({ type: 'host.result', requestId: event.requestId, ok: true, result: null })
+    })
+    manager.start()
+    const pending = manager.invokeNativeCapability('com.example.consumer', { capability: 'probe', method: 'echo', arguments: {} }, [])
+    const command = state.children[0]!.messages.find((message) => message.type === 'native.capability.invoke')!
+    state.children[0]!.emit('message', { type: 'native.capability.result', requestId: command.requestId, ok: false,
+      error: 'Failure: permission denied', errorCode: 'probe_failed', errorParams: { detail: 'permission denied' } } satisfies WorkerEvent)
+    await expect(pending).rejects.toMatchObject({ code: 'probe_failed', params: { detail: 'permission denied' } })
+    await manager.stop()
+  })
+
   it('keeps the closing child available for host responses without starting another connector', async () => {
     const onExit = vi.fn()
     let manager!: ConnectorManager

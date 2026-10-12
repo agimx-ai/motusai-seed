@@ -19,6 +19,7 @@ function runtime(name, entryPath) {
     sidecars: [], permissions: name === 'one' ? ['local.http-api', 'network.connect.loopback'] : ['cloud.relay'],
     consumes: name === 'one' ? [{ capability: 'probe_two', methods: ['echo'] }] : [],
     capabilities: [{ id: `probe_${name}`, version: 1, exposure: 'terminal',
+      errors: { probe_failed: { en_US: 'Probe failed: {detail}', zh_Hans: '探针失败：{detail}' } },
       methods: [{ name: 'echo', risk: 'read' }, { name: 'crash', risk: 'read' },
         ...(name === 'one' ? [{ name: 'delegate', risk: 'read' }] : [])] }],
   }
@@ -61,6 +62,7 @@ app.whenReady().then(async () => {
           invoke: async (method, request) => {
             if (method === 'crash') process.exit(7)
             if (method === 'delegate') return await ctx.capabilities.invoke({ capability: 'probe_two', method: 'echo', arguments: request.arguments })
+            if (request.arguments.error_case) throw Object.assign(new Error('Raw permission failure'), { code: 'probe_failed', params: { detail: 'permission denied' } })
             if (request.arguments.billing_case) return (await ctx.invokeHost('seed.cloud.relay', {
               capability_id: 'probe_two', method: 'echo', payload: request.arguments,
             })).payload
@@ -105,6 +107,13 @@ app.whenReady().then(async () => {
     const delegated = await router.invoke('probe_one', 'delegate', { request_id: 'delegated',
       arguments: { cross_process: true } })
     if (delegated?.cross_process !== true) throw new Error('Cross-plugin capability routing failed.')
+    try {
+      await router.invoke('probe_one', 'delegate', { request_id: 'delegated-error', arguments: { error_case: true } })
+      throw new Error('Expected a delegated plugin failure.')
+    } catch (error) {
+      if (error.code !== 'probe_failed' || error.params?.detail !== 'permission denied'
+        || error.message !== 'Probe failed: permission denied') throw error
+    }
     const billed = await Promise.all(['charge-one', 'charge-two'].map((id) => router.withBillingReceipt(() =>
       router.invoke('probe_one', 'delegate', { request_id: id, arguments: { billing_case: id } }))))
     for (const [index, response] of billed.entries()) {

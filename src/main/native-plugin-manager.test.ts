@@ -52,7 +52,7 @@ describe('NativePluginManager', () => {
     state.children.length = 0
     const failures: Array<{ event: string; message: string }> = []
     const manager = new NativePluginManager('Seed', async () => {
-      throw Object.assign(new Error('积分不足'), { code: 'insufficient_credits' })
+      throw Object.assign(new Error('积分不足'), { code: 'insufficient_credits', params: { required: 2 } })
     }, () => undefined, (_id, event, error) => failures.push({ event, message: error.message }),
     () => undefined, () => undefined)
     try {
@@ -64,8 +64,23 @@ describe('NativePluginManager', () => {
       expect(failures).toContainEqual({ event: 'native.host.invoke.failed', message: '积分不足' })
       expect(state.children[0]!.messages).toContainEqual({
         type: 'host.result', requestId: 'billing-request', ok: false,
-        error: '积分不足', errorCode: 'insufficient_credits',
+        error: '积分不足', errorCode: 'insufficient_credits', errorParams: { required: 2 },
       })
+    } finally { await manager.stopAll() }
+  })
+
+  it('preserves error parameters returned by a native plugin', async () => {
+    state.children.length = 0
+    const manager = new NativePluginManager('Seed', async () => null, () => undefined,
+      () => undefined, () => undefined, () => undefined)
+    try {
+      await manager.start(plugin('error'), configuration)
+      const pending = manager.call('com.example.error', { type: 'invoke', capability: 'probe', method: 'hang',
+        invocation: { request_id: 'failure', arguments: {} }, chain: [] }, 'failure')
+      await vi.waitFor(() => expect(state.children[0]!.messages.some((item) => item.type === 'call')).toBe(true))
+      state.children[0]!.emit('message', { type: 'result', requestId: 'failure', ok: false,
+        error: 'Failure: permission denied', errorCode: 'probe_failed', errorParams: { detail: 'permission denied' } } satisfies NativePluginEvent)
+      await expect(pending).rejects.toMatchObject({ code: 'probe_failed', params: { detail: 'permission denied' } })
     } finally { await manager.stopAll() }
   })
 

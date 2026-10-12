@@ -46,6 +46,7 @@ import { SeedDistributionEvents } from './distribution-events'
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization'
 import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh'
 import { PluginDataCleaner } from './plugin-data-cleaner'
+import { pluginErrorParams } from '../shared/plugin-error'
 
 const entitlementResponseSchema = z.object({
   items: z.array(z.object({
@@ -620,6 +621,7 @@ export class SeedRuntime {
           requestId: event.requestId,
           ok: false,
           error: error instanceof Error ? error.message : String(error),
+          errorParams: pluginErrorParams(error),
           errorCode: error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
             ? String((error as { code: string }).code)
             : 'host_invoke_error',

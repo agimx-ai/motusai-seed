@@ -46,13 +46,29 @@ describe('seed.screen v1', () => {
     electron.getSources.mockResolvedValue([{ display_id: '7', thumbnail: { isEmpty: () => true } }])
     await expect(service.invoke({ version: 1, operation: 'capture' }, permissions)).rejects.toMatchObject({ code: 'screen_capture_unavailable' })
   })
-  it('rejects denied Screen Recording access and oversized captures', async () => {
-    if (process.platform === 'darwin') {
-      electron.getMediaAccessStatus.mockReturnValue('denied')
-      await expect(service.invoke({ version: 1, operation: 'capture' }, permissions)).rejects.toMatchObject({ code: 'screen_permission_denied' })
-      expect(electron.getSources).not.toHaveBeenCalled()
+  it.skipIf(process.platform !== 'darwin')('requests capture before checking permission, then explains how to authorize the running app', async () => {
+    electron.getMediaAccessStatus.mockReturnValue('denied')
+    const result = service.invoke({ version: 1, operation: 'capture' }, permissions)
+    await expect(result).rejects.toMatchObject({ code: 'screen_permission_denied', message: expect.stringContaining('System Settings > Privacy & Security') })
+    expect(electron.getSources).toHaveBeenCalledOnce()
+    expect(electron.getSources.mock.invocationCallOrder[0]).toBeLessThan(electron.getMediaAccessStatus.mock.invocationCallOrder[0]!)
+    await expect(result).rejects.toThrow('use + to add the running app')
+  })
+  it.skipIf(process.platform !== 'darwin')('allows authorization during capture and explains OS capture rejections', async () => {
+    electron.getMediaAccessStatus.mockReturnValue('denied')
+    electron.getSources.mockImplementationOnce(async () => {
       electron.getMediaAccessStatus.mockReturnValue('granted')
-    }
+      return [{ display_id: '7', thumbnail: { isEmpty: () => false, toPNG: () => Buffer.from('png'), getSize: () => ({ width: 1, height: 1 }) } }]
+    })
+    await expect(service.invoke({ version: 1, operation: 'capture' }, permissions)).resolves.toMatchObject({ mime_type: 'image/png' })
+    electron.getMediaAccessStatus.mockReturnValue('denied')
+    electron.getSources.mockRejectedValueOnce(new Error('OS permission denied'))
+    await expect(service.invoke({ version: 1, operation: 'capture' }, permissions)).rejects.toMatchObject({ code: 'screen_permission_denied' })
+    electron.getMediaAccessStatus.mockReturnValue('granted')
+    electron.getSources.mockRejectedValueOnce(new Error('OS capture failed'))
+    await expect(service.invoke({ version: 1, operation: 'capture' }, permissions)).rejects.toThrow('OS capture failed')
+  })
+  it('rejects oversized captures', async () => {
     electron.getSources.mockResolvedValue([{ display_id: '7', thumbnail: { isEmpty: () => false, toPNG: () => Buffer.alloc(16 * 1024 * 1024 + 1) } }])
     await expect(service.invoke({ version: 1, operation: 'capture' }, permissions)).rejects.toMatchObject({ code: 'screen_capture_too_large' })
   })

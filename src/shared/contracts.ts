@@ -564,7 +564,7 @@ export type WorkerCommand =
     plugins: SeedPluginRuntimeDefinition[]
   }
   | { type: 'unconfigure' }
-  | { type: 'host.result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string }
+  | { type: 'host.result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string; errorParams?: Record<string, string | number | boolean> }
   | { type: 'native.runtime.updated'; packageId: string; snapshot: NativePluginRuntimeSnapshot | null }
   | { type: 'native.capability.list'; requestId: string; packageId: string }
   | { type: 'native.capability.invoke'; requestId: string; packageId: string; invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation; chain: string[] }
@@ -581,7 +581,7 @@ export type WorkerEvent =
   | { type: 'plugin.runtime.failed'; packageId: string; message: string }
   | { type: 'plugin.contributions.changed'; packageId: string; configurations: import('./plugin-manifest').SeedPluginConfiguration[]; managementViews: import('./plugin-manifest').SeedPluginManagementView[] }
   | { type: 'host.invoke'; requestId: string; service: string; arguments: Record<string, unknown>; trace?: import('./diagnostic-trace').DiagnosticTraceContext }
-  | { type: 'native.capability.result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string }
+  | { type: 'native.capability.result'; requestId: string; ok: boolean; result?: unknown; error?: string; errorCode?: string; errorParams?: Record<string, string | number | boolean> }
   | { type: 'plugin.management.result'; requestId: string; ok: boolean; result?: unknown; error?: string }
   | { type: 'plugin.configuration.options.result'; requestId: string; ok: boolean; options?: PluginConfigurationOption[]; error?: string }
   | { type: 'plugin.configuration.profile-statuses.result'; requestId: string; ok: boolean; statuses?: PluginConfigurationProfileStatus[]; error?: string }

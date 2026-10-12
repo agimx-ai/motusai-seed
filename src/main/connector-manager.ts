@@ -34,7 +34,7 @@ export class ConnectorManager {
         this.pendingNativeCapabilities.delete(event.requestId)
         clearTimeout(pending.timer)
         if (event.ok) pending.resolve(event.result)
-        else pending.reject(Object.assign(new Error(event.error || '插件能力调用失败。'), { code: event.errorCode }))
+        else pending.reject(Object.assign(new Error(event.error || '插件能力调用失败。'), { code: event.errorCode, params: event.errorParams }))
         return
       }
       if (event.type === 'plugin.management.result') {

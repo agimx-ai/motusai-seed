@@ -5,6 +5,7 @@ import { ConnectorCommandDispatcher } from './command-dispatcher'
 import { SeedLocalHttpGateway, seedLocalApiPort } from './local-http-gateway'
 import { SeedPluginHost } from './plugin-host'
 import { GlobalTaskActivityObserver } from './global-task-activity-observer'
+import { pluginErrorParams } from '../shared/plugin-error'
 
 type ParentPort = {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -102,6 +103,7 @@ async function handleCommand(command: WorkerCommand) {
     } catch (error) {
       emit({ type: 'native.capability.result', requestId: command.requestId, ok: false,
         error: error instanceof Error ? error.message : String(error),
+        errorParams: pluginErrorParams(error),
         errorCode: error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
           ? String((error as { code: string }).code) : 'native_capability_error' })
     }
@@ -219,8 +221,9 @@ async function handleCommand(command: WorkerCommand) {
     pendingHostInvocations.delete(command.requestId)
     if (command.ok) pending.resolve(command.result)
     else {
-      const error = new Error(command.error || '主进程能力调用失败。') as Error & { code?: string }
-      error.code = command.errorCode || 'host_invoke_error'
+      const error = Object.assign(new Error(command.error || '主进程能力调用失败。'), {
+        code: command.errorCode || 'host_invoke_error', params: command.errorParams,
+      })
       pending.reject(error)
     }
     return
