@@ -280,6 +280,24 @@ describe('LocalFileService', () => {
     expect(await readFile(join(root, 'generated', 'reports', 'ready.txt'), 'utf8')).toBe('ready')
   })
 
+  it.each(['report.md', '流程.canvas'])('writes %s after explicitly creating missing nested parents', async (name) => {
+    const directory = '验收 目录/多级/交付'
+    const path = `${directory}/${name}`
+    const content = name.endsWith('.canvas')
+      ? JSON.stringify({ nodes: [{ id: 'start', type: 'text', text: '开始', x: 0, y: 0, width: 240, height: 80 }], edges: [] })
+      : '# 验收通过'
+    await expect(service.execute('write', filesystemRoot.id, { path, content, create_only: true }))
+      .rejects.toMatchObject({ code: 'parent_missing' })
+    await expect(service.execute('mkdir', filesystemRoot.id, { path: directory }))
+      .resolves.toEqual({ path: directory, created: true })
+    await service.execute('write', filesystemRoot.id, { path, content, create_only: true })
+    await expect(service.execute('mkdir', filesystemRoot.id, { path: directory }))
+      .resolves.toEqual({ path: directory, created: false })
+    expect(await readFile(join(root, path), 'utf8')).toBe(content)
+    const snapshot = await service.execute('read', filesystemRoot.id, { path }) as { content: string }
+    expect(snapshot.content).toBe(content)
+  })
+
   it('moves deleted files to the system trash after creating an internal backup', async () => {
     await writeFile(join(root, 'note.txt'), 'keep me recoverable')
     const canonicalRoot = await realpath(root)
