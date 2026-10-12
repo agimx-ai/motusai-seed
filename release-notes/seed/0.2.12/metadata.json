@@ -1,0 +1,9 @@
+{
+  "version": "0.2.12",
+  "documentation": {
+    "pages": [
+      "/docs/plugins/permissions"
+    ],
+    "screenshots": false
+  }
+}
