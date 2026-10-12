@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { SeedInvocation } from '@motus-ai/seed-sdk'
 import type { FilesystemRoot } from '../../../shared/contracts'
 import { LocalFileError, LocalFileService, type LocalFileMethod, type TrashItem } from './file-service'
 
-const fileMethods = ['list', 'stat', 'search', 'find', 'grep', 'read', 'read_binary', 'mkdir', 'write', 'edit', 'move', 'delete'] as const
+const fileMethods = ['list', 'stat', 'search', 'find', 'grep', 'read', 'read_binary', 'mkdir', 'write', 'write_binary', 'edit', 'move', 'delete'] as const
 
 export type FileBrokerConfiguration = {
   backup_root: string
@@ -106,12 +106,22 @@ export class FileBroker {
         permissions: root.permissions,
       }))
     }
-    const rootId = String(request.arguments.root_id || '')
+    let args = request.arguments
+    // Binary producers can use an absolute destination without discovering a root via another plugin.
+    if (method === 'write_binary' && !args.root_id && typeof args.path === 'string' && isAbsolute(args.path)) {
+      const path = args.path
+      const root = value.roots.find((candidate) => {
+        const boundary = relative(candidate.rootPath, path)
+        return boundary !== '..' && !boundary.startsWith(`..${sep}`) && !isAbsolute(boundary)
+      })
+      if (root) args = { ...args, root_id: root.id, path: relative(root.rootPath, path) }
+    }
+    const rootId = String(args.root_id || '')
     if (!rootId || !fileMethods.includes(method as typeof fileMethods[number])) {
       throw new LocalFileError('invalid_arguments', '文件能力请求缺少有效的 root_id 或方法。')
     }
-    const result = await this.fileService(value).execute(method as LocalFileMethod, rootId, request.arguments)
-    return withDisplayPaths(value.roots, method, rootId, request.arguments, result)
+    const result = await this.fileService(value).execute(method as LocalFileMethod, rootId, args)
+    return withDisplayPaths(value.roots, method, rootId, args, result)
   }
 
   async resolveProcessDirectory(rootId: string, relativePath: unknown, permission: 'read' | 'write') {

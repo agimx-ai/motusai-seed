@@ -61,6 +61,44 @@ describe('LocalFileService', () => {
       .rejects.toMatchObject({ code: 'destination_exists' })
   })
 
+  it('writes exact binary bytes, hashes and backs up revision-checked replacements', async () => {
+    const bytes = Buffer.from([0, 1, 128, 254, 255])
+    const created = await service.execute('write_binary', filesystemRoot.id, {
+      path: 'image.png', content_base64: bytes.toString('base64'), create_only: true,
+    }) as { sha256: string }
+    expect(await readFile(join(root, 'image.png'))).toEqual(bytes)
+    expect(created.sha256).toBe(createHash('sha256').update(bytes).digest('hex'))
+    const replacement = Buffer.from([0, 255])
+    const updated = await service.execute('write_binary', filesystemRoot.id, {
+      path: 'image.png', content_base64: replacement.toString('base64'), expected_sha256: created.sha256,
+    }) as { backup_id: string }
+    expect(await readFile(join(root, 'image.png'))).toEqual(replacement)
+    expect(await readFile(join(backupRoot, filesystemRoot.id, updated.backup_id))).toEqual(bytes)
+    await expect(service.execute('write_binary', filesystemRoot.id, {
+      path: 'image.png', content_base64: bytes.toString('base64'), expected_sha256: created.sha256,
+    })).rejects.toMatchObject({ code: 'content_conflict' })
+  })
+
+  it('applies binary limits, path safety and atomic create-only semantics', async () => {
+    for (const content_base64 of ['@@@', 'YQ', 'YR==', 'YQ==\n']) {
+      await expect(service.execute('write_binary', filesystemRoot.id, { path: 'bad.png', content_base64 }))
+        .rejects.toMatchObject({ code: 'invalid_arguments' })
+    }
+    await expect(service.execute('write_binary', filesystemRoot.id, { path: 'big.png', content_base64: 'A'.repeat(4 * Math.ceil(16 * 1024 * 1024 / 3) + 4) }))
+      .rejects.toMatchObject({ code: 'file_too_large' })
+    const args = { content_base64: 'AA==', create_only: true }
+    await expect(service.execute('write_binary', filesystemRoot.id, { ...args, path: '.ssh/secret.png' })).rejects.toMatchObject({ code: 'sensitive_path' })
+    await writeFile(join(root, 'original.png'), 'keep')
+    await symlink(join(root, 'original.png'), join(root, 'link.png'))
+    await expect(service.execute('write_binary', filesystemRoot.id, { ...args, create_only: false, path: 'link.png' })).rejects.toMatchObject({ code: 'symlink_forbidden' })
+    const results = await Promise.allSettled(Array.from({ length: 4 }, () => service.execute('write_binary', filesystemRoot.id, { ...args, path: 'race.png' })))
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    for (const result of results.filter((item) => item.status === 'rejected')) expect(result.reason.code).toBe('destination_exists')
+    expect((await readdir(root)).filter((path) => path.endsWith('.motusai-tmp'))).toEqual([])
+    service.replaceRoots([{ ...filesystemRoot, permissions: ['read'] }])
+    await expect(service.execute('write_binary', filesystemRoot.id, { ...args, path: 'denied.png' })).rejects.toMatchObject({ code: 'permission_denied' })
+  })
+
   it('serializes revision-checked writes so only one concurrent editor wins', async () => {
     await writeFile(join(root, 'shared.json'), 'original')
     const revision = createHash('sha256').update('original').digest('hex')

@@ -1,9 +1,10 @@
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { SeedInvocation } from '@motus-ai/seed-sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FileBroker, filesystemRoots } from './index'
+import { fileBrokerPermissions } from './permissions'
 
 describe('FileBroker', () => {
   let root = ''
@@ -35,6 +36,19 @@ describe('FileBroker', () => {
       arguments: { root_id: filesystemRoot.id, path: relative(filesystemRoot.rootPath, join(root, path)) },
     }
   }
+
+  it('supports absolute binary destinations without granting root discovery or overwriting files', async () => {
+    const path = join(root, 'capture.png')
+    const request = { request_id: 'binary', arguments: { path, content_base64: 'AP/+', create_only: true } }
+    expect(fileBrokerPermissions('write_binary')).toEqual(['resources.directory.write'])
+    expect(fileBrokerPermissions('unknown')).toBeNull()
+    const saved = await broker.invoke('write_binary', request) as { display_path: string }
+    expect(saved.display_path).toBe(path)
+    expect(await readFile(path)).toEqual(Buffer.from([0, 255, 254]))
+    await expect(broker.invoke('write_binary', request)).rejects.toMatchObject({ code: 'destination_exists' })
+    await expect(broker.invoke('write_binary', { request_id: 'relative', arguments: { path: 'capture.png', content_base64: 'AA==' } }))
+      .rejects.toMatchObject({ code: 'invalid_arguments' })
+  })
 
   it('does not expose an absolute display path when reading binary bytes', async () => {
     await writeFile(join(root, 'candidate.pdf'), Buffer.from([0, 1, 2, 3]))

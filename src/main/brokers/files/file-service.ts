@@ -19,7 +19,7 @@ import { minimatch } from 'minimatch'
 import { z } from 'zod'
 import type { FilesystemRoot } from '../../../shared/contracts'
 
-export type LocalFileMethod = 'list' | 'stat' | 'search' | 'find' | 'grep' | 'read' | 'read_binary' | 'mkdir' | 'write' | 'edit' | 'move' | 'delete'
+export type LocalFileMethod = 'list' | 'stat' | 'search' | 'find' | 'grep' | 'read' | 'read_binary' | 'mkdir' | 'write' | 'write_binary' | 'edit' | 'move' | 'delete'
 export type TrashItem = (path: string) => Promise<void>
 const relativePathSchema = z.string().max(2_048).transform((value, context) => {
   const normalized = value.replaceAll('\\', '/').replace(/^\.\//, '')
@@ -210,6 +210,7 @@ export class LocalFileService {
       case 'read_binary': return this.readBinary(rootId, args)
       case 'mkdir': return this.mkdir(rootId, args)
       case 'write': return this.write(rootId, args)
+      case 'write_binary': return this.write(rootId, args, true)
       case 'edit': return this.edit(rootId, args)
       case 'move': return this.move(rootId, args)
       case 'delete': return this.delete(rootId, args)
@@ -458,11 +459,23 @@ export class LocalFileService {
     return { path: relativePath, created }
   }
 
-  private async write(rootId: string, args: Record<string, unknown>) {
+  private async write(rootId: string, args: Record<string, unknown>, binary = false) {
+    let content: Buffer
+    if (binary) {
+      const encoded = asString(args.content_base64, 'content_base64')
+      if (encoded.length > 4 * Math.ceil(maxWriteBytes / 3)) throw new LocalFileError('file_too_large', '单次写入内容不能超过 16 MiB。')
+      content = Buffer.from(encoded, 'base64')
+      if (content.toString('base64') !== encoded) throw new LocalFileError('invalid_arguments', 'content_base64 必须是标准 Base64。')
+    } else {
+      const text = asString(args.content, 'content')
+      if (Buffer.byteLength(text) > maxWriteBytes) throw new LocalFileError('file_too_large', '单次写入内容不能超过 16 MiB。')
+      content = Buffer.from(text, 'utf8')
+    }
+    if (content.length > maxWriteBytes) throw new LocalFileError('file_too_large', '单次写入内容不能超过 16 MiB。')
     const root = this.root(rootId, 'write')
     const location = await this.target(root, args.path, { existing: false })
     const previous = this.writes.get(location.target) ?? Promise.resolve()
-    const operation = previous.catch(() => undefined).then(() => this.writeSnapshot(root, location, args))
+    const operation = previous.catch(() => undefined).then(() => this.writeSnapshot(root, location, args, content))
     this.writes.set(location.target, operation)
     try {
       return await operation
@@ -471,9 +484,7 @@ export class LocalFileService {
     }
   }
 
-  private async writeSnapshot(root: FilesystemRoot, location: { target: string; relativePath: string }, args: Record<string, unknown>) {
-    const content = asString(args.content, 'content')
-    if (Buffer.byteLength(content) > maxWriteBytes) throw new LocalFileError('file_too_large', '单次写入内容不能超过 16 MiB。')
+  private async writeSnapshot(root: FilesystemRoot, location: { target: string; relativePath: string }, args: Record<string, unknown>, content: Buffer) {
     if (args.create_only !== undefined && typeof args.create_only !== 'boolean') throw new LocalFileError('invalid_arguments', 'create_only 必须是布尔值。')
     const current = await lstat(location.target).catch(() => null)
     if (current && args.create_only === true) throw new LocalFileError('destination_exists', '目标文件已经存在，拒绝覆盖。')

@@ -4,6 +4,7 @@ import { extname, join, relative, resolve, sep } from 'node:path'
 import { BrowserWindow, ipcMain, session } from 'electron'
 import type { SeedInvocation } from '@motus-ai/seed-sdk'
 import type { SeedPluginRuntimeDefinition } from '../shared/contracts'
+import { fileBrokerPermissions } from './brokers/files/permissions'
 
 const pluginHostPath = 'src/renderer/hosts/plugin/index.html'
 const pluginHostProtocolUrl = `seed-plugin://runtime/host/${pluginHostPath}`
@@ -43,7 +44,7 @@ function contentType(path: string) {
   }
 }
 
-function requiredPermissions(service: string, argumentsValue: Record<string, unknown>) {
+export function requiredPermissions(service: string, argumentsValue: Record<string, unknown>) {
   if (service === 'seed.plugin-authorization') {
     if (argumentsValue.operation === 'cancel') return []
     const request = argumentsValue.request as { standard?: unknown } | undefined
@@ -60,6 +61,7 @@ function requiredPermissions(service: string, argumentsValue: Record<string, unk
   if (service === 'seed.shell.open-path') return ['shell.open-path']
   if (service === 'seed.process') return ['process.sidecar']
   if (service === 'seed.python') return ['process.python']
+  if (service === 'seed.screen') return ['system.screen-capture']
   if (service === 'seed.audio') {
     const operation = String(argumentsValue.operation || '')
     if (['capture.start', 'capture.pause', 'capture.resume', 'capture.segment', 'capture.stop', 'capture.cancel', 'capture.interrupt', 'capture.status', 'capture.consume', 'capture.sessions', 'capture.read', 'capture.ack', 'capture.discard'].includes(operation)) {
@@ -69,10 +71,7 @@ function requiredPermissions(service: string, argumentsValue: Record<string, unk
   }
   if (service !== 'seed.broker.files.invoke') return null
   const method = String(argumentsValue.method || '')
-  if (['roots', 'list', 'stat', 'search', 'find', 'grep', 'read', 'read_binary'].includes(method)) return ['resources.directory.read']
-  if (method === 'edit') return ['resources.directory.read', 'resources.directory.write']
-  if (['mkdir', 'write', 'move', 'delete'].includes(method)) return ['resources.directory.write']
-  return null
+  return fileBrokerPermissions(method)
 }
 
 /** Executes installed browser bundles in a hidden, Node-free Electron sandbox. */

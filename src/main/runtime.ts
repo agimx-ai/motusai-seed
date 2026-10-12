@@ -25,6 +25,8 @@ import {
   updateCloudUser,
 } from './cloud-auth'
 import { FileBroker } from './brokers/files'
+import { fileBrokerPermissions } from './brokers/files/permissions'
+import { ScreenCaptureService } from './screen-capture-service'
 import { AudioService } from './audio-service'
 import { brokerPluginConfigurationDeclaration, initialPluginConfiguration, normalizePluginConfiguration, pluginConfigurationState, reconcilePluginConfigurationDefaultGroup } from './plugin-configuration'
 import { SeedPluginSandboxSupervisor } from './plugin-sandbox-host'
@@ -105,6 +107,7 @@ export class SeedRuntime {
   private readonly consumedLocalClientApprovalIds = new Map<string, number>()
   private readonly pluginInstaller: SeedPluginInstaller
   private readonly fileBroker: FileBroker
+  private readonly screenCaptureService = new ScreenCaptureService()
   private readonly audioService: AudioService
   private readonly sidecarProcessService: SidecarProcessService
   private readonly pythonEnvironmentService: PythonEnvironmentService
@@ -210,6 +213,7 @@ export class SeedRuntime {
     )],
     ['seed.shell.open-path', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.shell.open-path', argumentsValue)],
     ['seed.audio', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.audio', argumentsValue)],
+    ['seed.screen', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.screen', argumentsValue)],
     ['seed.configuration', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.configuration', argumentsValue)],
     ['seed.management.text', async (argumentsValue) => await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.management.text', argumentsValue)],
     ['seed.local-client.authorize', async (argumentsValue) => {
@@ -1807,11 +1811,21 @@ export class SeedRuntime {
     }
     if (service === 'seed.broker.files.invoke') {
       const method = String(argumentsValue.method || '')
+      const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)
+      const permissions = fileBrokerPermissions(method)
+      if (!plugin || !permissions || permissions.some((permission) => !plugin.permissions.includes(permission))) {
+        throw Object.assign(new Error('插件未声明文件操作所需权限。'), { code: 'broker_permission_denied' })
+      }
       const request = argumentsValue.request && typeof argumentsValue.request === 'object'
         ? argumentsValue.request as import('@motus-ai/seed-sdk').SeedInvocation
         : null
       if (!method || !request) throw new Error('文件 Broker 请求无效。')
       return await this.fileBroker.invoke(method, request)
+    }
+    if (service === 'seed.screen') {
+      const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)
+      const { package_id: _packageId, ...request } = argumentsValue
+      return await this.screenCaptureService.invoke(request, plugin?.permissions ?? [])
     }
     if (service === 'seed.shell.open-path') {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)

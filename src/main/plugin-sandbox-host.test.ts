@@ -51,7 +51,7 @@ vi.mock('electron', async () => {
   }
 })
 
-import { SeedPluginSandboxSupervisor } from './plugin-sandbox-host'
+import { SeedPluginSandboxSupervisor, requiredPermissions } from './plugin-sandbox-host'
 
 function plugin(name: string): SeedPluginRuntimeDefinition {
   return { package_id: `com.example.${name}`, version: '1.0.0', runtime_kind: 'sandboxed-web',
@@ -77,5 +77,17 @@ describe('SeedPluginSandboxSupervisor', () => {
       state.windows.length = 0
       state.handled.clear()
     }
+  })
+})
+
+describe('sandbox Host service permissions', () => {
+  it('requires screen capture for the generic screen service', () => {
+    expect(requiredPermissions('seed.screen', { version: 1, operation: 'capture' })).toEqual(['system.screen-capture'])
+    expect(requiredPermissions('seed.screen', { version: 1, operation: 'list_displays' })).toEqual(['system.screen-capture'])
+  })
+  it('requires write rather than read permission for binary output', () => {
+    expect(requiredPermissions('seed.broker.files.invoke', { method: 'write_binary' })).toEqual(['resources.directory.write'])
+    expect(requiredPermissions('seed.broker.files.invoke', { method: 'read_binary' })).toEqual(['resources.directory.read'])
+    expect(requiredPermissions('seed.broker.files.invoke', { method: 'unknown' })).toBeNull()
   })
 })
