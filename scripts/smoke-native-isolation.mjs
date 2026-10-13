@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { NativePluginManager } from '../dist/electron/main/native-plugin-manager.js'
 import { SeedPluginHost } from '../dist/electron/connector/plugin-host.js'
+import { invokeLocalCreditRelay } from '../dist/electron/main/local-credit-relay.js'
 
 const root = await mkdtemp(join(tmpdir(), 'seed-native-isolation-'))
 app.setPath('userData', root)
@@ -20,7 +21,9 @@ function runtime(name, entryPath) {
     consumes: name === 'one' ? [{ capability: 'probe_two', methods: ['echo'] }] : [],
     capabilities: [{ id: `probe_${name}`, version: 1, exposure: 'terminal',
       errors: { probe_failed: { en_US: 'Probe failed: {detail}', zh_Hans: '探针失败：{detail}' } },
-      methods: [{ name: 'echo', risk: 'read' }, { name: 'crash', risk: 'read' },
+      methods: [{ name: 'echo', risk: 'read', ...(name === 'two' ? {
+        annotations: { 'billing.settlement': 'local_relay', 'billing.product': 'iq.generate' },
+      } : {}) }, { name: 'crash', risk: 'read' },
         ...(name === 'one' ? [{ name: 'delegate', risk: 'read' }] : [])] }],
   }
 }
@@ -62,6 +65,11 @@ app.whenReady().then(async () => {
           invoke: async (method, request) => {
             if (method === 'crash') process.exit(7)
             if (method === 'delegate') return await ctx.capabilities.invoke({ capability: 'probe_two', method: 'echo', arguments: request.arguments })
+            if (request.arguments.local_outcome) return await ctx.invokeHost('seed.local.relay', {
+              capability_id: 'probe_two', method: 'echo',
+              call_id: '11111111-1111-4111-8111-111111111111', task_id: '22222222-2222-4222-8222-222222222222',
+              outcome: request.arguments.local_outcome,
+            })
             if (request.arguments.error_case) throw Object.assign(new Error('Raw permission failure'), { code: 'probe_failed', params: { detail: 'permission denied' } })
             if (request.arguments.billing_case) {
               const response = await ctx.invokeHost('seed.cloud.relay', {
@@ -81,6 +89,12 @@ app.whenReady().then(async () => {
     manager = new NativePluginManager('Seed Smoke', async (packageId, service, args) => {
       if (service === 'seed.native.capabilities.list') return router.consumedCapabilitiesByPackage(packageId)
       if (service === 'seed.native.capabilities.invoke') return router.invokeConsumedByPackage(packageId, args.invocation, args.chain)
+      if (service === 'seed.local.relay') return invokeLocalCreditRelay({
+        prepare: async () => { throw new Error('Settlement must not prepare a new call.') },
+        localRelay: async (input) => ({ billable: true, call_id: input.call_id, amount: 100, price_revision: 1,
+          state: input.outcome === 'started' ? 'executing' : input.outcome === 'succeeded' ? 'settled' : 'released',
+          charged_amount: input.outcome === 'started' ? null : input.outcome === 'succeeded' ? 100 : 0 }),
+      }, entries.find((plugin) => plugin.package_id === packageId), service, args)
       if (service === 'seed.cloud.relay') return { payload: args.payload,
         ...(args.payload.unknown_billing ? {} : { billing: { state: 'settled', call_id: args.payload.billing_case, charged_amount: 2 } }) }
       return undefined
@@ -126,6 +140,16 @@ app.whenReady().then(async () => {
         || response.billing.charges.length !== 1 || response.billing.charges[0].call_id !== id
         || response.billing.charges[0].charged_amount !== 2) {
         throw new Error(`Cross-process billing receipt was lost or duplicated: ${JSON.stringify(response)}`)
+      }
+    }
+    for (const outcome of ['started', 'succeeded', 'cancelled']) {
+      const response = await router.withBillingReceipt(() => router.invoke('probe_one', 'delegate', {
+        request_id: `local-${outcome}`, arguments: { local_outcome: outcome },
+      }))
+      const expected = outcome === 'started' ? [] : [{ call_id: '11111111-1111-4111-8111-111111111111',
+        charged_amount: outcome === 'succeeded' ? 100 : 0 }]
+      if (response.billing.complete !== (outcome !== 'started') || JSON.stringify(response.billing.charges) !== JSON.stringify(expected)) {
+        throw new Error(`Local relay settlement receipt was lost: ${JSON.stringify(response)}`)
       }
     }
     for (const [id, args, expected] of [

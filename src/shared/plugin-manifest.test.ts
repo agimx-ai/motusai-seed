@@ -27,6 +27,15 @@ describe('capability billing settlement annotation', () => {
     expect(seedCapabilityMethodSchema.parse(method).annotations['billing.settlement']).toBe('cloud_relay')
   })
 
+  it('accepts local relay with a product and rejects templates, missing products and exemptions', () => {
+    const annotations = { 'billing.settlement': 'local_relay', 'billing.product': 'iq.generate' }
+    expect(seedCapabilityMethodSchema.parse({ ...method, annotations }).annotations).toEqual(annotations)
+    for (const invalid of [ { ...annotations, 'billing.relay_template': 'firecrawl_search' },
+      { 'billing.settlement': 'local_relay' }, { ...annotations, 'billing.exempt': true } ]) {
+      expect(seedCapabilityMethodSchema.safeParse({ ...method, annotations: invalid }).success).toBe(false)
+    }
+  })
+
   it('rejects unknown modes and contradictory billing exemption', () => {
     expect(seedCapabilityMethodSchema.safeParse({ ...method, annotations: { 'billing.settlement': 'local' } }).success).toBe(false)
     expect(seedCapabilityMethodSchema.safeParse({ ...method, annotations: {

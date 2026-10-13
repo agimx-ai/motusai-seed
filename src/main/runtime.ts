@@ -37,6 +37,7 @@ import { mascotTiming, remainingMascotRunningMs } from './mascot-timing'
 import { SeedUpdater } from './updater'
 import { CloudDiagnosticUploader } from './cloud-diagnostic-uploader'
 import { CreditBillingClient, relayBillingModelId } from './credit-billing'
+import { invokeLocalCreditRelay } from './local-credit-relay'
 import { ObservationStore, errorDetails } from './observation-store'
 import { validateLocalClientCapabilityApproval } from './local-client-capability-approval'
 import { SidecarProcessService } from './sidecar-process-service'
@@ -165,6 +166,10 @@ export class SeedRuntime {
     ['seed.cloud.models', async (argumentsValue) => await this.invokePluginBroker(
       String(argumentsValue.package_id || ''), 'seed.cloud.models', argumentsValue,
     )],
+    ...(['seed.local.relay.prepare', 'seed.local.relay'] as const).map((service) => [service,
+      async (argumentsValue: Record<string, unknown>) => this.invokePluginBroker(
+        String(argumentsValue.package_id || ''), service, argumentsValue,
+      )] as const),
     ['seed.plugin.diagnostic', async (argumentsValue) => {
       const packageId = String(argumentsValue.package_id || '')
       const pluginVersion = String(argumentsValue.plugin_version || '')
@@ -1711,6 +1716,10 @@ export class SeedRuntime {
         valuePath: update.value_path, streamId: update.stream_id, operation: update.operation,
         text: update.text, offset: update.offset })
       return null
+    }
+    if (service === 'seed.local.relay.prepare' || service === 'seed.local.relay') {
+      return invokeLocalCreditRelay(this.creditBilling,
+        this.runtimePlugins.find((candidate) => candidate.package_id === packageId), service, argumentsValue)
     }
     if (service === 'seed.cloud.relay' || service === 'seed.cloud.models' ||
       ['seed.cloud.relay.stream.start', 'seed.cloud.relay.stream.next', 'seed.cloud.relay.stream.close'].includes(service)) {

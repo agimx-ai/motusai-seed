@@ -94,3 +94,9 @@ ctx.effect(() => {
 - [版本变更](https://github.com/agimx-ai/motusai-seed/blob/main/packages/seed-sdk/CHANGELOG.md)
 
 SDK 与 Seed 客户端的兼容要求会随新增接口记录在版本变更中。使用新接口前，请确认插件声明的最低 Seed 版本满足要求。
+
+## 本地异步固定计费
+
+在目标方法声明 `billing.settlement: local_relay` 和 `billing.product`，通过 `ctx.invokeHost('seed.local.relay.prepare', { capability_id, method, invocation_id, plugin_version, arguments })` 使用 Cloud 现有的调用准备与价格快照。持久化稳定请求编号和返回的 `call_id`，随后调用 `seed.local.relay`，参数为 `{ capability_id, method, call_id, task_id, outcome }`。`outcome` 依次使用 `started` 和最终的 `succeeded`、`failed` 或 `cancelled`；只有成功终态扣费。
+
+Cloud 负责价格、余额和幂等记账；插件负责业务终态以及重启后的任务查询和待确认结果重试。价格不能由客户端保存或提交来决定实际扣费；相同请求重试必须保留原编号，新业务请求使用新编号。断网、待确认及结算失败不表示免费，也不能为了重试结算重新执行业务。

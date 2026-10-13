@@ -528,7 +528,8 @@ export class SeedPluginHost {
   private pluginContext(plugin: SeedPluginRuntimeDefinition, base: CapsContext, dataPath: string): SeedPluginContext {
     const invokeRuntimeHost = async (service: string, argumentsValue: Record<string, unknown>) => {
       const receipt = this.billingReceipts.getStore()
-      const tracksBilling = service.startsWith('seed.cloud.relay') || service === 'seed.native.capabilities.invoke'
+      const tracksBilling = service.startsWith('seed.cloud.relay') || service === 'seed.local.relay'
+        || service === 'seed.native.capabilities.invoke'
       if (tracksBilling) receipt?.begin()
       try {
         const result = await this.runtime.invoke_host(service, {
@@ -542,6 +543,15 @@ export class SeedPluginHost {
           if (service === 'seed.cloud.relay.stream.next' && (result as { done?: boolean }).done) {
             receipt?.endStream(String(argumentsValue.stream_id))
           }
+        }
+        if (service === 'seed.local.relay') {
+          const settlement = result as { call_id?: string; state?: string; charged_amount?: unknown }
+          if ((settlement.state === 'settled' || settlement.state === 'released')
+            && isCreditAmount(settlement.charged_amount) && settlement.charged_amount >= 0) {
+            receipt?.add(settlement.call_id, settlement.charged_amount)
+            const trace = this.activeDiagnosticTrace()
+            if (trace) trace.credit_charged_amount = settlement.charged_amount
+          } else receipt?.uncertain()
         }
         return result
       } catch (error) {

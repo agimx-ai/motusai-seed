@@ -173,6 +173,11 @@ export class CreditBillingClient {
     return this.request(`/invocations/${encodeURIComponent(callId)}`, invocationSchema, { method: 'DELETE' })
   }
 
+  localRelay(input: { call_id: string; plugin_id: string; capability_id: string; method: string;
+    task_id: string; outcome: 'started' | 'succeeded' | 'failed' | 'cancelled' }) {
+    return this.request('/local-relay', invocationSchema, { method: 'POST', body: JSON.stringify(input) })
+  }
+
   async relay(input: { call_id: string; plugin_id: string; capability_id: string; method: string; payload: Record<string, unknown> }) {
     const result = await this.request('/relay', relaySchema, { method: 'POST', body: serializeRelayRequest(input) }, 135_000)
     const settlement = await this.status(input.call_id).catch(() => undefined)
