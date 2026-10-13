@@ -51,6 +51,38 @@ const resourcePlugin: SeedPluginRuntimeDefinition = {
 }
 
 describe('SeedPluginHost protocol and Cordis runtime', () => {
+  it('adds profiles only through a registered configuration and binds the host call to its owner', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'seed-profile-writer-'))
+    const entryPath = join(directory, 'runtime.mjs')
+    await writeFile(entryPath, `export function apply(ctx) {
+      const text = { en_US: 'Accounts', zh_Hans: '账户' };
+      ctx.configuration.register({ id: 'accounts', schema_version: 1, renderer: 'seed.profiles', title: text, description: text,
+        profiles: { min_items: 0, max_items: 2, summary_fields: ['name'], fields: [{ key: 'name', type: 'text', label: text }], actions: { save: { label: text } } } });
+      ctx.capabilities.register('probe', { async invoke(method, request) {
+        if (request.arguments.value === 'bypass') await ctx.invokeHost('seed.configuration', { operation: 'add_profile' });
+        else await ctx.configuration.addProfile(request.arguments.value, { id: 'account-new', name: 'New account' });
+        return { value: 'saved' };
+      } });
+    }`)
+    const invokeHost = vi.fn(async () => null)
+    const host = new SeedPluginHost({ configuration: () => ({ type: 'configure', appVersion: '1', locale: 'en-US',
+      backupRoot: join(directory, 'backups'), pluginDataRoot: join(directory, 'data'), plugins: [] }), invoke_host: invokeHost })
+    try {
+      await expect(host.start([{ ...plugin, runtime_kind: 'native-host', entry_path: entryPath }])).resolves.toEqual([])
+      await expect(host.invoke('probe', 'echo', { request_id: 'add', arguments: { value: 'accounts' } })).resolves.toEqual({ value: 'saved' })
+      expect(invokeHost).toHaveBeenCalledWith('seed.configuration', expect.objectContaining({
+        version: 1, operation: 'add_profile', package_id: plugin.package_id, configuration_id: 'accounts',
+        profile: { id: 'account-new', name: 'New account' }, declaration: expect.objectContaining({ id: 'accounts' }),
+      }))
+      await expect(host.invoke('probe', 'echo', { request_id: 'other', arguments: { value: 'other' } })).rejects.toThrow('尚未注册配置')
+      await expect(host.invoke('probe', 'echo', { request_id: 'bypass', arguments: { value: 'bypass' } })).rejects.toThrow('已注册的配置接口')
+      expect(invokeHost.mock.calls.filter(([service]) => service === 'seed.configuration')).toHaveLength(1)
+    } finally {
+      await host.stop()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('captures internal relay charges through nested native calls, independently for concurrent invocations', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'seed-billing-receipt-'))
     const providerPath = join(directory, 'provider.mjs')

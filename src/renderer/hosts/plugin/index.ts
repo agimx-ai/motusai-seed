@@ -82,6 +82,7 @@ runtimeBridge.onConfigure(async (configuration: PluginConfiguration) => {
             configuration: {
               register: () => { throw new Error('配置贡献需要 native-host 运行时。') },
               get: async () => { throw new Error('配置贡献需要 native-host 运行时。') },
+              addProfile: async () => { throw new Error('配置贡献需要 native-host 运行时。') },
               registerOptionsResolver: () => { throw new Error('动态配置选项需要 native-host 运行时。') },
             },
             management: {

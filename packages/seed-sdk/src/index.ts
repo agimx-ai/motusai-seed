@@ -246,6 +246,9 @@ export type SeedConfigurationRegistry = {
   register(declaration: Record<string, unknown>): () => void | Promise<void>
   /** Reads the current value of a configuration registered by this plugin. */
   get(configurationId: string): Promise<unknown>
+  /** Atomically adds one profile to an owned configuration. Existing profiles/defaults are preserved;
+   * secrets go directly to host storage. Does not reload the calling plugin. */
+  addProfile(configurationId: string, profile: Record<string, string> & { id: string }): Promise<void>
   /** Registers a package-owned resolver for suggestions shown by one dynamic configuration field. */
   registerOptionsResolver(
     configurationId: string,

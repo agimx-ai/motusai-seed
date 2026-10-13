@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.5
+
+- Add `ctx.configuration.addProfile()` so a plugin can append one profile to its own host-managed `seed.profiles` configuration without reading or replacing existing secrets.
+- Validate new profiles against the plugin declaration, preserve existing profiles and defaults, and reject duplicate IDs, undeclared fields, missing required values, and profile-limit overflow.
+- Requires Seed 0.2.14. Publish this SDK version before installing official plugins that use plugin-owned profile creation.
+
+中文：新增 `ctx.configuration.addProfile()`，让插件在不读取或覆盖现有密钥的情况下，安全地向自身的 `seed.profiles` 配置追加档案；宿主负责声明校验并保留已有档案与默认项。该能力需要 Seed 0.2.14，使用前须先发布 SDK 0.2.5。
+
 ## 0.2.4
 
 - Expose optional host-owned billing metadata on `SeedPluginError` so failed capability calls can retain confirmed settlement receipts. Missing or incomplete receipts remain unknown, not zero.

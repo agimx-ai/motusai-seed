@@ -575,8 +575,17 @@ export class SeedPluginHost {
       }
       return await invokeRuntimeHost(service, argumentsValue)
     }
-    const pendingAuthorizations = new Set<string>()
     const configurationSources = new Map<string, Record<string, unknown>>()
+    const addConfigurationProfile = async (configurationId: string, profile: Record<string, string> & { id: string }) => {
+      if (!this.configurations.get(plugin.package_id)?.has(configurationId)) {
+        throw new Error(`插件 ${plugin.package_id} 尚未注册配置：${configurationId}`)
+      }
+      await invokeRuntimeHost('seed.configuration', {
+        version: 1, operation: 'add_profile', configuration_id: configurationId, profile,
+        declaration: configurationSources.get(configurationId),
+      })
+    }
+    const pendingAuthorizations = new Set<string>()
     base.effect(() => async () => {
       await Promise.allSettled([...pendingAuthorizations].map((requestId) => invokeHost('seed.plugin-authorization', {
         operation: 'cancel', request_id: requestId,
@@ -856,6 +865,7 @@ export class SeedPluginHost {
       configuration: {
         register: registerConfiguration,
         registerOptionsResolver,
+        addProfile: addConfigurationProfile,
         get: async (configurationId) => {
           if (!this.configurations.get(plugin.package_id)?.has(configurationId)) {
             throw new Error(`插件 ${plugin.package_id} 尚未注册配置：${configurationId}`)

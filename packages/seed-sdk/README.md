@@ -54,7 +54,7 @@ export function apply(ctx: SeedPluginContext) {
 | 场景 | 接口 |
 | --- | --- |
 | 注册和调用能力 | `ctx.capabilities.register()`、`ctx.capabilities.list()`、`ctx.capabilities.invoke()` |
-| 注册配置并读取值 | `ctx.configuration.register()`、`ctx.configuration.get()` |
+| 注册、读取配置与安全新增档案 | `ctx.configuration.register()`、`ctx.configuration.get()`、`ctx.configuration.addProfile()` |
 | 注册管理界面 | `ctx.management.registerView()`、`ctx.management.publishText()` |
 | 提供本地 HTTP/SSE 接口 | `ctx.localApi.register()`、`SeedLocalEventStream` |
 | 调用受控宿主服务 | `ctx.invokeHost()` |
@@ -66,6 +66,8 @@ export function apply(ctx: SeedPluginContext) {
 | 生成 Seed 深链 | `createSeedDeepLink()` |
 
 完整参数和返回类型由包内 TypeScript 声明提供。
+
+`ctx.configuration.addProfile(configurationId, { id, ...fields })` 只向自身已注册的 `seed.profiles` / `secret_access: owner` 配置追加一个新档案。宿主串行校验并加密保存敏感字段，保留现有档案和默认项；重复 ID、未声明字段、缺少必填值或超过数量限制均拒绝。调用不返回 Secret，也不重启调用插件；插件在保存完成后自行更新连接。该接口需包含此能力的 Seed 开发构建，发布前应同步 SDK 依赖和 `min_seed_version`。
 
 ## 生命周期
 

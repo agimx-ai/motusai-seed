@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { seedPluginConfigurationSchema } from '../shared/plugin-manifest'
-import { brokerPluginConfigurationDeclaration, initialPluginConfiguration, normalizePluginConfiguration, pluginConfigurationState, reconcilePluginConfigurationDefaultGroup } from './plugin-configuration'
+import { appendPluginConfigurationProfile, brokerPluginConfigurationDeclaration, initialPluginConfiguration, normalizePluginConfiguration, pluginConfigurationState, reconcilePluginConfigurationDefaultGroup } from './plugin-configuration'
 
 const configurationInput = {
   id: 'search-providers',
@@ -48,6 +48,45 @@ const configurationInput = {
   },
 }
 const configuration = seedPluginConfigurationSchema.parse(configurationInput)
+
+describe('plugin-owned profile creation', () => {
+  const current = {
+    schema_version: 1 as const,
+    profiles: [{ id: 'search-old', provider: 'tavily', base_url: '', api_key: 'old-secret' }],
+    default_profile_id: 'search-old', values: { note: 'keep this note' },
+  }
+  const profile = { id: 'search-new', provider: 'tavily', api_key: 'new-secret' }
+
+  it('preserves existing credentials, root settings and defaults and redacts the snapshot', () => {
+    const result = appendPluginConfigurationProfile(configuration, profile, current)
+    expect(result.profiles[0]).toEqual(current.profiles[0])
+    expect(result.profiles[1]).toMatchObject(profile)
+    expect(result.values).toEqual(current.values)
+    expect(result.default_profile_id).toBe('search-old')
+    expect(JSON.stringify(pluginConfigurationState(configuration, result))).not.toContain('secret')
+    expect(current.profiles).toHaveLength(1)
+  })
+
+  it('selects the first new profile without making an empty placeholder', () => {
+    const empty = seedPluginConfigurationSchema.parse({ ...configurationInput, profiles: { ...configurationInput.profiles, min_items: 0 } })
+    const result = appendPluginConfigurationProfile(empty, profile)
+    expect(result.profiles).toHaveLength(1)
+    expect(result.default_profile_id).toBe(profile.id)
+  })
+
+  it('refuses overwrite, unknown fields, missing secrets and excessive profile counts', () => {
+    expect(() => appendPluginConfigurationProfile(configuration, { ...profile, id: 'search-old' }, current)).toThrow('已存在')
+    expect(() => appendPluginConfigurationProfile(configuration, { ...profile, other: 'value' }, current)).toThrow('未声明')
+    expect(() => appendPluginConfigurationProfile(configuration, { id: 'search-new', provider: 'searxng' }, current)).toThrow('不能为空')
+    const full = { ...current, profiles: Array.from({ length: 4 }, (_, i) => ({ ...current.profiles[0], id: `search-${i}` })) }
+    expect(() => appendPluginConfigurationProfile(configuration, profile, full)).toThrow('数量')
+  })
+
+  it('does not grant plugin writes to broker-only or catalog configurations', () => {
+    expect(() => appendPluginConfigurationProfile({ ...configuration, secretAccess: 'broker' }, profile, current)).toThrow('不允许')
+    expect(() => appendPluginConfigurationProfile({ ...configuration, renderer: 'seed.catalog-list' }, profile, current)).toThrow('不允许')
+  })
+})
 
 describe('broker configuration bootstrap', () => {
   it('uses the registered native declaration before contributions have been published', () => {

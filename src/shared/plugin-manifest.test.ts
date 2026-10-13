@@ -154,6 +154,15 @@ describe('plugin dynamic configuration options schema', () => {
     expect(seedPluginConfigurationSchema.parse(independent).profiles.fields[1]?.dynamicOptions).toEqual({ dependsOn: [], requiredFields: [] })
   })
 
+  it('lets a profile add action opt into the configuration header', () => {
+    const body: any = structuredClone(configuration)
+    body.profiles.actions.add = { label: text('Add') }
+    const header: any = structuredClone(body)
+    header.profiles.actions.add.placement = 'header'
+    expect(seedPluginConfigurationSchema.parse(header).profiles.actions.add).toMatchObject({ placement: 'header' })
+    expect(seedPluginConfigurationSchema.parse(body).profiles.actions.add).toMatchObject({ placement: 'body' })
+  })
+
   it('supports a generic single-selection dynamic option list', () => {
     const list: any = structuredClone(configuration)
     list.renderer = 'seed.option-list'
@@ -233,6 +242,21 @@ describe('plugin dynamic configuration options schema', () => {
 })
 
 describe('plugin management view schema', () => {
+  it('supports an action-only panel placed in a configuration header', () => {
+    const input = {
+      id: 'connect', renderer: 'seed.panel', title: text('Connect'), description: text('Connect'),
+      placement: { type: 'configuration_header', configuration_id: 'accounts' },
+      source: { capability: 'accounts', method: 'status' },
+      props: { blocks: [] },
+      toolbar: [{ type: 'action', action_id: 'start' }],
+      actions: [{ id: 'start', label: text('Connect'), target: { capability: 'accounts', method: 'connect' } }],
+    } as const
+    const view = seedPluginManagementViewSchema.parse(input)
+    expect(view.placement).toEqual({ type: 'configuration_header', configurationId: 'accounts' })
+    expect(view.props.blocks).toEqual([])
+    expect(seedPluginManagementViewSchema.safeParse({ ...input, renderer: 'seed.collection' }).success).toBe(false)
+  })
+
   it('accepts an optional elapsed-time data path on a generic panel status block', () => {
     const panel = { id: 'run', renderer: 'seed.panel', title: text('Run'), description: text('Run'),
       props: { blocks: [{ type: 'status', state_path: 'state', elapsed_ms_path: 'timing.elapsed_ms' }] } }
@@ -377,6 +401,25 @@ describe('plugin management view schema', () => {
 
     expect(view.actions[0]).toMatchObject({ icon: 'folder', display: 'icon', placement: 'toolbar' })
     expect(view.toolbar).toEqual([{ type: 'refresh' }, { type: 'action', actionId: 'open-folder' }])
+  })
+
+  it('supports lifecycle-aware result modals with a hidden close action', () => {
+    const view = seedPluginManagementViewSchema.parse({
+      id: 'binding', renderer: 'seed.panel', title: text('Binding'), description: text('Binding'),
+      props: { blocks: [
+        { type: 'status', state_path: 'state', states: { pending: text('Pending') } },
+      ] },
+      toolbar: [{ type: 'action', action_id: 'start' }],
+      actions: [{
+        id: 'start', label: text('Start'), target: { capability: 'binding', method: 'start' },
+        result: { mode: 'modal', renderer: 'qr', content_path: 'qr', dismiss_when: { path: 'state', in: ['done'] }, close_action_id: 'cancel' },
+      }, {
+        id: 'cancel', label: text('Cancel'), placement: 'result_close', target: { capability: 'binding', method: 'cancel' },
+      }],
+    })
+    expect(view.actions[0].result).toMatchObject({ close_action_id: 'cancel', dismiss_when: { path: 'state', in: ['done'] } })
+    expect(view.actions[1].placement).toBe('result_close')
+    expect(view.props).toMatchObject({ blocks: [expect.anything()] })
   })
 
   it('rejects missing, misplaced, or duplicate toolbar entries', () => {

@@ -114,6 +114,10 @@ export function PluginsPage({ appName, plugins, catalogPlugins, installedLoading
     && selectedInstalledPlugin.version !== selectedCatalogPlugin.latestVersion
     && selectedCatalogInstallable,
   )
+  const selectedConfigurationIds = new Set(selectedInstalledPlugin?.configurations.map((configuration) => configuration.id) || [])
+  const isConfigurationHeaderView = (view: SeedInstalledPlugin['managementViews'][number]) => (
+    view.placement?.type === 'configuration_header' && selectedConfigurationIds.has(view.placement.configurationId)
+  )
 
   const confirmationDialog = confirmation && <ConfirmDialog
     open
@@ -229,6 +233,9 @@ export function PluginsPage({ appName, plugins, catalogPlugins, installedLoading
       const Renderer = configurationRenderers[configuration.renderer as keyof typeof configurationRenderers]
       const configurationKey = `${selectedInstalledPlugin.id}:${configuration.id}`
       const configurationState = configurationStates[configurationKey]
+      const headerViews = selectedInstalledPlugin.managementViews.filter((view) => (
+        isConfigurationHeaderView(view) && view.placement?.configurationId === configuration.id
+      ))
       if (Renderer) return configurationState ? <Renderer
         key={configurationKey}
         pluginId={selectedInstalledPlugin.id}
@@ -236,6 +243,14 @@ export function PluginsPage({ appName, plugins, catalogPlugins, installedLoading
         state={configurationState}
         pluginNames={pluginNamesById}
         busy={busy === `plugin-config-${selectedInstalledPlugin.id}`}
+        headerActions={headerViews.length ? headerViews.map((view) => <PluginManagementView
+          embedded="configuration_header"
+          key={view.id}
+          pluginId={selectedInstalledPlugin.id}
+          view={view}
+          query={onQueryManagementView}
+          invoke={onInvokeManagementAction}
+        />) : undefined}
         onSave={onUpdateConfiguration}
         onQueryOptions={onQueryConfigurationOptions}
         onQueryProfileStatuses={onQueryConfigurationProfileStatuses}
@@ -246,7 +261,7 @@ export function PluginsPage({ appName, plugins, catalogPlugins, installedLoading
         <p className="mb-0 mt-1 text-[12px] text-muted-foreground">{t('plugins.unsupportedRenderer', { renderer: configuration.renderer })}</p>
       </section>
     })}
-    {selectedInstalledPlugin?.managementViews.filter((view) => (view.renderer === 'seed.collection' || view.renderer === 'seed.panel') && view.source).map((view) => <PluginManagementView
+    {selectedInstalledPlugin?.managementViews.filter((view) => !isConfigurationHeaderView(view) && (view.renderer === 'seed.collection' || view.renderer === 'seed.panel') && view.source).map((view) => <PluginManagementView
       key={view.id}
       pluginId={selectedInstalledPlugin.id}
       view={view}

@@ -102,13 +102,18 @@ const seedPluginConfigurationActionSchema = z.object({
   label: seedLocalizedTextSchema(100),
 }).strict()
 
+const seedPluginProfileAddActionSchema = z.object({
+  label: seedLocalizedTextSchema(100),
+  placement: z.enum(['body', 'header']).default('body'),
+}).strict()
+
 const seedPluginSetDefaultActionSchema = z.object({
   label: seedLocalizedTextSchema(100),
   selected_label: seedLocalizedTextSchema(100),
 }).strict().transform(({ selected_label, ...action }) => ({ ...action, selectedLabel: selected_label }))
 
 const seedPluginProfileActionsSchema = z.object({
-  add: seedPluginConfigurationActionSchema.optional(),
+  add: seedPluginProfileAddActionSchema.optional(),
   save: seedPluginConfigurationActionSchema,
   remove: seedPluginConfigurationActionSchema.optional(),
   set_default: seedPluginSetDefaultActionSchema.optional(),
@@ -386,7 +391,7 @@ const seedPluginManagementActionSchema = z.object({
   icon: z.enum(['record', 'pause', 'play', 'check', 'save', 'x', 'trash', 'folder']).optional(),
   display: z.enum(['label', 'icon']).default('label'),
   tone: z.enum(['neutral', 'primary', 'danger']).default('neutral'),
-  placement: z.enum(['toolbar', 'footer', 'item_menu', 'item_footer', 'field_change']).default('toolbar'),
+  placement: z.enum(['toolbar', 'footer', 'item_menu', 'item_footer', 'field_change', 'result_close']).default('toolbar'),
   target: seedPluginManagementSourceSchema,
   argument_bindings: z.record(identifier, z.string().min(1).max(200)).default({}),
   visible_when: seedPluginManagementConditionSchema.optional(),
@@ -413,8 +418,11 @@ const seedPluginManagementActionSchema = z.object({
   result: z.object({
     mode: z.literal('modal'),
     renderer: z.enum(['text', 'markdown', 'image', 'qr']),
+    title: seedLocalizedTextSchema(100).optional(),
     title_path: z.string().min(1).max(200).optional(),
     content_path: z.string().min(1).max(200),
+    dismiss_when: seedPluginManagementConditionSchema.optional(),
+    close_action_id: identifier.optional(),
   }).strict().optional(),
 }).strict().refine((action) => !(action.input && action.confirmation), '插件管理动作不能同时声明输入表单和确认提示。').transform(({ visible_when, argument_bindings, ...action }) => ({ ...action, visibleWhen: visible_when, argumentBindings: argument_bindings }))
 
@@ -473,8 +481,13 @@ const seedPluginPanelBlockSchema = z.discriminatedUnion('type', [
 ])
 
 const seedPluginPanelPropsSchema = z.object({
-  blocks: z.array(seedPluginPanelBlockSchema).min(1).max(32),
+  blocks: z.array(seedPluginPanelBlockSchema).max(32),
 }).strict()
+
+const seedPluginManagementPlacementSchema = z.object({
+  type: z.literal('configuration_header'),
+  configuration_id: identifier,
+}).strict().transform(({ configuration_id, ...placement }) => ({ ...placement, configurationId: configuration_id }))
 
 export const seedPluginManagementViewSchema = z.object({
   id: identifier,
@@ -487,8 +500,12 @@ export const seedPluginManagementViewSchema = z.object({
   actions: z.array(seedPluginManagementActionSchema).max(16).default([]),
   toolbar: z.array(seedPluginManagementToolbarItemSchema).max(16).default([]),
   refresh_interval_ms: z.number().int().min(500).max(60_000).optional(),
+  placement: seedPluginManagementPlacementSchema.optional(),
   props: z.record(z.string(), z.unknown()).default({}),
 }).strict().superRefine((view, context) => {
+  if (view.placement && view.renderer !== 'seed.panel') {
+    context.addIssue({ code: 'custom', path: ['placement'], message: '配置区头部动作只能使用通用面板。' })
+  }
   const actions = new Map(view.actions.map((action) => [action.id, action]))
   const toolbarEntries = new Set<string>()
   for (const [index, item] of view.toolbar.entries()) {
@@ -541,6 +558,17 @@ export const seedPluginManagementViewSchema = z.object({
     }
     if (action.placement === 'field_change' && !view.toolbar.some((item) => (item.type === 'select_field' || item.type === 'file_input') && item.onChangeActionId === action.id)) {
       context.addIssue({ code: 'custom', path: ['actions'], message: `字段变更动作未被工具栏引用：${action.id}` })
+    }
+    if (action.result?.close_action_id) {
+      const closeAction = actions.get(action.result.close_action_id)
+      if (!closeAction) context.addIssue({ code: 'custom', path: ['actions'], message: `结果弹窗引用了不存在的关闭动作：${action.result.close_action_id}` })
+      else if (closeAction.placement !== 'result_close') context.addIssue({ code: 'custom', path: ['actions'], message: `结果弹窗关闭动作的 placement 必须是 result_close：${action.result.close_action_id}` })
+    }
+    if (action.placement === 'result_close') {
+      if (action.input || action.confirmation || action.result) context.addIssue({ code: 'custom', path: ['actions'], message: '结果弹窗关闭动作不能声明输入、确认或结果弹窗。' })
+      if (!view.actions.some((candidate) => candidate.result?.close_action_id === action.id)) {
+        context.addIssue({ code: 'custom', path: ['actions'], message: `结果弹窗关闭动作未被引用：${action.id}` })
+      }
     }
   }
   if (view.renderer === 'seed.panel') {

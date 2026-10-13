@@ -133,6 +133,27 @@ function safeImageDataUrl(value: string) {
   return /^data:image\/(?:svg\+xml|png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : undefined
 }
 
+function localizedValue(value: unknown, locale: string) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const localized = value as Partial<SeedLocalizedText>
+    if (typeof localized.en_US === 'string' && typeof localized.zh_Hans === 'string') {
+      return resolveSeedLocalizedText(localized as SeedLocalizedText, locale)
+    }
+  }
+  return String(value ?? '')
+}
+
+export function managementResultTitle(action: ManagementAction, value: unknown, locale: string) {
+  const pathValue = action.result?.title_path ? valueAt(value, action.result.title_path) : undefined
+  if (pathValue !== undefined && pathValue !== null && pathValue !== '') return localizedValue(pathValue, locale)
+  if (action.result?.title) return resolveSeedLocalizedText(action.result.title, locale)
+  return resolveSeedLocalizedText(action.label, locale)
+}
+
+export function managementResultShouldDismiss(action: ManagementAction, value: unknown) {
+  return Boolean(action.result?.dismiss_when && conditionMatches(action.result.dismiss_when, value))
+}
+
 export function PluginManagementSkeleton({ view, label }: { view: View; label: string }) {
   const panelBlocks = view.renderer === 'seed.panel' ? (view.props as PanelProps).blocks : []
   const hasMarkdown = panelBlocks.some((block) => block.type === 'markdown')
@@ -157,11 +178,12 @@ export function PluginManagementSkeleton({ view, label }: { view: View; label: s
   </div>
 }
 
-export function PluginManagementView({ pluginId, view, query, invoke }: {
+export function PluginManagementView({ pluginId, view, query, invoke, embedded }: {
   pluginId: string
   view: View
   query(input: { pluginId: string; viewId: string; sourceId?: string; arguments?: Record<string, unknown> }): Promise<unknown>
   invoke(input: { pluginId: string; viewId: string; actionId: string; arguments: Record<string, unknown> }): Promise<unknown>
+  embedded?: 'configuration_header'
 }) {
   const { locale } = useSeedI18n()
   const { t } = useTranslation()
@@ -222,6 +244,9 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
     finally { if (revision === loadRevisionRef.current) { setLoading(false); setSettledView({ pluginId, viewId: view.id }) } }
   }, [pluginId, query, view.id])
   useEffect(() => { setValue(undefined); void load() }, [load])
+  useEffect(() => {
+    if (actionResult?.action.result?.dismiss_when && managementResultShouldDismiss(actionResult.action, value)) setActionResult(undefined)
+  }, [actionResult, value])
   useEffect(() => window.motusSeed.subscribe((event) => {
     const currentView = viewRef.current
     if (event.type !== 'plugin.management.text' || event.pluginId !== pluginId || event.viewId !== currentView.id || currentView.renderer !== 'seed.panel') return
@@ -269,11 +294,7 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
   const source = valueAt(value, props.items_path || 'items')
   const items = Array.isArray(source) ? source.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item))) : []
   const displayValue = (input: unknown) => {
-    if (input && typeof input === 'object' && !Array.isArray(input)) {
-      const localized = input as Partial<SeedLocalizedText>
-      if (typeof localized.en_US === 'string' && typeof localized.zh_Hans === 'string') return resolveSeedLocalizedText(localized as SeedLocalizedText, locale)
-    }
-    return String(input ?? '')
+    return localizedValue(input, locale)
   }
   const field = (item: Record<string, unknown>, name: string | undefined, fallback: string) => displayValue(valueAt(item, name || fallback))
   const itemIcon = (item: Record<string, unknown>) => {
@@ -330,6 +351,14 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
     } finally {
       setBusyAction('')
     }
+  }
+  const closeActionResult = () => {
+    const current = actionResult
+    setActionResult(undefined)
+    const closeActionId = current?.action.result?.close_action_id
+    if (!closeActionId) return
+    const closeAction = view.actions.find((candidate) => candidate.id === closeActionId && candidate.placement === 'result_close')
+    if (closeAction) void run(closeAction)
   }
   const itemArguments = (action: ManagementAction, item?: Record<string, unknown>) => item
     ? Object.fromEntries(Object.entries(action.argumentBindings).map(([key, path]) => [key, valueAt(item, path)]))
@@ -524,12 +553,14 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
     }
   }
 
-  if (settledView?.pluginId !== pluginId || settledView.viewId !== view.id) return <section className="mt-8 rounded-[12px]" aria-busy="true">
-    {view.show_header && <div className="mb-4"><h3 className="m-0 text-[17px] font-medium">{viewTitle}</h3><p className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">{resolveSeedLocalizedText(view.description, locale)}</p></div>}
-    <PluginManagementSkeleton view={view} label={t('plugins.loadingManagementView')} />
-  </section>
+  if (settledView?.pluginId !== pluginId || settledView.viewId !== view.id) return embedded === 'configuration_header'
+    ? <span className="block h-[30px] w-20 animate-pulse rounded-lg bg-border/70 motion-reduce:animate-none" aria-label={t('plugins.loadingManagementView')} role="status" />
+    : <section className={`${view.show_header ? 'mt-8' : 'mt-3'} rounded-[12px]`} aria-busy="true">
+      {view.show_header && <div className="mb-4"><h3 className="m-0 text-[17px] font-medium">{viewTitle}</h3><p className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">{resolveSeedLocalizedText(view.description, locale)}</p></div>}
+      <PluginManagementSkeleton view={view} label={t('plugins.loadingManagementView')} />
+    </section>
 
-  return <section className="mt-8 rounded-[12px]"
+  return <section className={embedded === 'configuration_header' ? 'contents' : `${view.show_header ? 'mt-8' : 'mt-3'} rounded-[12px]`}
     onDragEnterCapture={(event) => { if (dropField && event.dataTransfer.types.includes('Files')) { dragDepthRef.current += 1; setViewDragging(true) } }}
     onDragOverCapture={(event) => { if (dropField && event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' } }}
     onDragLeaveCapture={() => { if (dragDepthRef.current > 0) dragDepthRef.current -= 1; if (dragDepthRef.current === 0) setViewDragging(false) }}
@@ -538,7 +569,7 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
     {viewDragging && createPortal(<div className="pointer-events-none fixed inset-0 z-[80] grid place-items-center bg-card/90 backdrop-blur-[2px]" aria-hidden="true">
       <div className="flex flex-col items-center gap-2 text-foreground"><FileUp size={24} className="text-info" /><span className="text-[14px] font-medium">{t('plugins.managementFileRelease')}</span></div>
     </div>, document.body)}
-    <div className="flex items-center justify-between gap-4">
+    {embedded === 'configuration_header' ? <div className="flex items-center gap-2">{toolbar}</div> : <div className="flex items-center justify-between gap-4">
       {view.show_header && <div>
         <h3 className="m-0 text-[17px] font-medium">{viewTitle}</h3>
         <p className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">{resolveSeedLocalizedText(view.description, locale)}</p>
@@ -547,7 +578,8 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
         <div className="flex min-w-0 items-center gap-2">{toolbar.filter((_, index) => view.toolbar[index]?.type === 'select_field' && view.toolbar[index].align === 'start')}</div>
         <div className="flex items-center gap-2">{toolbar.filter((_, index) => view.toolbar[index]?.type !== 'select_field' || view.toolbar[index].align !== 'start')}</div>
       </div>
-    </div>
+    </div>}
+    {embedded !== 'configuration_header' && <>
     {error && <p className="my-4 text-[12px] text-danger">{error}</p>}
     {inlineFileError && <p className="my-4 text-[12px] text-danger" role="alert">{inlineFileError}</p>}
     {panel}
@@ -628,16 +660,22 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
         {itemFooterActions.length > 0 && <div className="mt-4 flex shrink-0 justify-end gap-2">{itemFooterActions.map((action) => actionControl(action, action.id, previewItem))}</div>}
       </div>
     </div>, document.body)}
-    {actionResult?.action.result && createPortal(<div className="fixed inset-0 z-[95] grid place-items-center bg-black/20 px-6 py-8 backdrop-blur-[2px]" onPointerDown={(event) => { if (event.target === event.currentTarget) setActionResult(undefined) }}>
-      <div className="max-h-[min(720px,calc(100vh-64px))] w-full max-w-[680px] overflow-auto rounded-[18px] border border-border bg-card p-5 shadow-[0_18px_55px_rgba(0,0,0,.18)]" role="dialog" aria-modal="true">
-        <div className="flex items-start justify-between gap-4"><h2 className="m-0 text-[18px] font-medium">{String(valueAt(actionResult.value, actionResult.action.result.title_path || '') || resolveSeedLocalizedText(actionResult.action.label, locale))}</h2><IconButton label={t('window.close')} icon={<X size={17} />} onClick={() => setActionResult(undefined)} /></div>
-        <div className="mt-4 rounded-[12px] bg-muted/45 p-5">{(() => {
+    </>}
+    {actionResult?.action.result && createPortal(<div className="fixed inset-0 z-[95] grid place-items-center bg-black/20 px-6 py-8 backdrop-blur-[2px]" onPointerDown={(event) => { if (event.target === event.currentTarget) closeActionResult() }}>
+      <div className={actionResult.action.result.renderer === 'qr'
+        ? 'relative max-h-[min(720px,calc(100vh-64px))] w-full max-w-[360px] overflow-auto rounded-[18px] border border-border bg-card px-6 pb-8 pt-6 shadow-[0_18px_55px_rgba(0,0,0,.18)]'
+        : 'max-h-[min(720px,calc(100vh-64px))] w-full max-w-[680px] overflow-auto rounded-[18px] border border-border bg-card p-5 shadow-[0_18px_55px_rgba(0,0,0,.18)]'} role="dialog" aria-modal="true">
+        <div className={actionResult.action.result.renderer === 'qr' ? 'px-8 text-center' : 'flex items-start justify-between gap-4'}>
+          <h2 className={actionResult.action.result.renderer === 'qr' ? 'm-0 text-[17px] font-medium' : 'm-0 text-[18px] font-medium'}>{managementResultTitle(actionResult.action, actionResult.value, locale)}</h2>
+          <div className={actionResult.action.result.renderer === 'qr' ? 'absolute right-4 top-4' : ''}><IconButton label={t('window.close')} icon={<X size={17} />} onClick={closeActionResult} /></div>
+        </div>
+        <div className={actionResult.action.result.renderer === 'qr' ? 'mt-4' : 'mt-4 rounded-[12px] bg-muted/45 p-5'}>{(() => {
           const result = actionResult.action.result!
           const content = String(valueAt(actionResult.value, result.content_path) ?? '')
           if (result.renderer === 'markdown') return <MarkdownContent>{content}</MarkdownContent>
           if (result.renderer === 'image' || result.renderer === 'qr') {
             const source = safeImageDataUrl(content)
-            return source ? <img className={result.renderer === 'qr' ? 'mx-auto h-56 w-56 rounded-lg bg-white p-2 [image-rendering:pixelated]' : 'mx-auto max-h-[520px] max-w-full rounded-lg'} src={source} alt="" /> : <p className="m-0 text-[12px] text-danger">Invalid image result.</p>
+            return source ? <img className={result.renderer === 'qr' ? 'mx-auto h-56 w-56 rounded-[12px] bg-white [image-rendering:pixelated]' : 'mx-auto max-h-[520px] max-w-full rounded-lg'} src={source} alt="" /> : <p className="m-0 text-[12px] text-danger">Invalid image result.</p>
           }
           return <p className="m-0 whitespace-pre-wrap text-[13px] leading-6">{content}</p>
         })()}</div>

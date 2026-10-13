@@ -36,6 +36,7 @@ app.whenReady().then(async () => {
   let failed = false
   try {
     const entries = []
+    const profileWrites = []
     for (const name of ['one', 'two']) {
       const directory = join(root, name)
       await mkdir(directory, { recursive: true })
@@ -64,6 +65,10 @@ app.whenReady().then(async () => {
         ctx.effect(() => ctx.capabilities.register('probe_${name}', {
           invoke: async (method, request) => {
             if (method === 'crash') process.exit(7)
+            if (request.arguments.add_profile) {
+              await ctx.configuration.addProfile('source', { id: 'source-new', kind: 'custom', value: 'new value' });
+              return { saved: true };
+            }
             if (method === 'delegate') return await ctx.capabilities.invoke({ capability: 'probe_two', method: 'echo', arguments: request.arguments })
             if (request.arguments.local_outcome) return await ctx.invokeHost('seed.local.relay', {
               capability_id: 'probe_two', method: 'echo',
@@ -87,6 +92,12 @@ app.whenReady().then(async () => {
     }
     const snapshots = []
     manager = new NativePluginManager('Seed Smoke', async (packageId, service, args) => {
+      if (service === 'seed.configuration' && args.operation === 'add_profile') {
+        if (packageId !== 'com.example.one' || args.version !== 1 || args.configuration_id !== 'source'
+          || args.declaration?.id !== 'source' || args.profile?.id !== 'source-new') throw new Error('Configuration write escaped its owner.')
+        profileWrites.push(args.profile)
+        return null
+      }
       if (service === 'seed.native.capabilities.list') return router.consumedCapabilitiesByPackage(packageId)
       if (service === 'seed.native.capabilities.invoke') return router.invokeConsumedByPackage(packageId, args.invocation, args.chain)
       if (service === 'seed.local.relay') return invokeLocalCreditRelay({
@@ -122,6 +133,8 @@ app.whenReady().then(async () => {
       } }, undefined, undefined, 'remote')
     const failures = await router.start(entries)
     if (failures.length) throw new Error(`Router startup failed: ${JSON.stringify(failures)}`)
+    const saved = await router.invoke('probe_one', 'echo', { request_id: 'profile-write', arguments: { add_profile: true } })
+    if (saved?.saved !== true || profileWrites.length !== 1) throw new Error('Native configuration write acknowledgement failed.')
     const delegated = await router.invoke('probe_one', 'delegate', { request_id: 'delegated',
       arguments: { cross_process: true } })
     if (delegated?.cross_process !== true) throw new Error('Cross-plugin capability routing failed.')
@@ -201,7 +214,7 @@ app.whenReady().then(async () => {
     if (!router.supports('probe_one', 'echo') || !router.supports('probe_two', 'echo')) {
       throw new Error('Router did not recover the crashed plugin while retaining the healthy one.')
     }
-    process.stdout.write('Independent native processes, success/failure billing receipts, crash isolation, and restart passed.\n')
+    process.stdout.write('Independent native processes, owned configuration writes, success/failure billing receipts, crash isolation, and restart passed.\n')
   } catch (error) {
     failed = true
     process.stderr.write(`${error instanceof Error ? error.stack || error.message : String(error)}\n`)

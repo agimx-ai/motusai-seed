@@ -181,6 +181,26 @@ export function reconcilePluginConfigurationDefaultGroup(
   return result
 }
 
+/** Create-only merge against the latest host value, never a renderer-supplied snapshot. */
+export function appendPluginConfigurationProfile(
+  configuration: SeedPluginConfiguration,
+  profile: Record<string, string> & { id: string },
+  current: StoredPluginConfiguration = initialPluginConfiguration(configuration),
+  locale = 'zh-CN',
+) {
+  if (configuration.renderer !== 'seed.profiles' || configuration.secretAccess !== 'owner') {
+    throw new Error(localized(locale, 'This configuration does not allow plugin-owned profiles.', '该配置不允许插件写入档案。'))
+  }
+  if (current.profiles.some((item) => item.id === profile.id)) {
+    throw new Error(localized(locale, 'The plugin profile already exists.', '插件配置档案已存在。'))
+  }
+  return normalizePluginConfiguration(configuration, {
+    ...current.values,
+    profiles: JSON.stringify([...current.profiles, profile]),
+    default_profile_id: current.default_profile_id,
+  }, current, locale)
+}
+
 export function pluginConfigurationState(configuration: SeedPluginConfiguration, stored?: StoredPluginConfiguration): PluginConfigurationState {
   const value = stored || initialPluginConfiguration(configuration)
   const configuredSecrets: string[] = []

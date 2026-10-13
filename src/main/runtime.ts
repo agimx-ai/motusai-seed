@@ -9,7 +9,7 @@ import type { AppUpdateState, AuditQueryInput, LocalClientAuthorization, MascotS
 import { resolveSeedLocale } from './i18n/locale'
 import { pluginConfigurationKey } from '../shared/contracts'
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation'
-import { resolveSeedLocalizedText } from '../shared/plugin-manifest'
+import { resolveSeedLocalizedText, type SeedPluginConfiguration } from '../shared/plugin-manifest'
 import { invalidManagementInput, resolveManagementInputFields } from '../shared/plugin-management-form'
 import { ConnectorManager } from './connector-manager'
 import {
@@ -28,7 +28,7 @@ import { FileBroker } from './brokers/files'
 import { fileBrokerPermissions } from './brokers/files/permissions'
 import { ScreenCaptureService } from './screen-capture-service'
 import { AudioService } from './audio-service'
-import { brokerPluginConfigurationDeclaration, initialPluginConfiguration, normalizePluginConfiguration, pluginConfigurationState, reconcilePluginConfigurationDefaultGroup } from './plugin-configuration'
+import { appendPluginConfigurationProfile, brokerPluginConfigurationDeclaration, initialPluginConfiguration, normalizePluginConfiguration, pluginConfigurationState, reconcilePluginConfigurationDefaultGroup } from './plugin-configuration'
 import { SeedPluginSandboxSupervisor } from './plugin-sandbox-host'
 import { NativePluginManager } from './native-plugin-manager'
 import { SeedStore } from './store'
@@ -66,6 +66,7 @@ function isAbortError(error: unknown) {
 export class SeedRuntime {
   private resettingPluginData = false
   private readonly pluginUninstallOperations = new Set<string>()
+  private readonly pluginConfigurationWrites = new Map<string, Promise<unknown>>()
   readonly store: SeedStore
   readonly connector: ConnectorManager
   private readonly seedCloudUrl = serverUrlSchema.parse(buildConfig.seedCloudUrl)
@@ -956,11 +957,24 @@ export class SeedRuntime {
     await this.publishSnapshot()
   }
 
+  private async withPluginConfigurationWrite<T>(pluginId: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.pluginConfigurationWrites.get(pluginId) || Promise.resolve()
+    const pending = previous.catch(() => undefined).then(work)
+    this.pluginConfigurationWrites.set(pluginId, pending)
+    try { return await pending } finally {
+      if (this.pluginConfigurationWrites.get(pluginId) === pending) this.pluginConfigurationWrites.delete(pluginId)
+    }
+  }
+
   async updatePluginConfiguration(input: UpdatePluginConfigurationInput) {
+    return this.withPluginConfigurationWrite(input.pluginId, () => this.savePluginConfiguration(input))
+  }
+
+  private async savePluginConfiguration(input: UpdatePluginConfigurationInput, reload = true, ownedDeclaration?: SeedPluginConfiguration) {
     const locale = resolveSeedLocale(this.store.languagePreference())
     const english = locale.toLowerCase().startsWith('en')
     const plugin = this.installedPlugins.find((candidate) => candidate.id === input.pluginId && candidate.enabled && this.pluginIsAuthorized(candidate.id))
-    const configuration = plugin?.configurations.find((candidate) => candidate.id === input.configurationId)
+    const configuration = ownedDeclaration || plugin?.configurations.find((candidate) => candidate.id === input.configurationId)
     if (!plugin || !configuration) throw new Error(english
       ? 'The plugin is not installed, is disabled, or has no configuration.'
       : '插件未安装、未启用或没有可配置项。')
@@ -969,8 +983,9 @@ export class SeedRuntime {
       : '插件未声明配置所需权限。')
     const key = pluginConfigurationKey(plugin.id, configuration.id)
     const value = normalizePluginConfiguration(configuration, input.values, this.store.pluginConfiguration(key), locale)
+    const declarations = [...plugin.configurations.filter((candidate) => candidate.id !== configuration.id), configuration]
     const groupedConfigurations = configuration.profiles.defaultGroup
-      ? plugin.configurations.filter((candidate) => candidate.profiles.defaultGroup === configuration.profiles.defaultGroup)
+      ? declarations.filter((candidate) => candidate.profiles.defaultGroup === configuration.profiles.defaultGroup)
       : [configuration]
     const groupedValues = new Map(groupedConfigurations.map((candidate) => [
       candidate.id,
@@ -978,7 +993,7 @@ export class SeedRuntime {
         ? value
         : this.store.pluginConfiguration(pluginConfigurationKey(plugin.id, candidate.id)) || initialPluginConfiguration(candidate),
     ]))
-    const reconciled = reconcilePluginConfigurationDefaultGroup(plugin.configurations, groupedValues, configuration.id)
+    const reconciled = reconcilePluginConfigurationDefaultGroup(declarations, groupedValues, configuration.id)
     await this.store.setPluginConfigurations(Object.fromEntries([...reconciled].map(([configurationId, stored]) => [
       pluginConfigurationKey(plugin.id, configurationId),
       stored,
@@ -990,10 +1005,12 @@ export class SeedRuntime {
       action_label_en_us: configuration.title.en_US,
       action_label_zh_hans: configuration.title.zh_Hans,
     })
-    this.runtimePlugins = this.runtimePlugins.map((candidate) => candidate.package_id === plugin.id
-      ? { ...candidate, configuration_revision: randomUUID() }
-      : candidate)
-    this.configureWorker()
+    if (reload) {
+      this.runtimePlugins = this.runtimePlugins.map((candidate) => candidate.package_id === plugin.id
+        ? { ...candidate, configuration_revision: randomUUID() }
+        : candidate)
+      this.configureWorker()
+    }
     await this.publishSnapshot()
   }
 
@@ -1867,6 +1884,33 @@ export class SeedRuntime {
       return await this.audioService.invoke(argumentsValue, packageId)
     }
     if (service === 'seed.configuration') {
+      if (argumentsValue.operation === 'add_profile') {
+        const input = z.object({
+          version: z.literal(1),
+          operation: z.literal('add_profile'),
+          configuration_id: z.string().min(1).max(128),
+          declaration: z.unknown().optional(),
+          profile: z.record(z.string(), z.string().max(20_000)),
+        }).strict().parse(Object.fromEntries(Object.entries(argumentsValue).filter(([key]) => key !== 'package_id')))
+        return this.withPluginConfigurationWrite(packageId, async () => {
+          const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)
+          const declaration = plugin && brokerPluginConfigurationDeclaration({
+            configurationId: input.configuration_id,
+            published: this.pluginContributions.get(packageId)?.configurations.find((candidate) => candidate.id === input.configuration_id),
+            bootstrap: input.declaration, runtimeKind: plugin.runtime_kind, permissions: plugin.permissions,
+          })
+          if (!plugin || !declaration || plugin.runtime_kind !== 'native-host' || declaration.secretAccess !== 'owner') {
+            throw Object.assign(new Error('插件只能写入自身声明的配置。'), { code: 'broker_configuration_denied' })
+          }
+          const key = pluginConfigurationKey(packageId, declaration.id)
+          const value = appendPluginConfigurationProfile(declaration, input.profile as Record<string, string> & { id: string }, this.store.pluginConfiguration(key), resolveSeedLocale(this.store.languagePreference()))
+          const values = { ...value.values, profiles: JSON.stringify(value.profiles), default_profile_id: value.default_profile_id }
+          // Reuse the normal validation, encryption, defaults and snapshot path without restarting
+          // the plugin before its pending host call has received the acknowledgement.
+          await this.savePluginConfiguration({ pluginId: packageId, configurationId: declaration.id, values }, false, declaration)
+          return null
+        })
+      }
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)
       const configurationId = String(argumentsValue.configuration_id || '')
       const publishedDeclaration = this.pluginContributions.get(packageId)?.configurations.find((candidate) => candidate.id === configurationId)

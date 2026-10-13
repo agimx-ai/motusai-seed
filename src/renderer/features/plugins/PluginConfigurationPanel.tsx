@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { LoaderCircle, Plus, Save, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, UpdatePluginConfigurationInput } from '../../../shared/contracts'
@@ -23,6 +23,7 @@ type Props = {
   embedded?: boolean
   hideDefaultControls?: boolean
   preferDefaultOnSave?: boolean
+  headerActions?: ReactNode
   onSave(input: UpdatePluginConfigurationInput): Promise<void>
   onQueryOptions(input: QueryPluginConfigurationOptionsInput): Promise<PluginConfigurationOption[]>
   onQueryProfileStatuses(input: QueryPluginConfigurationProfileStatusesInput): Promise<PluginConfigurationProfileStatus[]>
@@ -207,7 +208,7 @@ function DynamicOptionsInput({ pluginId, configurationId, field, fields, values,
   />
 }
 
-function FieldControl({ pluginId, configurationId, field, fields, values, configured, dependencyConfigured, optionValueLabels, optionValueOptions, onChange, onQueryOptions, bleedControl = false }: {
+function FieldControl({ pluginId, configurationId, field, fields, values, configured, dependencyConfigured, optionValueLabels, optionValueOptions, onChange, onQueryOptions }: {
   pluginId: string
   configurationId: string
   field: Field
@@ -219,7 +220,6 @@ function FieldControl({ pluginId, configurationId, field, fields, values, config
   optionValueOptions?: ReadonlyMap<string, PluginConfigurationOption>
   onChange(values: Record<string, string>): void
   onQueryOptions(input: QueryPluginConfigurationOptionsInput): Promise<PluginConfigurationOption[]>
-  bleedControl?: boolean
 }) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
@@ -256,14 +256,11 @@ function FieldControl({ pluginId, configurationId, field, fields, values, config
       : field.type === 'textarea'
         ? <TextAreaControl required={required} maxLength={field.maxLength} value={values[field.key] || ''} placeholder={field.placeholder ? resolveSeedLocalizedText(field.placeholder, locale) : t('plugins.inputPlaceholder')} onChange={(event) => update(event.target.value)} />
         : <input className="seed-text-input" type={field.type === 'url' ? 'url' : 'text'} required={required} maxLength={field.maxLength} value={values[field.key] || ''} placeholder={field.placeholder ? resolveSeedLocalizedText(field.placeholder, locale) : t('plugins.inputPlaceholder')} autoComplete="off" onChange={(event) => update(event.target.value)} />
-  const renderedControl = bleedControl
-    ? <div className="-mx-4 w-[calc(100%+2rem)] [&_button]:px-4 [&_input]:px-4 [&_textarea]:px-4">{control}</div>
-    : control
   return <label className={`grid min-w-0 gap-1.5 text-[12px] text-muted-foreground ${fieldSpanClass[field.span]}`}>
     <FieldLabel description={resolveSeedLocalizedText(field.description, locale)} helpUrl={field.helpUrl} className="text-foreground">
       {resolveSeedLocalizedText(field.label, locale)}
     </FieldLabel>
-    {renderedControl}
+    {control}
   </label>
 }
 
@@ -296,7 +293,7 @@ function ProfileStatusDot({ status, onReconnect }: { status: PluginConfiguration
   >{dot}</span>
 }
 
-export function PluginConfigurationPanel({ pluginId, configuration, state, pluginNames, busy, embedded = false, hideDefaultControls = false, preferDefaultOnSave = false, onSave, onQueryOptions, onQueryProfileStatuses, onReconnectProfile }: Props) {
+export function PluginConfigurationPanel({ pluginId, configuration, state, pluginNames, busy, embedded = false, hideDefaultControls = false, preferDefaultOnSave = false, headerActions, onSave, onQueryOptions, onQueryProfileStatuses, onReconnectProfile }: Props) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
   const [profiles, setProfiles] = useState(() => parseProfiles(configuration, state))
@@ -459,12 +456,31 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
       })
       .finally(() => setReconnectingProfileId(''))
   }
+  const canAddProfile = Boolean(configuration.profiles.actions.add && profiles.length < configuration.profiles.maxItems)
+  const addProfile = () => {
+    const profile = newProfile(configuration)
+    mutateProfiles([...profiles, profile])
+    setExpandedId(profile.id)
+    if (configuration.profiles.defaultRequired && !defaultId) setDefaultId(profile.id)
+  }
+  const addProfileControl = canAddProfile && <ActionButton
+    type="button"
+    icon={configuration.profiles.actions.add?.placement === 'header' ? undefined : <Plus size={14} />}
+    onClick={addProfile}
+  >
+    {resolveSeedLocalizedText(configuration.profiles.actions.add!.label, locale)}
+  </ActionButton>
   const statusesByProfileId = new Map(profileStatuses.map((status) => [status.profileId, status]))
-
-  return <section className={embedded ? undefined : 'mt-8'}>
-    {!embedded && <div className="sticky top-[96px] z-[8] bg-background">
-      <h3 className="m-0 text-[17px] font-medium">{resolveSeedLocalizedText(configuration.title, locale)}</h3>
-      <p className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">{resolveSeedLocalizedText(configuration.description, locale)}</p>
+  return <section className={embedded ? undefined : 'mt-8 first-of-type:mt-0'}>
+    {!embedded && <div className="sticky top-[96px] z-[8] flex items-start justify-between gap-4 bg-background">
+      <div className="min-w-0">
+        <h3 className="m-0 text-[17px] font-medium">{resolveSeedLocalizedText(configuration.title, locale)}</h3>
+        <p className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">{resolveSeedLocalizedText(configuration.description, locale)}</p>
+      </div>
+      {(configuration.profiles.actions.add?.placement === 'header' || headerActions) && <div className="flex shrink-0 items-center gap-2">
+        {configuration.profiles.actions.add?.placement === 'header' && addProfileControl}
+        {headerActions}
+      </div>}
     </div>}
     <div>
       {profiles.length > 0 && <div className="grid gap-2 pt-2">
@@ -561,13 +577,8 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
           </form>}
         </div>})}
       </div>}
-      {configuration.profiles.actions.add && profiles.length < configuration.profiles.maxItems && <ActionButton className="mt-3" type="button" icon={<Plus size={14} />} onClick={() => {
-        const profile = newProfile(configuration)
-        mutateProfiles([...profiles, profile])
-        setExpandedId(profile.id)
-        if (configuration.profiles.defaultRequired && !defaultId) setDefaultId(profile.id)
-      }}>{resolveSeedLocalizedText(configuration.profiles.actions.add.label, locale)}</ActionButton>}
-      {configuration.fields.length > 0 && configuration.actions?.save && <form className="mt-4 px-4" noValidate onSubmit={(event) => { event.preventDefault(); if (!busy) void submitConfiguration(savedProfiles, savedDefaultId, values) }}>
+      {configuration.profiles.actions.add?.placement !== 'header' && canAddProfile && <div className="mt-3">{addProfileControl}</div>}
+      {configuration.fields.length > 0 && configuration.actions?.save && <form className="mt-4" noValidate onSubmit={(event) => { event.preventDefault(); if (!busy) void submitConfiguration(savedProfiles, savedDefaultId, values) }}>
         <div className="flex flex-wrap gap-x-3 gap-y-4">
           {configuration.fields.map((field) => {
             const reset = field.resetWhenChanged?.some((key) => values[key] !== state.values[key]) || false
@@ -587,7 +598,6 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
               optionValueLabels={pluginNames}
               onChange={setValues}
               onQueryOptions={onQueryOptions}
-              bleedControl={field.span === 'full'}
             />
           })}
         </div>
