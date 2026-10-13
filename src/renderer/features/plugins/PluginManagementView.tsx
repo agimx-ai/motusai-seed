@@ -73,7 +73,7 @@ type PanelProps = {
   blocks: Array<
     | { type: 'text'; value_path: string; label?: SeedLocalizedText }
     | { type: 'markdown'; value_path: string; stream_id_path?: string; streaming_when?: { path: string; in: Array<string | number | boolean | null> }; label?: SeedLocalizedText }
-    | { type: 'status'; state_path: string; label_path?: string; states: Record<string, SeedLocalizedText> }
+    | { type: 'status'; state_path: string; label_path?: string; elapsed_ms_path?: string; states: Record<string, SeedLocalizedText> }
     | { type: 'image' | 'qr'; data_url_path: string; alt?: SeedLocalizedText }
     | { type: 'progress'; value_path: string; max: number; label?: SeedLocalizedText }
   >
@@ -103,6 +103,15 @@ function visible(action: ManagementAction, value: unknown) {
 function formatDuration(value: unknown) {
   const totalSeconds = Math.max(0, Math.floor(Number(value || 0) / 1_000))
   return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`
+}
+
+function formatElapsedDuration(value: unknown, locale: string) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return ''
+  const seconds = Math.floor(value / 1_000)
+  const units = [['hour', Math.floor(seconds / 3_600)], ['minute', Math.floor(seconds % 3_600 / 60)], ['second', seconds % 60]] as const
+  return units.filter(([unit, count]) => count > 0 || (unit === 'second' && seconds === 0))
+    .map(([unit, count]) => new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'narrow' }).format(count))
+    .join(locale === 'zh-CN' ? '' : ' ')
 }
 
 const actionIcons = {
@@ -476,9 +485,10 @@ export function PluginManagementView({ pluginId, view, query, invoke }: {
     if (block.type === 'status') {
       const state = String(valueAt(value, block.state_path) ?? '')
       const label = block.states[state] ? resolveSeedLocalizedText(block.states[state]!, locale) : String(valueAt(value, block.label_path || '') ?? state)
+      const elapsed = block.elapsed_ms_path ? formatElapsedDuration(valueAt(value, block.elapsed_ms_path), locale) : ''
       return <div className="flex min-h-6 items-center gap-3 py-2 first:pt-0 last:pb-0" key={index}>
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${state === 'connected' || state === 'ready' ? 'bg-[var(--seed-success)]' : state === 'connecting' || state === 'pending' ? 'animate-pulse bg-info' : state === 'error' ? 'bg-danger' : 'bg-muted-foreground/55'}`} />
-        <span className="text-[13px]">{label}</span>
+        <span className="text-[13px]">{label}{elapsed && <span className="ml-1.5 whitespace-nowrap tabular-nums text-muted-foreground">{elapsed}</span>}</span>
         {markdownBlocks.length > 0 && <IconButton className="ml-auto" label={t(copiedBlock === index ? 'plugins.managementCopied' : 'plugins.managementCopy')} icon={copiedBlock === index ? <Check size={14} /> : <Copy size={14} />} disabled={!copyContent} onClick={() => void copyPanelContent(copyContent, index)} />}
       </div>
     }

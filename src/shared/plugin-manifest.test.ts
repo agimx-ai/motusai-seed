@@ -233,6 +233,13 @@ describe('plugin dynamic configuration options schema', () => {
 })
 
 describe('plugin management view schema', () => {
+  it('accepts an optional elapsed-time data path on a generic panel status block', () => {
+    const panel = { id: 'run', renderer: 'seed.panel', title: text('Run'), description: text('Run'),
+      props: { blocks: [{ type: 'status', state_path: 'state', elapsed_ms_path: 'timing.elapsed_ms' }] } }
+    expect(seedPluginManagementViewSchema.parse(panel).props.blocks).toMatchObject([{ elapsed_ms_path: 'timing.elapsed_ms' }])
+    expect(seedPluginManagementViewSchema.safeParse({ ...panel, props: { blocks: [{ ...panel.props.blocks[0], elapsed_ms_path: '' }] } }).success).toBe(false)
+  })
+
   it('accepts a generic streaming Markdown panel block', () => {
     const view = seedPluginManagementViewSchema.parse({
       id: 'report', renderer: 'seed.panel', title: text('Report'), description: text('Report'),
