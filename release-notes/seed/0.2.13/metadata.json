@@ -1,0 +1,7 @@
+{
+  "version": "0.2.13",
+  "documentation": {
+    "pages": ["/docs/plugins/capability", "/docs/plugins/configuration"],
+    "screenshots": true
+  }
+}

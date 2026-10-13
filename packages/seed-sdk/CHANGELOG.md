@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4
+
+- Expose optional host-owned billing metadata on `SeedPluginError` so failed capability calls can retain confirmed settlement receipts. Missing or incomplete receipts remain unknown, not zero.
+- Document the `local_relay` prepare, start and terminal settlement flow, including persistent call IDs and restart recovery. These host features require Seed 0.2.13.
+
+中文：公开插件错误的可选宿主结算回执类型，失败调用保留已确认费用，缺失或不完整回执不代表零费用；补充本地插件计费、稳定调用编号与重启恢复说明。对应宿主能力需要 Seed 0.2.13。
+
 ## 0.2.3
 
 - Add opt-in `include_billing` to capability invocations and export `SeedBillingReceipt` and `SeedBilledCapabilityResult`.
