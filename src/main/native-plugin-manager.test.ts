@@ -69,7 +69,7 @@ describe('NativePluginManager', () => {
     } finally { await manager.stopAll() }
   })
 
-  it('preserves error parameters returned by a native plugin', async () => {
+  it.each([true, false])('preserves error parameters and billing returned by a native plugin (complete=%s)', async (complete) => {
     state.children.length = 0
     const manager = new NativePluginManager('Seed', async () => null, () => undefined,
       () => undefined, () => undefined, () => undefined)
@@ -79,8 +79,10 @@ describe('NativePluginManager', () => {
         invocation: { request_id: 'failure', arguments: {} }, chain: [] }, 'failure')
       await vi.waitFor(() => expect(state.children[0]!.messages.some((item) => item.type === 'call')).toBe(true))
       state.children[0]!.emit('message', { type: 'result', requestId: 'failure', ok: false,
-        error: 'Failure: permission denied', errorCode: 'probe_failed', errorParams: { detail: 'permission denied' } } satisfies NativePluginEvent)
-      await expect(pending).rejects.toMatchObject({ code: 'probe_failed', params: { detail: 'permission denied' } })
+        error: 'Failure: permission denied', errorCode: 'probe_failed', errorParams: { detail: 'permission denied' },
+        errorBilling: { version: 1, complete, charges: [{ call_id: 'confirmed', charged_amount: 2 }] } } satisfies NativePluginEvent)
+      await expect(pending).rejects.toMatchObject({ code: 'probe_failed', params: { detail: 'permission denied' },
+        billing: { version: 1, complete, charges: [{ call_id: 'confirmed', charged_amount: 2 }] } })
     } finally { await manager.stopAll() }
   })
 

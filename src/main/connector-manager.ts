@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { utilityProcess, type UtilityProcess } from 'electron'
 import type { PluginConfigurationOption, PluginConfigurationProfileStatus, WorkerCommand, WorkerEvent } from '../shared/contracts'
+import { pluginErrorBilling } from '../shared/plugin-error'
 
 export class ConnectorManager {
   private child: UtilityProcess | null = null
@@ -34,7 +35,9 @@ export class ConnectorManager {
         this.pendingNativeCapabilities.delete(event.requestId)
         clearTimeout(pending.timer)
         if (event.ok) pending.resolve(event.result)
-        else pending.reject(Object.assign(new Error(event.error || '插件能力调用失败。'), { code: event.errorCode, params: event.errorParams }))
+        else pending.reject(Object.assign(new Error(event.error || '插件能力调用失败。'), {
+          code: event.errorCode, params: event.errorParams, billing: pluginErrorBilling({ billing: event.errorBilling }),
+        }))
         return
       }
       if (event.type === 'plugin.management.result') {

@@ -63,9 +63,13 @@ app.whenReady().then(async () => {
             if (method === 'crash') process.exit(7)
             if (method === 'delegate') return await ctx.capabilities.invoke({ capability: 'probe_two', method: 'echo', arguments: request.arguments })
             if (request.arguments.error_case) throw Object.assign(new Error('Raw permission failure'), { code: 'probe_failed', params: { detail: 'permission denied' } })
-            if (request.arguments.billing_case) return (await ctx.invokeHost('seed.cloud.relay', {
-              capability_id: 'probe_two', method: 'echo', payload: request.arguments,
-            })).payload
+            if (request.arguments.billing_case) {
+              const response = await ctx.invokeHost('seed.cloud.relay', {
+                capability_id: 'probe_two', method: 'echo', payload: request.arguments,
+              });
+              if (request.arguments.billing_error) throw Object.assign(new Error('Failure after relay'), { code: 'probe_failed', params: { detail: 'after relay' } });
+              return response.payload;
+            }
             return request.arguments
           },
         }))
@@ -78,7 +82,7 @@ app.whenReady().then(async () => {
       if (service === 'seed.native.capabilities.list') return router.consumedCapabilitiesByPackage(packageId)
       if (service === 'seed.native.capabilities.invoke') return router.invokeConsumedByPackage(packageId, args.invocation, args.chain)
       if (service === 'seed.cloud.relay') return { payload: args.payload,
-        billing: { state: 'settled', call_id: args.payload.billing_case, charged_amount: 2 } }
+        ...(args.payload.unknown_billing ? {} : { billing: { state: 'settled', call_id: args.payload.billing_case, charged_amount: 2 } }) }
       return undefined
     },
       (packageId, snapshot) => {
@@ -124,6 +128,20 @@ app.whenReady().then(async () => {
         throw new Error(`Cross-process billing receipt was lost or duplicated: ${JSON.stringify(response)}`)
       }
     }
+    for (const [id, args, expected] of [
+      ['free-error', { error_case: true }, { complete: true, charges: [] }],
+      ['paid-error', { billing_case: 'paid-error', billing_error: true }, { complete: true, charges: [{ call_id: 'paid-error', charged_amount: 2 }] }],
+      ['unknown-error', { billing_case: 'unknown-error', billing_error: true, unknown_billing: true }, { complete: false, charges: [] }],
+    ]) {
+      let failure
+      try { await router.withBillingReceipt(() => router.invoke('probe_one', 'delegate', invocation(id, args))) }
+      catch (error) { failure = error }
+      if (failure?.code !== 'probe_failed' || failure.billing?.version !== 1
+        || failure.billing.complete !== expected.complete
+        || JSON.stringify(failure.billing.charges) !== JSON.stringify(expected.charges)) {
+        throw new Error(`Failed cross-process invocation lost its authoritative receipt: ${id}`)
+      }
+    }
     if (firstSnapshot.configurations[0]?.id !== 'source' || firstSnapshot.connections[0]?.state !== 'connected'
       || firstSnapshot.localApi?.routes[0]?.path !== '/events') throw new Error('Native runtime contributions were not transferred.')
     const options = await manager.call(entries[0].package_id, { type: 'configuration-options',
@@ -159,7 +177,7 @@ app.whenReady().then(async () => {
     if (!router.supports('probe_one', 'echo') || !router.supports('probe_two', 'echo')) {
       throw new Error('Router did not recover the crashed plugin while retaining the healthy one.')
     }
-    process.stdout.write('Independent native processes, nested billing receipts, crash isolation, and restart passed.\n')
+    process.stdout.write('Independent native processes, success/failure billing receipts, crash isolation, and restart passed.\n')
   } catch (error) {
     failed = true
     process.stderr.write(`${error instanceof Error ? error.stack || error.message : String(error)}\n`)

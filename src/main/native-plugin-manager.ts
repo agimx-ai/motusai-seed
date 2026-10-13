@@ -4,7 +4,7 @@ import { utilityProcess, type UtilityProcess } from 'electron'
 import type { NativePluginRuntimeSnapshot, SeedPluginRuntimeDefinition, WorkerCommand } from '../shared/contracts'
 import type { NativePluginCommand, NativePluginEvent, NativePluginOperation } from '../shared/native-plugin-process'
 import type { HostDiagnosticEvent } from '../shared/diagnostic-trace'
-import { pluginErrorParams } from '../shared/plugin-error'
+import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error'
 
 type Configuration = Extract<WorkerCommand, { type: 'configure' }>
 type Pending = { resolve(value: unknown): void; reject(error: Error): void; timer: NodeJS.Timeout }
@@ -22,8 +22,8 @@ type Slot = {
   retryCount: number
 }
 
-function remoteError(message: string, code?: string, params?: Record<string, string | number | boolean>) {
-  return Object.assign(new Error(message), { code: code || 'native_plugin_error', params })
+function remoteError(message: string, code?: string, params?: Record<string, string | number | boolean>, billing?: unknown) {
+  return Object.assign(new Error(message), { code: code || 'native_plugin_error', params, billing: pluginErrorBilling({ billing }) })
 }
 
 /** One Electron utility process per native plugin. Only Main may own or restart these processes. */
@@ -128,7 +128,7 @@ export class NativePluginManager {
       if (cancellationTimer) clearTimeout(cancellationTimer)
       slot.cancellationTimers.delete(event.requestId)
       if (event.ok) pending.resolve(event.result)
-      else pending.reject(remoteError(event.error || 'Native plugin call failed.', event.errorCode, event.errorParams))
+      else pending.reject(remoteError(event.error || 'Native plugin call failed.', event.errorCode, event.errorParams, event.errorBilling))
       return
     }
     if (event.type === 'host.invoke') {
@@ -137,7 +137,9 @@ export class NativePluginManager {
           const result = await this.invokeBroker(packageId, event.service, event.arguments)
           if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: true, result } satisfies NativePluginCommand)
         } catch (error) {
+          const errorBilling = pluginErrorBilling(error)
           if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: false,
+            ...(errorBilling ? { errorBilling } : {}),
             error: error instanceof Error ? error.message : String(error), errorCode: 'native_broker_error',
             errorParams: pluginErrorParams(error) } satisfies NativePluginCommand)
         }
@@ -155,6 +157,7 @@ export class NativePluginManager {
           message: 'Host service completed.' })
         if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: true, result } satisfies NativePluginCommand)
       } catch (error) {
+        const errorBilling = pluginErrorBilling(error)
         this.onDiagnostic?.({ ...base, phase: 'failed', duration_ms: Math.round(performance.now() - started),
           error_code: error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
           error_name: error instanceof Error ? error.name : undefined,
@@ -162,6 +165,7 @@ export class NativePluginManager {
           message: error instanceof Error ? error.message : String(error) })
         if (!this.onDiagnostic) this.onFailure(packageId, 'native.host.invoke.failed', error instanceof Error ? error : new Error(String(error)))
         if (this.slots.get(packageId) === slot) slot.child.postMessage({ type: 'host.result', requestId: event.requestId, ok: false,
+          ...(errorBilling ? { errorBilling } : {}),
           error: error instanceof Error ? error.message : String(error),
           errorParams: pluginErrorParams(error),
           errorCode: error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pluginErrorParams } from './plugin-error'
+import { pluginErrorBilling, pluginErrorParams } from './plugin-error'
 
 describe('plugin error parameters', () => {
   it('preserves SDK scalar parameters and excludes non-contract values', () => {
@@ -12,5 +12,22 @@ describe('plugin error parameters', () => {
     expect(pluginErrorParams(new Error('failure'))).toBeUndefined()
     expect(pluginErrorParams(null)).toBeUndefined()
     expect(pluginErrorParams({ params: [] })).toBeUndefined()
+  })
+
+  it('copies only valid billing fields, preserving confirmed zero and uncertainty', () => {
+    for (const complete of [true, false]) {
+      const billing = { version: 1, complete, charges: [{ call_id: 'zero', charged_amount: 0, secret: 'discard' }], secret: 'discard' }
+      expect(structuredClone(pluginErrorBilling({ billing }))).toEqual({ version: 1, complete,
+        charges: [{ call_id: 'zero', charged_amount: 0 }] })
+    }
+    expect(pluginErrorBilling({ billing: { version: 1, complete: true, charges: [] } })).toEqual({ version: 1, complete: true, charges: [] })
+  })
+
+  it.each([undefined, {}, { version: 2, complete: true, charges: [] },
+    { version: 1, complete: 'true', charges: [] },
+    ...[-1, NaN, Infinity, 0.001, '0'].map((charged_amount) => ({ version: 1, complete: true, charges: [{ call_id: 'bad', charged_amount }] })),
+    { version: 1, complete: true, charges: [{ call_id: '', charged_amount: 0 }] },
+  ])('does not turn invalid or missing billing into free usage: %j', (billing) => {
+    expect(pluginErrorBilling({ billing })).toBeUndefined()
   })
 })

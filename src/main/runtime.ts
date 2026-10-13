@@ -46,7 +46,7 @@ import { SeedDistributionEvents } from './distribution-events'
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization'
 import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh'
 import { PluginDataCleaner } from './plugin-data-cleaner'
-import { pluginErrorParams } from '../shared/plugin-error'
+import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error'
 
 const entitlementResponseSchema = z.object({
   items: z.array(z.object({
@@ -616,10 +616,12 @@ export class SeedRuntime {
           duration_ms: Math.round(performance.now() - started),
           error_code: error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
           ...errorDetails(error) })
+        const errorBilling = pluginErrorBilling(error)
         this.connector.send({
           type: 'host.result',
           requestId: event.requestId,
           ok: false,
+          ...(errorBilling ? { errorBilling } : {}),
           error: error instanceof Error ? error.message : String(error),
           errorParams: pluginErrorParams(error),
           errorCode: error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'

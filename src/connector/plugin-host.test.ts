@@ -57,7 +57,9 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
     const middlePath = join(directory, 'middle.mjs')
     await writeFile(providerPath, `export function apply(ctx) {
       ctx.effect(() => ctx.capabilities.register('probe', { async invoke(method, invocation) {
+        if (invocation.arguments.value === 'local-failure') throw new Error('Local edit failed');
         const response = await ctx.invokeHost('seed.cloud.relay', { capability_id: 'probe', method: 'echo', payload: invocation.arguments });
+        if (invocation.arguments.value.endsWith('-failure')) throw new Error('Failure after relay');
         return response.payload;
       } }));
     }`)
@@ -93,8 +95,13 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
       await expect(invoke('free', 'probe')).resolves.toMatchObject({ billing: { complete: true,
         charges: [{ call_id: 'free', charged_amount: 0 }] } })
       await expect(invoke('raw', 'probe', false)).resolves.toEqual({ value: 'raw' })
+      await expect(invoke('local-failure')).rejects.toMatchObject({ message: 'Local edit failed',
+        billing: { version: 1, complete: true, charges: [] } })
+      await expect(invoke('paid-failure')).rejects.toMatchObject({ message: 'Failure after relay',
+        billing: { version: 1, complete: true, charges: [{ call_id: 'paid-failure', charged_amount: 2 }] } })
       confirmed = false
       await expect(invoke('unknown')).resolves.toMatchObject({ billing: { complete: false, charges: [] } })
+      await expect(invoke('unknown-failure')).rejects.toMatchObject({ billing: { complete: false, charges: [] } })
       await expect(host.invokeConsumedByPackage(consumer.package_id,
         { capability: 'forbidden', method: 'echo', arguments: {}, include_billing: true }, []))
         .rejects.toMatchObject({ code: 'capability_unavailable' })
@@ -106,6 +113,54 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
       await host.stop()
       await rm(directory, { recursive: true, force: true })
     }
+  })
+
+  it.each(['released', 'settled', 'uncertain', 'status-failed', 'prepare-failed'] as const)(
+    'does not infer free usage from a failed billed capability (%s)', async (state) => {
+      const billed = { ...plugin, capabilities: plugin.capabilities.map((capability) => ({ ...capability,
+        methods: capability.methods.map((method) => ({ ...method, annotations: { 'billing.settlement': 'cloud_relay' } })) })) }
+      const host = new SeedPluginHost({ configuration: () => null, invoke_host: async (service) => {
+        if (service === 'seed.billing.prepare') {
+          if (state === 'prepare-failed') throw new Error('Preparation response lost')
+          return { billable: true, call_id: 'billed-call', amount: 2, price_revision: 1 }
+        }
+        if (service === 'seed.billing.cancel') {
+          if (state === 'released') return { state: 'released', charged_amount: 0 }
+          throw new Error('Execution may have started')
+        }
+        if (service === 'seed.billing.status') {
+          if (state === 'status-failed') throw new Error('Status unavailable')
+          return { state, charged_amount: state === 'settled' ? 2 : null }
+        }
+        throw new Error('Capability failed')
+      } }, undefined, undefined, 'local', undefined, true)
+      try {
+        await host.start([billed])
+        await expect(host.withBillingReceipt(() => host.invoke('probe', 'echo', {
+          request_id: 'failure', arguments: { value: 'ok' },
+        }))).rejects.toMatchObject({ billing: { version: 1,
+          complete: state === 'released' || state === 'settled',
+          charges: state === 'released' || state === 'settled'
+            ? [{ call_id: 'billed-call', charged_amount: state === 'settled' ? 2 : 0 }] : [],
+        } })
+      } finally { await host.stop() }
+    })
+
+  it.each([true, false])('merges authoritative native error receipts without guessing on transport failure (receipt=%s)', async (hasReceipt) => {
+    const nativePlugin = { ...plugin, runtime_kind: 'native-host' as const, entry_path: '/not-loaded/in-connector.mjs' }
+    const host = new SeedPluginHost({ configuration: () => null, invoke_host: async (service) => {
+      if (service === 'seed.native.start') return { capabilities: ['probe'], configurations: [], managementViews: [], connections: [] }
+      if (service === 'seed.native.invoke') throw Object.assign(new Error('Native failed'), hasReceipt
+        ? { billing: { version: 1, complete: true, charges: [{ call_id: 'charged-before-failure', charged_amount: 2 }] } } : {})
+      return null
+    } }, undefined, undefined, 'remote')
+    try {
+      await host.start([nativePlugin])
+      await expect(host.withBillingReceipt(() => host.invoke('probe', 'echo', {
+        request_id: 'failure', arguments: { value: 'ok' },
+      }))).rejects.toMatchObject({ billing: { version: 1, complete: hasReceipt,
+        charges: hasReceipt ? [{ call_id: 'charged-before-failure', charged_amount: 2 }] : [] } })
+    } finally { await host.stop() }
   })
 
   it('merges native-process receipts before validating the business result schema', async () => {

@@ -13,6 +13,7 @@ import type { GlobalTaskActivityObserver } from './global-task-activity-observer
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace'
 import { isCreditAmount } from '../shared/credit-amount'
 import { BillingReceipt } from './billing-receipt'
+import { pluginErrorBilling } from '../shared/plugin-error'
 import type { SeedBilledCapabilityResult } from '@motus-ai/seed-sdk'
 
 type MethodValidators = { input?: ValidateFunction; output?: ValidateFunction }
@@ -215,8 +216,9 @@ export class SeedPluginHost {
       const result = await this.billingReceipts.run(receipt, work)
       return { result, billing: receipt.snapshot() }
     } catch (error) {
-      receipt.uncertain()
-      throw error
+      // Business failure is not billing uncertainty. Charging/transport paths
+      // mark uncertainty themselves; preserve their authoritative snapshot.
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), { billing: receipt.snapshot() })
     } finally {
       parent?.merge(receipt.snapshot())
       parent?.end()
@@ -299,6 +301,12 @@ export class SeedPluginHost {
           const billed = response as SeedBilledCapabilityResult
           this.billingReceipts.getStore()!.merge(billed.billing)
           return billed.result
+        } catch (error) {
+          const receipt = this.billingReceipts.getStore()
+          const billing = pluginErrorBilling(error)
+          if (billing) receipt?.merge(billing)
+          else receipt?.uncertain()
+          throw error
         } finally { context.signal?.removeEventListener('abort', cancel) }
       },
     }])))
@@ -537,7 +545,11 @@ export class SeedPluginHost {
         }
         return result
       } catch (error) {
-        if (tracksBilling) receipt?.uncertain()
+        if (tracksBilling) {
+          const billing = service === 'seed.native.capabilities.invoke' ? pluginErrorBilling(error) : undefined
+          if (billing) receipt?.merge(billing)
+          else receipt?.uncertain()
+        }
         throw error
       } finally { if (tracksBilling) receipt?.end() }
     }
@@ -1323,8 +1335,14 @@ export class SeedPluginHost {
     }
     const principal: SeedInvocationPrincipal = context.principal || { kind: 'seed', surface: 'system' }
     let billingContext: { call_id: string; amount: number; price_revision: number } | undefined
+    let preparingBilling = false
+    // A browser plugin's internal relay calls are not correlated, even on failure.
+    if (declared.plugin.runtime_kind === 'sandboxed-web' && declared.plugin.permissions.includes('cloud.relay')) {
+      this.billingReceipts.getStore()?.uncertain()
+    }
     try {
       const requiresCloudBilling = declared.method.annotations?.['billing.settlement'] === 'cloud_relay'
+      preparingBilling = this.cloudBilling && requiresCloudBilling
       const billing = this.cloudBilling && requiresCloudBilling ? await this.runtime.invoke_host('seed.billing.prepare', {
         invocation_id: randomUUID(),
         plugin_id: declared.plugin.package_id,
@@ -1338,6 +1356,7 @@ export class SeedPluginHost {
       billingContext = billing.billable ? {
         call_id: String(billing.call_id), amount: Number(billing.amount), price_revision: Number(billing.price_revision),
       } : undefined
+      preparingBilling = false
       const handler = this.nativeCapabilities.get(declared.plugin.package_id)?.get(capability)
       if (declared.plugin.runtime_kind === 'native-host' && !handler) {
         throw new Error(`插件 ${declared.plugin.package_id} 未注册能力实现：${capability}`)
@@ -1373,18 +1392,24 @@ export class SeedPluginHost {
         }
         else this.billingReceipts.getStore()?.uncertain()
       }
-      // Browser contexts cannot correlate arbitrary asynchronous Broker calls with
-      // a capability invocation. Never claim those unobserved charges are zero.
-      if (declared.plugin.runtime_kind === 'sandboxed-web' && declared.plugin.permissions.includes('cloud.relay')) {
-        this.billingReceipts.getStore()?.uncertain()
-      }
       scope.handlerReturned = true
       this.finishInvocationScope(scope)
       return result
     } catch (error) {
-      if (billingContext) await this.runtime.invoke_host('seed.billing.cancel', {
-        call_id: billingContext.call_id,
-      }).catch(() => undefined)
+      if (preparingBilling) this.billingReceipts.getStore()?.uncertain()
+      if (billingContext) {
+        const cancelled = await this.runtime.invoke_host('seed.billing.cancel', {
+          call_id: billingContext.call_id,
+        }).catch(() => undefined)
+        const settlement = (cancelled || await this.runtime.invoke_host('seed.billing.status', {
+          call_id: billingContext.call_id,
+        }).catch(() => undefined)) as { state?: string; charged_amount?: unknown } | undefined
+        if (settlement?.state === 'settled' && isCreditAmount(settlement.charged_amount) && settlement.charged_amount >= 0) {
+          this.billingReceipts.getStore()?.add(billingContext.call_id, settlement.charged_amount)
+        } else if (settlement?.state === 'released' && settlement.charged_amount === 0) {
+          this.billingReceipts.getStore()?.add(billingContext.call_id, 0)
+        } else this.billingReceipts.getStore()?.uncertain()
+      }
       scope.handlerReturned = true
       scope.failed = true
       this.finishInvocationScope(scope)

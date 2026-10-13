@@ -5,7 +5,7 @@ import { ConnectorCommandDispatcher } from './command-dispatcher'
 import { SeedLocalHttpGateway, seedLocalApiPort } from './local-http-gateway'
 import { SeedPluginHost } from './plugin-host'
 import { GlobalTaskActivityObserver } from './global-task-activity-observer'
-import { pluginErrorParams } from '../shared/plugin-error'
+import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error'
 
 type ParentPort = {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -101,7 +101,9 @@ async function handleCommand(command: WorkerCommand) {
         : await pluginHost.invokeConsumedByPackage(command.packageId, command.invocation, command.chain)
       emit({ type: 'native.capability.result', requestId: command.requestId, ok: true, result })
     } catch (error) {
+      const errorBilling = pluginErrorBilling(error)
       emit({ type: 'native.capability.result', requestId: command.requestId, ok: false,
+        ...(errorBilling ? { errorBilling } : {}),
         error: error instanceof Error ? error.message : String(error),
         errorParams: pluginErrorParams(error),
         errorCode: error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
@@ -223,6 +225,7 @@ async function handleCommand(command: WorkerCommand) {
     else {
       const error = Object.assign(new Error(command.error || '主进程能力调用失败。'), {
         code: command.errorCode || 'host_invoke_error', params: command.errorParams,
+        billing: pluginErrorBilling({ billing: command.errorBilling }),
       })
       pending.reject(error)
     }

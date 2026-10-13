@@ -4,7 +4,7 @@ import { SeedPluginHost } from './plugin-host'
 import { GlobalTaskActivityObserver } from './global-task-activity-observer'
 import type { WorkerCommand } from '../shared/contracts'
 import { waitForSettlement } from './shutdown'
-import { pluginErrorParams } from '../shared/plugin-error'
+import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error'
 
 type ParentPort = {
   on(event: 'message', listener: (event: { data: unknown }) => void): void
@@ -93,7 +93,9 @@ async function handle(command: NativePluginCommand) {
     pendingHost.delete(command.requestId)
     if (command.ok) pending.resolve(command.result)
     else {
-      const error = Object.assign(new Error(command.error || 'Host service failed.'), { code: command.errorCode, params: command.errorParams })
+      const error = Object.assign(new Error(command.error || 'Host service failed.'), {
+        code: command.errorCode, params: command.errorParams, billing: pluginErrorBilling({ billing: command.errorBilling }),
+      })
       pending.reject(error)
     }
     return
@@ -121,7 +123,9 @@ async function handle(command: NativePluginCommand) {
       const result = await call(command.operation, controller.signal)
       emit({ type: 'result', requestId: command.requestId, ok: true, result })
     } catch (error) {
+      const errorBilling = pluginErrorBilling(error)
       emit({ type: 'result', requestId: command.requestId, ok: false, error: error instanceof Error ? error.message : String(error),
+        ...(errorBilling ? { errorBilling } : {}),
         errorParams: pluginErrorParams(error),
         errorCode: error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
           ? String((error as { code: string }).code) : 'native_plugin_error' })

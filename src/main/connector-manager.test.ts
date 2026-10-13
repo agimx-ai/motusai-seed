@@ -39,7 +39,7 @@ import { ConnectorManager } from './connector-manager'
 describe('ConnectorManager', () => {
   beforeEach(() => { state.children.length = 0 })
 
-  it('preserves parameters returned by the capability router', async () => {
+  it.each([true, false])('preserves error parameters and billing returned by the capability router (complete=%s)', async (complete) => {
     const manager = new ConnectorManager('Seed', (event) => {
       if (event.type === 'host.invoke') manager.send({ type: 'host.result', requestId: event.requestId, ok: true, result: null })
     })
@@ -47,8 +47,10 @@ describe('ConnectorManager', () => {
     const pending = manager.invokeNativeCapability('com.example.consumer', { capability: 'probe', method: 'echo', arguments: {} }, [])
     const command = state.children[0]!.messages.find((message) => message.type === 'native.capability.invoke')!
     state.children[0]!.emit('message', { type: 'native.capability.result', requestId: command.requestId, ok: false,
-      error: 'Failure: permission denied', errorCode: 'probe_failed', errorParams: { detail: 'permission denied' } } satisfies WorkerEvent)
-    await expect(pending).rejects.toMatchObject({ code: 'probe_failed', params: { detail: 'permission denied' } })
+      error: 'Failure: permission denied', errorCode: 'probe_failed', errorParams: { detail: 'permission denied' },
+      errorBilling: { version: 1, complete, charges: [{ call_id: 'confirmed', charged_amount: 2 }] } } satisfies WorkerEvent)
+    await expect(pending).rejects.toMatchObject({ code: 'probe_failed', params: { detail: 'permission denied' },
+      billing: { version: 1, complete, charges: [{ call_id: 'confirmed', charged_amount: 2 }] } })
     await manager.stop()
   })
 
