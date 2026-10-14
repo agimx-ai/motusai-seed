@@ -63,6 +63,8 @@ export type PluginConfigurationOption = {
   badges?: PluginConfigurationOptionBadge[]
   iconDataUrl?: string
   iconDarkDataUrl?: string
+  group?: 'seed' | 'custom'
+  thinkingLevels?: string[]
 }
 export type QueryPluginConfigurationOptionsInput = {
   pluginId: string

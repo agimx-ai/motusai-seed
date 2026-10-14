@@ -138,6 +138,9 @@ const seedPluginConfigurationFieldSchema = z.object({
   schemes: z.array(z.enum(['http', 'https'])).min(1).max(2).optional(),
   options: z.array(seedPluginConfigurationOptionSchema).min(1).max(32).optional(),
   dynamic_options: seedPluginDynamicOptionsSchema.optional(),
+  control: z.literal('model_select').optional(),
+  size: z.enum(['default', 'form']).optional(),
+  thinking_field_key: identifier.optional(),
   visible_when: seedPluginConfigurationConditionSchema.optional(),
   required_when: seedPluginConfigurationConditionSchema.optional(),
   reset_when_changed: z.array(identifier).min(1).max(8).optional(),
@@ -148,7 +151,10 @@ const seedPluginConfigurationFieldSchema = z.object({
   if (field.type !== 'select' && field.options !== undefined) context.addIssue({ code: 'custom', path: ['options'], message: '只有选择字段可以声明选项。' })
   if (field.type !== 'url' && field.schemes !== undefined) context.addIssue({ code: 'custom', path: ['schemes'], message: '只有 URL 字段可以声明协议。' })
   if (field.dynamic_options && field.type !== 'text') context.addIssue({ code: 'custom', path: ['dynamic_options'], message: '只有文本字段可以声明动态选项。' })
-}).transform(({ max_length, help_url, visible_when, required_when, reset_when_changed, dynamic_options, ...field }) => ({
+  if (field.control && (field.type !== 'text' || !field.dynamic_options)) context.addIssue({ code: 'custom', path: ['control'], message: '模型选择控件必须使用动态文本选项。' })
+  if (field.thinking_field_key && !field.control) context.addIssue({ code: 'custom', path: ['thinking_field_key'], message: '思考等级字段必须属于模型选择控件。' })
+  if (field.size && !field.control) context.addIssue({ code: 'custom', path: ['size'], message: '控件尺寸必须声明对应控件。' })
+}).transform(({ max_length, help_url, visible_when, required_when, reset_when_changed, dynamic_options, thinking_field_key, ...field }) => ({
   ...field,
   maxLength: max_length,
   helpUrl: help_url,
@@ -156,6 +162,7 @@ const seedPluginConfigurationFieldSchema = z.object({
   requiredWhen: required_when,
   resetWhenChanged: reset_when_changed,
   dynamicOptions: dynamic_options,
+  thinkingFieldKey: thinking_field_key,
 }))
 
 const seedPluginProfilesSchema = z.object({
@@ -256,11 +263,15 @@ export const seedPluginConfigurationSchema = z.object({
   description: seedLocalizedTextSchema(500),
   source_presentation: seedPluginConfigurationSourcePresentationSchema.optional(),
   fields: z.array(seedPluginConfigurationFieldSchema).max(32).default([]),
+  save_mode: z.enum(['manual', 'auto']).default('manual'),
   actions: z.object({ save: seedPluginConfigurationActionSchema }).strict().optional(),
   profiles: seedPluginProfilesSchema.optional(),
 }).strict().superRefine((value, context) => {
   if (value.permission && value.permission.length > 128) context.addIssue({ code: 'custom', path: ['permission'], message: '配置权限无效。' })
-  if (value.fields.length > 0 && !value.actions?.save) context.addIssue({ code: 'custom', path: ['actions', 'save'], message: '配置级字段必须声明保存动作。' })
+  if (value.save_mode === 'auto') {
+    if (value.renderer !== 'seed.form') context.addIssue({ code: 'custom', path: ['save_mode'], message: '自动保存只适用于独立配置表单。' })
+    if (value.actions?.save) context.addIssue({ code: 'custom', path: ['actions', 'save'], message: '自动保存表单不能同时声明手动保存动作。' })
+  } else if (value.fields.length > 0 && !value.actions?.save) context.addIssue({ code: 'custom', path: ['actions', 'save'], message: '配置级字段必须声明保存动作。' })
   if (value.source_presentation && !value.profiles?.defaultGroup) context.addIssue({ code: 'custom', path: ['source_presentation'], message: '来源展示必须属于一个默认配置组。' })
   if (value.renderer === 'seed.form') {
     if (value.profiles) context.addIssue({ code: 'custom', path: ['profiles'], message: '独立表单不能声明配置档案。' })
@@ -291,6 +302,17 @@ export const seedPluginConfigurationSchema = z.object({
     }
   }
   const keys = new Set<string>()
+  for (const fields of [value.fields, value.profiles?.fields || []]) {
+    const linked = new Set<string>()
+    for (const field of fields) {
+      if (!field.thinkingFieldKey) continue
+      const target = fields.find((candidate) => candidate.key === field.thinkingFieldKey)
+      if (!target || target === field || target.type !== 'text' || target.control || target.dynamicOptions || linked.has(target.key)) {
+        context.addIssue({ code: 'custom', path: ['fields'], message: '模型选择必须引用同一表单中独立且唯一的思考等级文本字段。' })
+      }
+      linked.add(field.thinkingFieldKey)
+    }
+  }
   for (const [index, field] of (value.fields || []).entries()) {
     if (keys.has(field.key)) context.addIssue({ code: 'custom', path: ['fields', index, 'key'], message: `重复的配置字段：${field.key}` })
     if (field.type !== 'hidden' && !field.label) context.addIssue({ code: 'custom', path: ['fields', index, 'label'], message: '可见配置字段必须提供标题。' })
@@ -319,11 +341,12 @@ export const seedPluginConfigurationSchema = z.object({
       }
     }
   }
-}).transform(({ schema_version, secret_access, source_presentation, profiles, ...configuration }) => ({
+}).transform(({ schema_version, secret_access, source_presentation, save_mode, profiles, ...configuration }) => ({
   ...configuration,
   profiles: profiles || emptyFormProfiles,
   schemaVersion: schema_version,
   secretAccess: secret_access,
+  saveMode: save_mode,
   sourcePresentation: source_presentation,
 }))
 
@@ -358,7 +381,7 @@ const seedPluginManagementInputFieldSchema = z.object({
   max_length: z.number().int().min(1).max(65_536).default(2_048),
   min_value: z.number().finite().optional(),
   max_value: z.number().finite().optional(),
-  options: z.array(z.object({ value: z.string().min(1).max(200), label: seedLocalizedTextSchema(100), icon_data_url: seedPluginManagementImageDataUrlSchema.optional(), group: z.enum(['seed', 'custom']).optional(), is_default: z.boolean().optional(), thinking_levels: z.array(z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])).max(7).optional() }).strict()).min(1).max(32).optional(),
+  options: z.array(z.object({ value: z.string().min(1).max(200), label: seedLocalizedTextSchema(100), icon_data_url: seedPluginManagementImageDataUrlSchema.optional(), icon_dark_data_url: seedPluginManagementImageDataUrlSchema.optional(), group: z.enum(['seed', 'custom']).optional(), is_default: z.boolean().optional(), thinking_levels: z.array(z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])).max(7).optional() }).strict()).min(1).max(32).optional(),
   options_path: z.string().min(1).max(200).optional(),
   accept: z.array(z.string().regex(/^\.[a-zA-Z0-9]+$/)).min(1).max(16).optional(),
   choose_label: seedLocalizedTextSchema(100).optional(),
@@ -429,7 +452,7 @@ const seedPluginManagementActionSchema = z.object({
 const seedPluginManagementToolbarItemSchema = z.union([
   z.object({ type: z.literal('refresh') }).strict(),
   z.object({ type: z.literal('file_input'), on_change_action_id: identifier.optional() }).strict().transform(({ on_change_action_id, ...item }) => ({ ...item, onChangeActionId: on_change_action_id })),
-  z.object({ type: z.literal('select_field'), field_key: identifier, control: z.enum(['select', 'model_select']).default('select'), align: z.enum(['start', 'end']).default('end'), thinking_field_key: identifier.optional(), on_change_action_id: identifier.optional() }).strict().transform(({ field_key, thinking_field_key, on_change_action_id, ...item }) => ({ ...item, fieldKey: field_key, thinkingFieldKey: thinking_field_key, onChangeActionId: on_change_action_id })),
+  z.object({ type: z.literal('select_field'), field_key: identifier, control: z.enum(['select', 'model_select']).default('select'), size: z.enum(['default', 'form']).optional(), align: z.enum(['start', 'end']).default('end'), thinking_field_key: identifier.optional(), on_change_action_id: identifier.optional() }).strict().transform(({ field_key, thinking_field_key, on_change_action_id, ...item }) => ({ ...item, fieldKey: field_key, thinkingFieldKey: thinking_field_key, onChangeActionId: on_change_action_id })),
   z.object({ type: z.literal('action'), action_id: identifier }).strict().transform(({ action_id, ...item }) => ({ ...item, actionId: action_id })),
 ])
 

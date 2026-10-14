@@ -401,6 +401,7 @@ export class SeedPluginHost {
     const nextPlugins = new Map(plugins.map((plugin) => [plugin.package_id, plugin]))
     const dependencyProviders = [...previousPlugins.values(), ...nextPlugins.values()]
     const changedCapabilities = new Set<string>()
+    const remoteRefreshPackages = new Set<string>()
     for (const packageId of new Set([...previousPlugins.keys(), ...nextPlugins.keys()])) {
       const previous = previousPlugins.get(packageId)
       const next = nextPlugins.get(packageId)
@@ -417,6 +418,11 @@ export class SeedPluginHost {
         .some((capabilityId) => dependsOnChangedCapability(next, capabilityId, dependencyProviders)))
       if (unchanged && !dependencyChanged) continue
       if (next) this.deferredContributionPackages.add(packageId)
+      if (this.nativeExecution === 'remote' && next?.runtime_kind === 'native-host'
+        && this.remoteSnapshots.has(packageId)) {
+        remoteRefreshPackages.add(packageId)
+        continue
+      }
       const registry = this.nativeRegistries.get(packageId)
       try { await registry?.clear() } catch { /* Best-effort cleanup before reconfiguration. */ }
       if (this.remoteSnapshots.has(packageId)) {
@@ -454,7 +460,7 @@ export class SeedPluginHost {
           if (plugin.publisher_type !== 'official') throw new Error(`当前 Seed 只允许运行官方 native-host 插件：${plugin.package_id}`)
           if (this.nativeExecution === 'remote') {
             const preserved = this.remoteSnapshots.get(plugin.package_id)
-            const snapshot = preserved || await this.runtime.invoke_host('seed.native.start', {
+            const snapshot = preserved && !remoteRefreshPackages.has(plugin.package_id) ? preserved : await this.runtime.invoke_host('seed.native.start', {
               package_id: plugin.package_id, plugin,
               configuration: this.runtime.configuration(),
             }) as NativePluginRuntimeSnapshot
@@ -1027,7 +1033,7 @@ export class SeedPluginHost {
     if (!Array.isArray(resolved)) throw new Error('插件动态配置选项必须返回数组。')
     const options: PluginConfigurationOption[] = []
     const seen = new Set<string>()
-    for (const option of resolved.slice(0, 500)) {
+    for (const option of resolved.slice(0, 500) as SeedConfigurationOption[]) {
       if (!option || typeof option.value !== 'string') throw new Error('插件动态配置选项格式无效。')
       const value = option.value.trim()
       const label = typeof option.label === 'string' ? option.label.trim() : value
@@ -1057,10 +1063,17 @@ export class SeedPluginHost {
         ? candidate : undefined
       const iconDataUrl = imageDataUrl(option.icon_data_url)
       const iconDarkDataUrl = imageDataUrl(option.icon_dark_data_url)
+      if (option.group !== undefined && option.group !== 'seed' && option.group !== 'custom') throw new Error('插件动态配置选项分组无效。')
+      if (option.thinking_levels !== undefined && (!Array.isArray(option.thinking_levels) || option.thinking_levels.length > 7
+        || option.thinking_levels.some((level) => !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(level)))) {
+        throw new Error('插件动态配置选项思考等级无效。')
+      }
       options.push({
         value, label: label || value, ...(badges.length ? { badges } : {}),
         ...(iconDataUrl ? { iconDataUrl } : {}),
         ...(iconDataUrl && iconDarkDataUrl ? { iconDarkDataUrl } : {}),
+        ...(option.group ? { group: option.group } : {}),
+        ...(option.thinking_levels ? { thinkingLevels: [...new Set(option.thinking_levels)] } : {}),
       })
     }
     return options

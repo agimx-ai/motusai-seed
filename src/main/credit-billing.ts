@@ -71,6 +71,7 @@ type RelayStreamEnd = { done: true; billing?: { state: 'settled'; call_id: strin
 const relayModelsSchema = z.array(z.object({
   model_id: z.string(), display_name: z.string(), badge: z.string().nullable(),
   icon_data_url: z.string().nullable(),
+  icon_dark_data_url: z.string().nullable().optional(),
   display_original_multiplier_basis_points: z.number().int().nonnegative(),
   display_discounted_multiplier_basis_points: z.number().int().nonnegative(),
   max_output_tokens: z.number().int().positive(), context_window: z.number().int().positive(),

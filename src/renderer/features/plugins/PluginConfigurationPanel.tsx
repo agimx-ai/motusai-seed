@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { LoaderCircle, Plus, Save, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, UpdatePluginConfigurationInput } from '../../../shared/contracts'
+import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput } from '../../../shared/contracts'
 import { resolveSeedLocalizedText, type SeedPluginConfiguration } from '../../../shared/plugin-manifest'
 import { ActionButton } from '../../components/ActionButton'
 import { AsyncCombobox } from '../../components/AsyncCombobox'
@@ -9,10 +9,12 @@ import { ConfigurationOptionLabel } from '../../components/ConfigurationOptionLa
 import { DefaultProfileControl } from '../../components/DefaultProfileControl'
 import { DisclosureControl } from '../../components/DisclosureControl'
 import { FieldLabel } from '../../components/FieldLabel'
+import { ModelSelectControl } from '../../components/ModelSelectControl'
 import { SelectControl } from '../../components/SelectControl'
 import { TextAreaControl } from '../../components/TextAreaControl'
 import { useSeedI18n } from '../../i18n'
 import { configurationOptionDisplayLabel } from '../../lib/configuration-options'
+import { useConfigurationDraft, type SavePluginConfiguration } from './use-configuration-draft'
 
 type Props = {
   pluginId: string
@@ -24,7 +26,7 @@ type Props = {
   hideDefaultControls?: boolean
   preferDefaultOnSave?: boolean
   headerActions?: ReactNode
-  onSave(input: UpdatePluginConfigurationInput): Promise<void>
+  onSave: SavePluginConfiguration
   onQueryOptions(input: QueryPluginConfigurationOptionsInput): Promise<PluginConfigurationOption[]>
   onQueryProfileStatuses(input: QueryPluginConfigurationProfileStatusesInput): Promise<PluginConfigurationProfileStatus[]>
   onReconnectProfile(input: ReconnectPluginConfigurationProfileInput): Promise<void>
@@ -125,7 +127,7 @@ function DynamicOptionsInput({ pluginId, configurationId, field, fields, values,
   dependencyConfigured(key: string): boolean
   optionValueLabels: ReadonlyMap<string, string>
   optionValueOptions?: ReadonlyMap<string, PluginConfigurationOption>
-  onChange(value: string): void
+  onChange(values: Record<string, string>): void
   onQueryOptions(input: QueryPluginConfigurationOptionsInput): Promise<PluginConfigurationOption[]>
 }) {
   const { t } = useTranslation()
@@ -187,6 +189,27 @@ function DynamicOptionsInput({ pluginId, configurationId, field, fields, values,
     return () => window.clearTimeout(timer)
   }, [configurationId, dependencyRevision, field.key, onQueryOptions, pluginId, ready, refreshRevision])
 
+  if (field.control === 'model_select') return <div className="grid min-w-0 justify-items-start gap-1.5">
+    <ModelSelectControl
+      className="max-w-full"
+      size={field.size}
+      label={resolveSeedLocalizedText(field.label, locale)}
+      value={values[field.key] || ''}
+      options={currentRequest.options}
+      disabled={!ready || !currentRequest.options.length}
+      loading={ready && (!currentRequest.loaded || currentRequest.loading)}
+      thinkingValue={field.thinkingFieldKey ? values[field.thinkingFieldKey] || '' : undefined}
+      onChange={(model, thinking) => onChange({
+        ...updateFieldValue(fields, values, field.key, model),
+        ...(field.thinkingFieldKey ? { [field.thinkingFieldKey]: thinking } : {}),
+      })}
+    />
+    {(!ready || currentRequest.error || (currentRequest.loaded && !currentRequest.options.length)) && <span role="status" className={currentRequest.error ? 'text-danger' : undefined}>
+      {!ready ? dependencyMessage : currentRequest.error || t('plugins.dynamicOptionsEmpty')}
+    </span>}
+    {currentRequest.error && <button type="button" className="text-foreground underline" onClick={() => setRefreshRevision((revision) => revision + 1)}>{t('plugins.refreshDynamicOptions')}</button>}
+  </div>
+
   return <AsyncCombobox
     value={values[field.key] || ''}
     valueLabel={optionValueLabels.get(values[field.key] || '')}
@@ -203,7 +226,7 @@ function DynamicOptionsInput({ pluginId, configurationId, field, fields, values,
     resolvingValueLabel={ready && Boolean(values[field.key]) && !optionValueLabels.has(values[field.key] || '') && !optionValueOptions?.has(values[field.key] || '') && !currentRequest.loaded}
     maxLength={field.maxLength}
     required={required}
-    onChange={onChange}
+    onChange={(value) => onChange(updateFieldValue(fields, values, field.key, value))}
     onRefresh={() => setRefreshRevision((revision) => revision + 1)}
   />
 }
@@ -223,7 +246,7 @@ function FieldControl({ pluginId, configurationId, field, fields, values, config
 }) {
   const { t } = useTranslation()
   const { locale } = useSeedI18n()
-  if (field.type === 'hidden' || !matches(values, field.visibleWhen)) return null
+  if (field.type === 'hidden' || fields.some((candidate) => candidate.thinkingFieldKey === field.key) || !matches(values, field.visibleWhen)) return null
   const required = field.required || Boolean(field.requiredWhen && matches(values, field.requiredWhen))
   const update = (value: string) => onChange(updateFieldValue(fields, values, field.key, value))
   const control = field.type === 'secret'
@@ -239,7 +262,7 @@ function FieldControl({ pluginId, configurationId, field, fields, values, config
           dependencyConfigured={dependencyConfigured}
           optionValueLabels={optionValueLabels}
           optionValueOptions={optionValueOptions}
-          onChange={update}
+          onChange={onChange}
           onQueryOptions={onQueryOptions}
         />
       : field.type === 'select'
@@ -256,41 +279,42 @@ function FieldControl({ pluginId, configurationId, field, fields, values, config
       : field.type === 'textarea'
         ? <TextAreaControl required={required} maxLength={field.maxLength} value={values[field.key] || ''} placeholder={field.placeholder ? resolveSeedLocalizedText(field.placeholder, locale) : t('plugins.inputPlaceholder')} onChange={(event) => update(event.target.value)} />
         : <input className="seed-text-input" type={field.type === 'url' ? 'url' : 'text'} required={required} maxLength={field.maxLength} value={values[field.key] || ''} placeholder={field.placeholder ? resolveSeedLocalizedText(field.placeholder, locale) : t('plugins.inputPlaceholder')} autoComplete="off" onChange={(event) => update(event.target.value)} />
-  return <label className={`grid min-w-0 gap-1.5 text-[12px] text-muted-foreground ${fieldSpanClass[field.span]}`}>
+  // Button-based controls must not inherit native label click forwarding from the whole field.
+  const Container = field.control === 'model_select' || field.type === 'select' ? 'div' : 'label'
+  return <Container className={`grid min-w-0 gap-1.5 text-[12px] text-muted-foreground ${fieldSpanClass[field.span]}`}>
     <FieldLabel description={resolveSeedLocalizedText(field.description, locale)} helpUrl={field.helpUrl} className="text-foreground">
       {resolveSeedLocalizedText(field.label, locale)}
     </FieldLabel>
     {control}
-  </label>
+  </Container>
 }
 
 const profileStatusTone = {
-  idle: 'bg-muted-foreground/45',
-  connecting: 'bg-accent',
-  connected: 'bg-[var(--seed-success)]',
-  reconnecting: 'bg-accent',
-  disconnecting: 'bg-warning',
-  disconnected: 'bg-muted-foreground/55',
-  failed: 'bg-danger',
+  idle: 'border-border bg-muted/25 text-muted-foreground',
+  connecting: 'border-info/25 bg-info-soft text-info',
+  connected: 'border-success/30 bg-success-soft text-success',
+  reconnecting: 'border-info/25 bg-info-soft text-info',
+  disconnecting: 'border-warning/25 bg-warning-soft text-warning',
+  disconnected: 'border-border bg-muted/40 text-muted-foreground',
+  failed: 'border-danger/25 bg-danger-soft text-danger',
 } satisfies Record<PluginConfigurationProfileStatus['state'], string>
 
-function ProfileStatusDot({ status, onReconnect }: { status: PluginConfigurationProfileStatus; onReconnect?: () => void }) {
+function ProfileStatusBadge({ status, onReconnect }: { status: PluginConfigurationProfileStatus; onReconnect?: () => void }) {
   const { t } = useTranslation()
   const label = t(`plugins.profileConnectionStatus.${status.state}`)
-  const dot = <span className={`block h-2.5 w-2.5 rounded-full ${profileStatusTone[status.state]}`} />
+  const className = `inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-[11px] font-medium leading-none ${profileStatusTone[status.state]}`
   if (onReconnect) return <button
     type="button"
-    className="grid h-7 w-7 shrink-0 place-items-center rounded-full outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
-    aria-label={t('plugins.reconnectProfile')}
+    className={`${className} cursor-pointer outline-none transition-[filter] hover:brightness-[0.97] focus-visible:ring-2 focus-visible:ring-ring`}
+    aria-label={`${label}. ${t('plugins.reconnectProfile')}`}
     title={status.error ? `${status.error}\n${t('plugins.reconnectProfile')}` : t('plugins.reconnectProfile')}
     onClick={onReconnect}
-  >{dot}</button>
+  >{label}</button>
   return <span
-    className="grid h-7 w-7 shrink-0 place-items-center"
-    role="img"
+    className={className}
     aria-label={label}
     title={status.error || label}
-  >{dot}</span>
+  >{label}</span>
 }
 
 export function PluginConfigurationPanel({ pluginId, configuration, state, pluginNames, busy, embedded = false, hideDefaultControls = false, preferDefaultOnSave = false, headerActions, onSave, onQueryOptions, onQueryProfileStatuses, onReconnectProfile }: Props) {
@@ -298,7 +322,10 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
   const { locale } = useSeedI18n()
   const [profiles, setProfiles] = useState(() => parseProfiles(configuration, state))
   const [defaultId, setDefaultId] = useState(state.values.default_profile_id || '')
-  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(configuration.fields.map((field) => [field.key, field.type === 'secret' ? '' : state.values[field.key] ?? defaultValue(field)])))
+  const savedValues = Object.fromEntries(configuration.fields.map((field) => [field.key, field.type === 'secret' ? '' : state.values[field.key] ?? defaultValue(field)]))
+  const automatic = configuration.saveMode === 'auto'
+  const draft = useConfigurationDraft(savedValues, automatic, (next) => submitConfiguration(savedProfiles, savedDefaultId, next))
+  const values = draft.values
   const [expandedId, setExpandedId] = useState('')
   const [pendingDefaultId, setPendingDefaultId] = useState('')
   const [reconnectingProfileId, setReconnectingProfileId] = useState('')
@@ -313,7 +340,6 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
     const nextProfiles = parseProfiles(configuration, state)
     setProfiles(nextProfiles)
     setDefaultId(state.values.default_profile_id || '')
-    setValues(Object.fromEntries(configuration.fields.map((field) => [field.key, field.type === 'secret' ? '' : state.values[field.key] ?? defaultValue(field)])))
     setExpandedId((current) => current && nextProfiles.some((profile) => profile.id === current) ? current : '')
     setPendingDefaultId('')
   }, [sourceRevision])
@@ -409,8 +435,7 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
     return { label, parts, loading }
   }
   const savedProfiles = state.persisted ? parseProfiles(configuration, state) : []
-  const savedDefaultId = state.persisted ? state.values.default_profile_id || '' : state.values.default_profile_id || ''
-  const savedValues = Object.fromEntries(configuration.fields.map((field) => [field.key, field.type === 'secret' ? '' : state.values[field.key] ?? defaultValue(field)]))
+  const savedDefaultId = state.values.default_profile_id || ''
   const profileChanged = (profile: Profile) => {
     const saved = savedProfiles.find((candidate) => candidate.id === profile.id)
     return !saved
@@ -510,7 +535,7 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
             label={profileSummary.label}
             onToggle={() => setExpandedId(expandedId === profile.id ? '' : profile.id)}
             actions={profileStatus || defaultControl ? <span className="flex items-center gap-2">
-              {profileStatus && <ProfileStatusDot
+              {profileStatus && <ProfileStatusBadge
                 status={profileStatus}
                 onReconnect={profileStatus.reconnectable
                   && (profileStatus.state === 'disconnected' || profileStatus.state === 'failed')
@@ -578,7 +603,12 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
         </div>})}
       </div>}
       {configuration.profiles.actions.add?.placement !== 'header' && canAddProfile && <div className="mt-3">{addProfileControl}</div>}
-      {configuration.fields.length > 0 && configuration.actions?.save && <form className="mt-4" noValidate onSubmit={(event) => { event.preventDefault(); if (!busy) void submitConfiguration(savedProfiles, savedDefaultId, values) }}>
+      {configuration.fields.length > 0 && (automatic || configuration.actions?.save) && <form className="mt-4" noValidate
+        aria-busy={automatic && draft.status === 'saving' || undefined}
+        onCompositionStartCapture={() => draft.composition(true)}
+        onCompositionEndCapture={() => draft.composition(false)}
+        onBlurCapture={() => { if (automatic && draft.status !== 'error') void draft.flush() }}
+        onSubmit={(event) => { event.preventDefault(); if (automatic) void draft.flush(); else if (!busy) void submitConfiguration(savedProfiles, savedDefaultId, values) }}>
         <div className="flex flex-wrap gap-x-3 gap-y-4">
           {configuration.fields.map((field) => {
             const reset = field.resetWhenChanged?.some((key) => values[key] !== state.values[key]) || false
@@ -596,12 +626,16 @@ export function PluginConfigurationPanel({ pluginId, configuration, state, plugi
                 return !reset && secretConfigured(null, key)
               }}
               optionValueLabels={pluginNames}
-              onChange={setValues}
+              onChange={draft.update}
               onQueryOptions={onQueryOptions}
             />
           })}
         </div>
-        {valuesChanged && <div className="mt-3 flex justify-end"><ActionButton type="submit" icon={<Save size={14} />} busy={busy}>{busy ? t('plugins.savingConfiguration') : resolveSeedLocalizedText(configuration.actions.save.label, locale)}</ActionButton></div>}
+        {!automatic && valuesChanged && configuration.actions?.save && <div className="mt-3 flex justify-end"><ActionButton type="submit" icon={<Save size={14} />} busy={busy}>{busy ? t('plugins.savingConfiguration') : resolveSeedLocalizedText(configuration.actions.save.label, locale)}</ActionButton></div>}
+        {automatic && draft.status === 'error' && <div className="mt-3 flex items-center gap-2 text-[12px] text-danger" role="alert">
+          <span>{t('plugins.autoSaveFailed')}</span>
+          <button type="button" className="underline" onClick={() => void draft.flush()}>{t('plugins.autoSaveRetry')}</button>
+        </div>}
       </form>}
     </div>
   </section>

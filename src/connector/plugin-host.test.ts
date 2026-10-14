@@ -425,6 +425,62 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
     await host.stop()
   })
 
+  it('keeps remote contributions mounted until a refreshed native runtime is ready', async () => {
+    const oldText = { en_US: 'Old settings', zh_Hans: '旧设置' }
+    const newText = { en_US: 'New settings', zh_Hans: '新设置' }
+    const declaration = (text: typeof oldText) => ({
+      id: 'settings', schemaVersion: 1 as const, renderer: 'seed.profiles' as const,
+      title: text, description: text, fields: [],
+      profiles: {
+        idPrefix: 'setting', minItems: 0, maxItems: 1, defaultRequired: false,
+        summaryFields: [], fields: [], actions: { save: { label: text } },
+      },
+    })
+    const nativePlugin = {
+      ...plugin,
+      publisher_type: 'official' as const,
+      runtime_kind: 'native-host' as const,
+      entry_path: '/does-not-exist/native-entry.mjs',
+      configuration_revision: 'revision-1',
+    }
+    let finishRefresh!: (snapshot: {
+      capabilities: string[]
+      configurations: ReturnType<typeof declaration>[]
+      managementViews: []
+      connections: []
+    }) => void
+    const refreshSnapshot = new Promise<Parameters<typeof finishRefresh>[0]>((resolve) => { finishRefresh = resolve })
+    let starts = 0
+    const contributionsChanged = vi.fn()
+    const invoke_host = vi.fn(async (service: string): Promise<unknown> => {
+      if (service === 'seed.native.start') {
+        starts += 1
+        if (starts === 1) return { capabilities: ['probe'], configurations: [declaration(oldText)], managementViews: [], connections: [] }
+        return await refreshSnapshot
+      }
+      if (service === 'seed.native.stop' || service === 'seed.plugin.diagnostic') return null
+      throw new Error(`Unexpected service: ${service}`)
+    })
+    const host = new SeedPluginHost({ configuration: () => null, invoke_host }, undefined, contributionsChanged, 'remote')
+
+    await host.start([nativePlugin])
+    contributionsChanged.mockClear()
+    const refreshing = host.start([{ ...nativePlugin, configuration_revision: 'revision-2' }])
+    await vi.waitFor(() => expect(starts).toBe(2))
+
+    expect(host.configuration(nativePlugin.package_id, 'settings')?.title).toEqual(oldText)
+    expect(invoke_host).not.toHaveBeenCalledWith('seed.native.stop', expect.anything())
+    expect(contributionsChanged).not.toHaveBeenCalledWith(nativePlugin.package_id, {
+      configurations: [],
+      managementViews: [],
+    })
+
+    finishRefresh({ capabilities: ['probe'], configurations: [declaration(newText)], managementViews: [], connections: [] })
+    await refreshing
+    expect(host.configuration(nativePlugin.package_id, 'settings')?.title).toEqual(newText)
+    await host.stop()
+  })
+
   it('keeps failed native declarations unavailable until their supervised process recovers', async () => {
     const nativePlugin = { ...plugin, runtime_kind: 'native-host' as const,
       entry_path: '/does-not-exist/native-entry.mjs' }
@@ -911,7 +967,7 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
       "const text = { en_US: 'Source', zh_Hans: '来源' }",
       'export async function apply(context) {',
       "  context.effect(() => context.configuration.register({ id: 'source', schema_version: 1, renderer: 'seed.profiles', title: text, description: text, fields: [], profiles: { id_prefix: 'source', min_items: 1, max_items: 2, default_required: true, summary_fields: ['value'], fields: [{ key: 'kind', type: 'text', label: text }, { key: 'value', type: 'text', label: text, dynamic_options: { depends_on: ['kind'] } }], actions: { save: { label: text } } } }))",
-      "  context.effect(() => context.configuration.registerOptionsResolver('source', 'value', (values) => [{ value: `${values.kind}-one` }, { value: `${values.kind}-one` }, { value: 'two', label: 'Second', icon_data_url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', icon_dark_data_url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', badges: [{ prefix: 'x', label: '1.00', suffix: '→ x0.50', tone: 'info', strikethrough: true }] }, { value: 'invalid-icon', icon_data_url: 'file:///tmp/logo.svg' }]))",
+      "  context.effect(() => context.configuration.registerOptionsResolver('source', 'value', (values) => values.kind === 'invalid-group' ? [{ value: 'invalid', group: 'other' }] : values.kind === 'invalid-thinking' ? [{ value: 'invalid', thinking_levels: ['unknown'] }] : [{ value: `${values.kind}-one` }, { value: `${values.kind}-one` }, { value: 'two', label: 'Second', group: 'seed', thinking_levels: ['off', 'high', 'high'], icon_data_url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', icon_dark_data_url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', badges: [{ prefix: 'x', label: '1.00', suffix: '→ x0.50', tone: 'info', strikethrough: true }] }, { value: 'invalid-icon', icon_data_url: 'file:///tmp/logo.svg' }]))",
       '}',
     ].join('\n'))
     const nativePlugin: SeedPluginRuntimeDefinition = {
@@ -932,10 +988,12 @@ describe('SeedPluginHost protocol and Cordis runtime', () => {
       await host.start([nativePlugin])
       await expect(host.resolveConfigurationOptions(nativePlugin.package_id, 'source', 'value', { id: 'source-1', kind: 'remote', value: '' })).resolves.toEqual([
         { value: 'remote-one', label: 'remote-one' },
-        { value: 'two', label: 'Second', iconDataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', iconDarkDataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', badges: [{ prefix: 'x', label: '1.00', suffix: '→ x0.50', tone: 'info', strikethrough: true }] },
+        { value: 'two', label: 'Second', group: 'seed', thinkingLevels: ['off', 'high'], iconDataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', iconDarkDataUrl: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', badges: [{ prefix: 'x', label: '1.00', suffix: '→ x0.50', tone: 'info', strikethrough: true }] },
         { value: 'invalid-icon', label: 'invalid-icon' },
       ])
       await expect(host.resolveConfigurationOptions(nativePlugin.package_id, 'source', 'value', { unknown: 'value' })).rejects.toThrow('未声明字段')
+      await expect(host.resolveConfigurationOptions(nativePlugin.package_id, 'source', 'value', { kind: 'invalid-group' })).rejects.toThrow('分组无效')
+      await expect(host.resolveConfigurationOptions(nativePlugin.package_id, 'source', 'value', { kind: 'invalid-thinking' })).rejects.toThrow('思考等级无效')
     } finally {
       await host.stop()
       await rm(directory, { recursive: true, force: true })

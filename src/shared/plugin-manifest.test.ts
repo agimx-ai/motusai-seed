@@ -98,6 +98,34 @@ describe('plugin detail presentation schema', () => {
 })
 
 describe('plugin dynamic configuration options schema', () => {
+  it('supports opt-in automatic standalone forms without redundant save actions', () => {
+    const form = { id: 'preferences', schema_version: 1, renderer: 'seed.form', title: text('Preferences'), description: text('Preferences'), fields: [{ key: 'value', type: 'text', label: text('Value') }] }
+    const automatic = seedPluginConfigurationSchema.parse({ ...form, save_mode: 'auto' })
+    expect(automatic.saveMode).toBe('auto')
+    expect(automatic).not.toHaveProperty('actions')
+    expect(seedPluginConfigurationSchema.parse({ ...form, actions: { save: { label: text('Save') } } })).toMatchObject({ saveMode: 'manual' })
+    for (const invalid of [
+      form, { ...form, save_mode: 'instant' },
+      { ...form, save_mode: 'auto', actions: { save: { label: text('Save') } } },
+      { ...form, renderer: 'seed.profiles', save_mode: 'auto', profiles: { summary_fields: ['value'], fields: form.fields, actions: { save: { label: text('Save') } } } },
+    ]) expect(seedPluginConfigurationSchema.safeParse(invalid).success).toBe(false)
+  })
+  it('supports the shared model control in any configuration form and validates its linked field', () => {
+    const model = { key: 'choice', type: 'text', label: text('Choice'), control: 'model_select', thinking_field_key: 'effort', dynamic_options: { depends_on: ['service'] } }
+    const fields = [{ key: 'service', type: 'text', label: text('Service') }, model, { key: 'effort', type: 'text', label: text('Effort') }]
+    const form = { id: 'preferences', schema_version: 1, renderer: 'seed.form', title: text('Preferences'), description: text('Preferences'), fields, actions: { save: { label: text('Save') } } }
+    expect(seedPluginConfigurationSchema.parse(form).fields[1]).toMatchObject({ control: 'model_select', thinkingFieldKey: 'effort' })
+    for (const size of ['default', 'form']) expect(seedPluginConfigurationSchema.parse({ ...form, fields: [fields[0], { ...model, size }, fields[2]] }).fields[1]).toMatchObject({ size })
+    for (const invalid of [
+      { ...model, thinking_field_key: 'missing' }, { ...model, thinking_field_key: 'choice' },
+      { ...model, control: undefined }, { ...model, dynamic_options: undefined }, { ...model, type: 'secret' },
+      { ...model, size: 'large' }, { ...model, control: undefined, thinking_field_key: undefined, size: 'form' },
+    ]) expect(seedPluginConfigurationSchema.safeParse({ ...form, fields: [fields[0], invalid, fields[2]] }).success).toBe(false)
+    expect(seedPluginConfigurationSchema.safeParse({ ...form, fields: [fields[0], model, { ...fields[2], type: 'secret' }] }).success).toBe(false)
+    expect(seedPluginConfigurationSchema.safeParse({ ...form, fields: [...fields, { ...model, key: 'other' }] }).success).toBe(false)
+    const profiles = { id_prefix: 'account', min_items: 0, default_required: false, summary_fields: ['service'], fields, actions: form.actions }
+    expect(seedPluginConfigurationSchema.parse({ ...form, renderer: 'seed.profiles', fields: [], profiles }).profiles.fields[1]).toMatchObject({ thinkingFieldKey: 'effort' })
+  })
   const configuration = {
     id: 'source', schema_version: 1, renderer: 'seed.profiles', title: text('Source'), description: text('Source'), fields: [],
     profiles: {
@@ -305,6 +333,8 @@ describe('plugin management view schema', () => {
     const toolbarView = { ...view, show_header: false, toolbar: [{ type: 'select_field', field_key: 'model' }, ...view.toolbar] }
     expect(seedPluginManagementViewSchema.parse(toolbarView)).toMatchObject({ show_header: false, toolbar: [{ type: 'select_field', fieldKey: 'model' }, { type: 'action', actionId: 'start' }] })
     expect(seedPluginManagementViewSchema.parse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'model', control: 'model_select' }, ...view.toolbar] }).toolbar[0]).toMatchObject({ type: 'select_field', fieldKey: 'model', control: 'model_select' })
+    for (const size of ['default', 'form']) expect(seedPluginManagementViewSchema.parse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'model', control: 'model_select', size }, ...view.toolbar] }).toolbar[0]).toMatchObject({ size })
+    expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'model', control: 'model_select', size: 'large' }, ...view.toolbar] }).success).toBe(false)
     expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'model', control: 'model_select', align: 'start', thinking_field_key: 'missing' }, ...view.toolbar] }).success).toBe(false)
     expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'model', control: 'unknown' }, ...view.toolbar] }).success).toBe(false)
     expect(seedPluginManagementViewSchema.safeParse({ ...toolbarView, toolbar: [{ type: 'select_field', field_key: 'missing' }, ...view.toolbar] }).success).toBe(false)

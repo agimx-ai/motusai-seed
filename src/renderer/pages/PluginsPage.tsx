@@ -1,6 +1,6 @@
 import { PackageCheck } from 'lucide-react'
 import { useEffect, useState, type RefObject } from 'react'
-import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, PluginInstallProgress, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, SeedCatalogPlugin, SeedInstalledPlugin, UpdatePluginConfigurationInput } from '../../shared/contracts'
+import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, PluginInstallProgress, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, SeedCatalogPlugin, SeedInstalledPlugin } from '../../shared/contracts'
 import { resolveSeedLocalizedText, type SeedLocalizedText } from '../../shared/plugin-manifest'
 import { useTranslation } from 'react-i18next'
 import { ActionButton } from '../components/ActionButton'
@@ -22,6 +22,7 @@ import { PluginConfigurationSourceGroup } from '../features/plugins/PluginConfig
 import { PluginDetailPresentation } from '../features/plugins/PluginDetailPresentation'
 import { PluginManagementView } from '../features/plugins/PluginManagementView'
 import { useSeedI18n } from '../i18n'
+import type { SavePluginConfiguration } from '../features/plugins/use-configuration-draft'
 
 function searchableText(value: SeedLocalizedText) {
   return `${value.en_US} ${value.zh_Hans}`
@@ -59,7 +60,7 @@ type PluginsPageProps = {
   onInstall: (id: string, version: string) => void
   onCancelInstall: (id: string) => void
   onUninstall: (id: string) => void
-  onUpdateConfiguration: (input: UpdatePluginConfigurationInput) => Promise<void>
+  onUpdateConfiguration: SavePluginConfiguration
   onQueryConfigurationOptions: (input: QueryPluginConfigurationOptionsInput) => Promise<PluginConfigurationOption[]>
   onQueryConfigurationProfileStatuses: (input: QueryPluginConfigurationProfileStatusesInput) => Promise<PluginConfigurationProfileStatus[]>
   onReconnectConfigurationProfile: (input: ReconnectPluginConfigurationProfileInput) => Promise<void>

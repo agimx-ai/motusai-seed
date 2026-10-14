@@ -317,7 +317,11 @@ export default function App() {
           onInstall={(id, version) => void run(`plugin-install-${id}`, (api) => api.installPlugin(id, version), t('notifications.pluginInstalled'))}
           onCancelInstall={(id) => void cancelPluginInstall(id)}
           onUninstall={(id) => void run(`plugin-uninstall-${id}`, (api) => api.uninstallPlugin(id), t('notifications.pluginUninstalled'))}
-          onUpdateConfiguration={(input) => run(`plugin-config-${input.pluginId}`, (api) => api.updatePluginConfiguration(input), t('plugins.configurationSaved'))}
+          onUpdateConfiguration={async (input) => {
+            const configuration = snapshot.plugins.find((plugin) => plugin.id === input.pluginId)?.configurations.find((item) => item.id === input.configurationId)
+            const saved = await run(`plugin-config-${input.pluginId}`, async (api) => { await api.updatePluginConfiguration(input); return true }, configuration?.saveMode === 'auto' ? undefined : t('plugins.configurationSaved'))
+            return saved === true
+          }}
           onQueryConfigurationOptions={window.motusSeed.queryPluginConfigurationOptions}
           onQueryConfigurationProfileStatuses={window.motusSeed.queryPluginConfigurationProfileStatuses}
           onReconnectConfigurationProfile={window.motusSeed.reconnectPluginConfigurationProfile}

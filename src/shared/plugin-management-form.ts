@@ -54,8 +54,10 @@ export function resolveManagementInputFields(fields: ManagementInputField[], sou
         || typeof localized.zh_Hans !== 'string' || !localized.zh_Hans || localized.zh_Hans.length > 100) return false
       if (entry.is_default !== undefined && typeof entry.is_default !== 'boolean') return false
       if (entry.group !== undefined && entry.group !== 'seed' && entry.group !== 'custom') return false
-      if (entry.icon_data_url !== undefined && (typeof entry.icon_data_url !== 'string' || entry.icon_data_url.length > 350_000
-        || !/^data:image\/(?:svg\+xml|png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(entry.icon_data_url))) return false
+      for (const icon of [entry.icon_data_url, entry.icon_dark_data_url]) {
+        if (icon !== undefined && (typeof icon !== 'string' || icon.length > 350_000
+          || !/^data:image\/(?:svg\+xml|png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(icon))) return false
+      }
       if (entry.thinking_levels !== undefined && (!Array.isArray(entry.thinking_levels) || entry.thinking_levels.length > 7
         || entry.thinking_levels.some((level) => !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(level)))) return false
       seen.add(entry.value)

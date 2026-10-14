@@ -31,6 +31,7 @@ import { AudioService } from './audio-service'
 import { appendPluginConfigurationProfile, brokerPluginConfigurationDeclaration, initialPluginConfiguration, normalizePluginConfiguration, pluginConfigurationState, reconcilePluginConfigurationDefaultGroup } from './plugin-configuration'
 import { SeedPluginSandboxSupervisor } from './plugin-sandbox-host'
 import { NativePluginManager } from './native-plugin-manager'
+import { currentNativePluginRuntimeDefinition } from './native-plugin-runtime-definition'
 import { SeedStore } from './store'
 import { SeedPluginInstaller } from './seed-plugin-installer'
 import { mascotTiming, remainingMascotRunningMs } from './mascot-timing'
@@ -477,12 +478,13 @@ export class SeedRuntime {
       (entry) => this.diagnostics.record({ ...entry, level: entry.phase === 'failed' ? 'error' : 'info', source: 'plugin-host' }),
     )
     this.hostServices.set('seed.native.start', async (args) => {
-      const plugin = args.plugin as SeedPluginRuntimeDefinition | undefined
-      const configured = this.runtimePlugins.find((candidate) => candidate.package_id === plugin?.package_id)
-      if (!plugin || !configured || JSON.stringify(plugin) !== JSON.stringify(configured)) throw new Error('原生插件运行定义无效。')
+      const requested = args.plugin as SeedPluginRuntimeDefinition | undefined
+      const configured = this.runtimePlugins.find((candidate) => candidate.package_id === requested?.package_id)
+      const plugin = currentNativePluginRuntimeDefinition(requested, configured)
+      if (!plugin) throw new Error('原生插件运行定义无效。')
       const configuration = args.configuration as Extract<import('../shared/contracts').WorkerCommand, { type: 'configure' }> | undefined
       if (!configuration || configuration.pluginDataRoot !== join(app.getPath('userData'), 'plugin-data')) throw new Error('原生插件运行配置无效。')
-      return await this.nativeHost.start(plugin, configuration)
+      return await this.nativeHost.start(plugin, { ...configuration, plugins: this.runtimePlugins })
     })
     this.hostServices.set('seed.native.stop', async (args) => { await this.nativeHost.stop(String(args.package_id || '')); return null })
     this.hostServices.set('seed.native.invoke', async (args) => {

@@ -9,7 +9,7 @@ const props: ComponentProps<typeof PluginsPage> = {
   query: '', searchRef: createRef(), busy: '', updateCount: 0, updatesBusy: false, installProgress: {},
   hasMore: false, loadingMore: false, configurationStates: {},
   onUpdateAll() {}, onQueryChange() {}, onLoadMore() {}, onSelectPlugin() {}, onInstall() {}, onCancelInstall() {}, onUninstall() {},
-  async onUpdateConfiguration() {}, async onQueryConfigurationOptions() { return [] },
+  async onUpdateConfiguration() { return true }, async onQueryConfigurationOptions() { return [] },
   async onQueryConfigurationProfileStatuses() { return [] }, async onReconnectConfigurationProfile() {},
   async onQueryManagementView() {}, async onInvokeManagementAction() {},
 }

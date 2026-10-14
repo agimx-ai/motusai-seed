@@ -1,12 +1,13 @@
 import { Check, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { PluginConfigurationOption, PluginConfigurationState, QueryPluginConfigurationOptionsInput, UpdatePluginConfigurationInput } from '../../../shared/contracts'
+import type { PluginConfigurationOption, PluginConfigurationState, QueryPluginConfigurationOptionsInput } from '../../../shared/contracts'
 import { resolveSeedLocalizedText, type SeedPluginConfiguration } from '../../../shared/plugin-manifest'
 import { ActionButton } from '../../components/ActionButton'
 import { ConfigurationOptionLabel } from '../../components/ConfigurationOptionLabel'
 import { useSeedI18n } from '../../i18n'
 import { cx } from '../../lib/display'
+import type { SavePluginConfiguration } from './use-configuration-draft'
 
 type Profile = Record<string, string> & { id: string }
 
@@ -16,7 +17,7 @@ type Props = {
   state: PluginConfigurationState
   busy: boolean
   embedded?: boolean
-  onSave(input: UpdatePluginConfigurationInput): Promise<void>
+  onSave: SavePluginConfiguration
   onQueryOptions(input: QueryPluginConfigurationOptionsInput): Promise<PluginConfigurationOption[]>
 }
 
@@ -77,7 +78,7 @@ function PluginConfigurationDynamicList({ pluginId, configuration, state, busy, 
     const profileId = profile?.id || `${configuration.profiles.idPrefix}-default`
     setPendingValue(option.value)
     try {
-      await onSave({
+      const saved = await onSave({
         pluginId,
         configurationId: configuration.id,
         values: {
@@ -86,6 +87,7 @@ function PluginConfigurationDynamicList({ pluginId, configuration, state, busy, 
           default_profile_id: profileId,
         },
       })
+      if (saved === false) setPendingValue('')
     } catch {
       setPendingValue('')
     }

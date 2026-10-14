@@ -69,6 +69,12 @@ export function apply(ctx: SeedPluginContext) {
 
 `ctx.configuration.addProfile(configurationId, { id, ...fields })` 只向自身已注册的 `seed.profiles` / `secret_access: owner` 配置追加一个新档案。宿主串行校验并加密保存敏感字段，保留现有档案和默认项；重复 ID、未声明字段、缺少必填值或超过数量限制均拒绝。调用不返回 Secret，也不重启调用插件；插件在保存完成后自行更新连接。该接口需包含此能力的 Seed 开发构建，发布前应同步 SDK 依赖和 `min_seed_version`。
 
+动态文本配置字段可声明 `control: 'model_select'` 和 `thinking_field_key`，复用共享模型选择器；关联的思考等级必须是同一配置中的独立文本字段。`registerOptionsResolver()` 返回的 `SeedConfigurationOption` 可携带 `group: 'seed' | 'custom'`、`icon_data_url` 与 `thinking_levels`，宿主校验后仅负责渲染和保存。模型目录、提供方发现和调用参数由插件拥有，宿主不会按插件 ID 选择模型。该表单入口需要配套的 Seed 开发构建。
+
+独立配置表单可用 `renderer: 'seed.form'`、`save_mode: 'auto'` 声明自动保存，不声明 `actions.save`。宿主合并连续编辑并串行保存，保留失败草稿以供重试；模型和关联思考等级作为同一次修改提交。默认 `save_mode: 'manual'` 仍使用声明的保存动作，档案接入流程不变。此入口需要配套 Seed 开发构建。
+
+动态配置选项和管理视图选项可同时提供 `icon_data_url`、`icon_dark_data_url`，共享图标组件按界面主题切换。未提供深色图时，仅以 `currentColor` / `none` 着色的简单 SVG 跟随文字颜色；固定品牌色、多色、复杂 SVG 和位图保持原图，不统一反色。这一通用渲染规则同时用于配置选项、模型触发按钮和弹出列表。
+
 ## 生命周期
 
 使用 `ctx.effect()` 绑定需要清理的注册、监听器和资源：

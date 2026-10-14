@@ -417,27 +417,21 @@ export function PluginManagementView({ pluginId, view, query, invoke, embedded }
       const label = resolveSeedLocalizedText(field.label, locale)
       const raw = effectiveInlineValues[field.key]
       const options = item.control === 'model_select'
-        ? (field.options || []).map((option) => ({ value: option.value, label: resolveSeedLocalizedText(option.label, locale), group: option.group, iconDataUrl: option.icon_data_url ? safeImageDataUrl(option.icon_data_url) : undefined }))
+        ? (field.options || []).map((option) => ({ value: option.value, label: resolveSeedLocalizedText(option.label, locale), group: option.group, iconDataUrl: option.icon_data_url ? safeImageDataUrl(option.icon_data_url) : undefined, iconDarkDataUrl: option.icon_dark_data_url ? safeImageDataUrl(option.icon_dark_data_url) : undefined, thinkingLevels: option.thinking_levels }))
         : [{ value: '', label: resolveSeedLocalizedText(field.placeholder, locale) || t('plugins.managementSelect') }, ...(field.options || []).map((option) => ({ value: option.value, label: resolveSeedLocalizedText(option.label, locale) }))]
-      const controlProps = { key: `select_field:${field.key}`, className: item.control === 'model_select' ? 'max-w-[calc(100vw-16px)]' : 'w-[190px] max-w-[30vw]', label, value: typeof raw === 'string' ? raw : '', options, disabled: item.control === 'model_select' && options.length === 0,
-        onValueChange: (next: string) => {
-          const levels: readonly string[] = (next ? field.options?.find((option) => option.value === next) : field.options?.find((option) => option.is_default))?.thinking_levels || []
-          const thinking = item.thinkingFieldKey
-          const updated = { ...effectiveInlineValues, [field.key]: next, ...(thinking && effectiveInlineValues[thinking] && !levels.includes(String(effectiveInlineValues[thinking])) ? { [thinking]: '' } : {}) }
-          setInlineValues(updated)
-          saveFieldChange(item.onChangeActionId, updated)
-        } }
-      const selectedModel = field.options?.find((option) => option.value === raw)
+      const controlKey = `select_field:${field.key}`
+      const controlProps = { className: item.control === 'model_select' ? 'max-w-[calc(100vw-16px)]' : 'w-[190px] max-w-[30vw]', label, value: typeof raw === 'string' ? raw : '', options, disabled: item.control === 'model_select' && options.length === 0 }
+      const updateSelection = (model: string, thinking = '') => {
+        const updated = { ...effectiveInlineValues, [field.key]: model, ...(item.thinkingFieldKey ? { [item.thinkingFieldKey]: thinking } : {}) }
+        setInlineValues(updated)
+        saveFieldChange(item.onChangeActionId, updated)
+      }
       return item.control === 'model_select'
-        ? <ModelSelectControl {...controlProps}
-            thinkingValue={item.thinkingFieldKey ? String(effectiveInlineValues[item.thinkingFieldKey] || '') : ''}
-            thinkingLevels={selectedModel?.thinking_levels}
-            onThinkingChange={item.thinkingFieldKey ? (next) => {
-              const updated = { ...effectiveInlineValues, [item.thinkingFieldKey!]: next }
-              setInlineValues(updated)
-              saveFieldChange(item.onChangeActionId, updated)
-            } : undefined} />
-        : <SelectControl portal variant="form" {...controlProps} />
+        ? <ModelSelectControl key={controlKey} {...controlProps}
+            size={item.size}
+            thinkingValue={item.thinkingFieldKey ? String(effectiveInlineValues[item.thinkingFieldKey] || '') : undefined}
+            onChange={updateSelection} />
+        : <SelectControl key={controlKey} portal variant="form" size={item.size} {...controlProps} onValueChange={updateSelection} />
     }
     if (item.type === 'file_input') {
       const label = dropField?.chooseLabel ? resolveSeedLocalizedText(dropField.chooseLabel, locale) : t('plugins.managementFilesChoose')
@@ -667,7 +661,7 @@ export function PluginManagementView({ pluginId, view, query, invoke, embedded }
         : 'max-h-[min(720px,calc(100vh-64px))] w-full max-w-[680px] overflow-auto rounded-[18px] border border-border bg-card p-5 shadow-[0_18px_55px_rgba(0,0,0,.18)]'} role="dialog" aria-modal="true">
         <div className={actionResult.action.result.renderer === 'qr' ? 'px-8 text-center' : 'flex items-start justify-between gap-4'}>
           <h2 className={actionResult.action.result.renderer === 'qr' ? 'm-0 text-[17px] font-medium' : 'm-0 text-[18px] font-medium'}>{managementResultTitle(actionResult.action, actionResult.value, locale)}</h2>
-          <div className={actionResult.action.result.renderer === 'qr' ? 'absolute right-4 top-4' : ''}><IconButton label={t('window.close')} icon={<X size={17} />} onClick={closeActionResult} /></div>
+          <div className={actionResult.action.result.renderer === 'qr' ? 'absolute right-4 top-4' : ''}><IconButton label={t('window.close')} icon={<X size={17} />} showTooltip={false} onClick={closeActionResult} /></div>
         </div>
         <div className={actionResult.action.result.renderer === 'qr' ? 'mt-4' : 'mt-4 rounded-[12px] bg-muted/45 p-5'}>{(() => {
           const result = actionResult.action.result!

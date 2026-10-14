@@ -163,8 +163,9 @@ describe('generic Cloud relay client', () => {
     expect(relayBillingModelId('model.generate', {})).toBeUndefined()
   })
 
-  it('passes through real model reasoning metadata without a plugin-specific rule', async () => {
+  it.each([undefined, null, 'data:image/svg+xml;base64,PHN2Zy8+'])('passes through model metadata and optional dark icon %s without a plugin-specific rule', async (darkIcon) => {
     const catalog = [{ model_id: 'example/model', display_name: 'Example', badge: 'New', icon_data_url: null, display_original_multiplier_basis_points: 10_000,
+      ...(darkIcon === undefined ? {} : { icon_dark_data_url: darkIcon }),
       display_discounted_multiplier_basis_points: 3000, max_output_tokens: 4096,
       context_window: 128000, architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] }, supported_parameters: ['tools'],
       reasoning: { supported_efforts: ['low', 'high'], mandatory: false,

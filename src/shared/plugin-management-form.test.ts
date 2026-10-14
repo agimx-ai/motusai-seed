@@ -27,14 +27,30 @@ describe('plugin management form values', () => {
       } }],
     }).actions[0]!.input!.fields
     const resolved = resolveManagementInputFields(dynamic, { catalog: { options: [
-      { value: 'model-1', label: localized('Model 1'), group: 'seed', icon_data_url: 'data:image/png;base64,iVBORw0KGgo=', is_default: true, thinking_levels: ['off', 'low'] },
+      { value: 'model-1', label: localized('Model 1'), group: 'seed', icon_data_url: 'data:image/png;base64,iVBORw0KGgo=', icon_dark_data_url: 'data:image/svg+xml;base64,PHN2Zy8+', is_default: true, thinking_levels: ['off', 'low'] },
       { value: 'model-1', label: localized('Duplicate') },
       { value: 'invalid', label: 'Invalid label' },
+      ...['file:///tmp/icon.svg', 'data:image/svg+xml;base64,!', 'x'.repeat(350_001)].map((icon, index) => ({ value: `invalid-dark-${index}`, label: localized('Invalid icon'), icon_dark_data_url: icon })),
     ] } })
-    expect(resolved[0]?.options).toEqual([{ value: 'model-1', label: localized('Model 1'), group: 'seed', icon_data_url: 'data:image/png;base64,iVBORw0KGgo=', is_default: true, thinking_levels: ['off', 'low'] }])
+    expect(resolved[0]?.options).toEqual([{ value: 'model-1', label: localized('Model 1'), group: 'seed', icon_data_url: 'data:image/png;base64,iVBORw0KGgo=', icon_dark_data_url: 'data:image/svg+xml;base64,PHN2Zy8+', is_default: true, thinking_levels: ['off', 'low'] }])
     expect(invalidManagementInput(resolved, { model: 'model-1' })).toBeNull()
     expect(invalidManagementInput(resolved, { model: 'unknown' })).toBe('model')
     expect(invalidManagementInput(resolveManagementInputFields(dynamic, {}), { model: 'model-1' })).toBe('model')
+  })
+
+  it('validates dark icons on static options using the same image contract', () => {
+    const option = { value: 'one', label: localized('One'), icon_data_url: 'data:image/png;base64,iVBORw0KGgo=', icon_dark_data_url: 'data:image/svg+xml;base64,PHN2Zy8+' }
+    const definition = (icon: unknown) => ({
+      id: 'icons', renderer: 'seed.panel', title: localized('Icons'), description: localized('Icons'), props: { blocks: [] },
+      toolbar: [{ type: 'select_field', field_key: 'model', control: 'model_select' }, { type: 'action', action_id: 'start' }],
+      actions: [{ id: 'start', label: localized('Start'), target: { capability: 'draft', method: 'start' }, input: {
+        mode: 'inline', fields: [{ key: 'model', type: 'select', label: localized('Model'), options: [{ ...option, icon_dark_data_url: icon }] }],
+      } }],
+    })
+    expect(seedPluginManagementViewSchema.parse(definition(option.icon_dark_data_url)).actions[0]!.input!.fields[0]!.options).toEqual([option])
+    for (const icon of ['file:///tmp/icon.svg', 1, 'data:image/svg+xml;base64,!', 'x'.repeat(350_001)]) {
+      expect(seedPluginManagementViewSchema.safeParse(definition(icon)).success).toBe(false)
+    }
   })
 
   it('selects the listed default model without adding a synthetic default option', () => {

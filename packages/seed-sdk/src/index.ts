@@ -270,7 +270,11 @@ export type SeedConfigurationOption = {
   label?: string
   badges?: readonly SeedConfigurationOptionBadge[]
   icon_data_url?: string
+  /** Optional dark-theme image; fixed-color images remain unchanged without it. */
   icon_dark_data_url?: string
+  /** Optional presentation metadata for the shared model picker. */
+  group?: 'seed' | 'custom'
+  thinking_levels?: readonly string[]
 }
 
 export type SeedManagementRegistry = {

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput, UpdatePluginConfigurationInput } from '../../../shared/contracts'
+import type { PluginConfigurationOption, PluginConfigurationProfileStatus, PluginConfigurationState, QueryPluginConfigurationOptionsInput, QueryPluginConfigurationProfileStatusesInput, ReconnectPluginConfigurationProfileInput } from '../../../shared/contracts'
 import { resolveSeedLocalizedText, type SeedPluginConfiguration } from '../../../shared/plugin-manifest'
 import { SegmentedControl } from '../../components/SegmentedControl'
 import { useSeedI18n } from '../../i18n'
 import { PluginConfigurationPanel } from './PluginConfigurationPanel'
 import { PluginConfigurationCatalogList, PluginConfigurationOptionList } from './PluginConfigurationOptionList'
 import { PluginRoutePresentation } from './PluginRoutePresentation'
+import type { SavePluginConfiguration } from './use-configuration-draft'
 
 type Source = {
   configuration: SeedPluginConfiguration
@@ -17,7 +18,7 @@ type Props = {
   sources: Source[]
   pluginNames: ReadonlyMap<string, string>
   busy: boolean
-  onSave(input: UpdatePluginConfigurationInput): Promise<void>
+  onSave: SavePluginConfiguration
   onQueryOptions(input: QueryPluginConfigurationOptionsInput): Promise<PluginConfigurationOption[]>
   onQueryProfileStatuses(input: QueryPluginConfigurationProfileStatusesInput): Promise<PluginConfigurationProfileStatus[]>
   onReconnectProfile(input: ReconnectPluginConfigurationProfileInput): Promise<void>
