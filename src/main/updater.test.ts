@@ -38,6 +38,7 @@ describe('SeedUpdater macOS manual downloads', () => {
         provider: 'generic',
         url: 'https://downloads.example.test/stable/mac-arm64',
         channel: 'latest',
+        useMultipleRangeRequest: false,
       })
 
       const notAvailable = autoUpdater.on.mock.calls.find(([event]) => event === 'update-not-available')?.[1]
@@ -103,6 +104,27 @@ describe('SeedUpdater macOS manual downloads', () => {
     await expect(updater.download()).resolves.toBe(true)
     expect(autoUpdater.downloadUpdate).toHaveBeenCalledOnce()
     expect(openExternal).not.toHaveBeenCalled()
+    updater.stop()
+  })
+
+  it.each(['stable', 'beta'])('uses single-range differential requests for the %s feed across reconfiguration', (channel) => {
+    const updater = new SeedUpdater(vi.fn(), vi.fn(), { platform: 'win32', openExternal })
+    updater.configure(`https://downloads.example.test/${channel}/win-x64`)
+    updater.start()
+    expect(autoUpdater.setFeedURL).toHaveBeenLastCalledWith({
+      provider: 'generic',
+      url: `https://downloads.example.test/${channel}/win-x64`,
+      channel: channel === 'stable' ? 'latest' : 'beta',
+      useMultipleRangeRequest: false,
+    })
+    updater.configure(`https://storage.example.test/${channel}/win-x64`)
+    expect(autoUpdater.setFeedURL).toHaveBeenLastCalledWith({
+      provider: 'generic',
+      url: `https://storage.example.test/${channel}/win-x64`,
+      channel: channel === 'stable' ? 'latest' : 'beta',
+      useMultipleRangeRequest: false,
+    })
+    expect(autoUpdater.allowPrerelease).toBe(channel === 'beta')
     updater.stop()
   })
 })

@@ -68,7 +68,7 @@ export class SeedUpdater {
   }
 
   private applyFeedConfiguration() {
-    autoUpdater.setFeedURL({ provider: 'generic', url: this.updateUrl, channel: this.updateChannel === 'stable' ? 'latest' : 'beta' })
+    autoUpdater.setFeedURL({ provider: 'generic', url: this.updateUrl, channel: this.updateChannel === 'stable' ? 'latest' : 'beta', useMultipleRangeRequest: false })
     autoUpdater.allowPrerelease = this.updateChannel === 'beta'
   }
 
