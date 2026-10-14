@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6
+
+- Add shared model-picker metadata to dynamic configuration options: Seed/custom grouping, per-model thinking levels, and optional dark-theme icons.
+- Document automatic `seed.form` saving and the generic model/thinking control without coupling plugins to a specific AI provider.
+- Requires Seed 0.2.15 for the new configuration rendering and automatic-save contracts.
+
+中文：动态配置选项新增模型分组、逐模型思考等级和可选深色主题图标；补充独立表单自动保存与通用模型选择控件说明，不绑定具体 AI 提供方。新配置契约需要 Seed 0.2.15。
+
 ## 0.2.5
 
 - Add `ctx.configuration.addProfile()` so a plugin can append one profile to its own host-managed `seed.profiles` configuration without reading or replacing existing secrets.
