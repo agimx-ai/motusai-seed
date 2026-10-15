@@ -1,10 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { versionPattern } from './semver.mjs'
 
 const nextVersion = process.argv[2]?.trim()
-const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/
 
-if (!nextVersion || !semverPattern.test(nextVersion)) {
+if (!nextVersion || !versionPattern.test(nextVersion)) {
   console.error('用法：npm run version:client -- <版本号>')
   console.error('示例：npm run version:client -- 0.1.2')
   process.exit(1)
@@ -23,7 +23,7 @@ const packageJson = JSON.parse(packageSource)
 const packageLock = JSON.parse(lockSource)
 const currentVersion = packageJson.version
 
-if (typeof currentVersion !== 'string' || !semverPattern.test(currentVersion)) {
+if (typeof currentVersion !== 'string' || !versionPattern.test(currentVersion)) {
   throw new Error('package.json 中的客户端版本号无效。')
 }
 if (packageLock.version !== currentVersion || packageLock.packages?.['']?.version !== currentVersion) {

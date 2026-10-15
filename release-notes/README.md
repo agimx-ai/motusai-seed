@@ -1,6 +1,7 @@
 # 发布说明维护
 
 每个新版本在 release-notes/<产品 ID>/<版本>/ 中维护 metadata.json、zh-CN.md、en.md。
+版本使用严格 SemVer：x.y.z 为正式版；-dev.N、-beta.N、-rc.N 等为内测版；+build.N 仅作构建元数据。目录名、metadata.json、package.json、标签和 Release 必须使用同一个完整版本号。
 metadata.json 写明 version 和 documentation（pages 为受影响的 /docs 路由数组，screenshots 为布尔值；没有影响也必须显式填写空数组和 false）。
 正文不写 frontmatter：以带版本号的一级标题开头，接一段短摘要，再按需使用“新增、改进、修复、使用提醒、版本”（英文 New、Improvements、Fixes、Usage notes、Versions）和带粗体名称的短条目。不得提交占位文本。
 

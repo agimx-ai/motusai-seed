@@ -19,7 +19,6 @@ env:
   MOTUSAI_DISTRIBUTION_KEY_ID: motusai-cloud-production-v1
   MOTUSAI_DISTRIBUTION_PUBLIC_KEY: MCowBQYDK2VwAyEAGhcDBccJ1TtieZrAO1YFMs7sL7s7JuvtKPJFB7BheTc=
   MOTUSAI_ALLOW_INSECURE_HTTP: 'false'
-  MOTUSAI_UPDATE_CHANNEL: stable
 
 concurrency:
   group: seed-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -33,6 +32,8 @@ jobs:
       contents: write
     outputs:
       version: ${{ steps.release.outputs.version }}
+      channel: ${{ steps.release.outputs.channel }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
 
     steps:
       - name: Check out source
@@ -49,13 +50,21 @@ jobs:
         id: release
         shell: bash
         run: |
+          node --test scripts/verify-semver.mjs
           version="$(node -p "require('./package.json').version")"
           tag="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           if [ "$tag" != "$version" ]; then
             echo "Tag $tag does not match package version $version." >&2
             exit 1
           fi
+          prerelease="$(node --input-type=module -e "import { isPrereleaseVersion } from './scripts/semver.mjs'; console.log(isPrereleaseVersion(process.argv[1]))" "$version")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          if [ "$prerelease" = true ]; then
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check out shared release tooling
         uses: actions/checkout@v5
@@ -107,6 +116,7 @@ jobs:
       contents: write
     env:
       MOTUSAI_RELEASE_PLATFORM: mac-arm64
+      MOTUSAI_UPDATE_CHANNEL: ${{ needs.metadata.outputs.channel }}
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
     steps:
@@ -142,15 +152,16 @@ jobs:
         shell: bash
         run: |
           version='${{ needs.metadata.outputs.version }}'
+          metadata_name="$([ "$MOTUSAI_UPDATE_CHANNEL" = stable ] && echo latest-mac.yml || echo beta-mac.yml)"
           files=(
-            "release/latest-mac.yml"
+            "release/$metadata_name"
             "release/MotusAI-Seed-${version}-mac-arm64.dmg"
             "release/MotusAI-Seed-${version}-mac-arm64.dmg.blockmap"
             "release/MotusAI-Seed-${version}-mac-arm64.zip"
             "release/MotusAI-Seed-${version}-mac-arm64.zip.blockmap"
           )
           for file in "${files[@]}"; do test -s "$file" || { echo "Missing $file" >&2; exit 1; }; done
-          grep -Fq "version: ${version}" release/latest-mac.yml
+          grep -Fq "version: ${version}" "release/$metadata_name"
 
       - name: Upload macOS assets to draft Release
         env:
@@ -160,8 +171,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          metadata_name="$([ "$MOTUSAI_UPDATE_CHANNEL" = stable ] && echo latest-mac.yml || echo beta-mac.yml)"
           gh release upload "$RELEASE_VERSION" \
-            release/latest-mac.yml \
+            "release/$metadata_name" \
             "release/MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg" \
             "release/MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg.blockmap" \
             "release/MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.zip" \
@@ -177,6 +189,7 @@ jobs:
       contents: write
     env:
       MOTUSAI_RELEASE_PLATFORM: win-x64
+      MOTUSAI_UPDATE_CHANNEL: ${{ needs.metadata.outputs.channel }}
 
     defaults:
       run:
@@ -214,8 +227,9 @@ jobs:
       - name: Verify Windows release assets
         run: |
           $version = '${{ needs.metadata.outputs.version }}'
+          $metadataName = if ($env:MOTUSAI_UPDATE_CHANNEL -eq 'stable') { 'latest.yml' } else { 'beta.yml' }
           $files = @(
-            'release/latest.yml',
+            "release/$metadataName",
             "release/MotusAI-Seed-$version-win-x64.exe",
             "release/MotusAI-Seed-$version-win-x64.exe.blockmap"
           )
@@ -224,8 +238,8 @@ jobs:
               throw "Missing $file"
             }
           }
-          if (-not (Select-String -Path 'release/latest.yml' -SimpleMatch "version: $version" -Quiet)) {
-            throw 'latest.yml does not contain the release version.'
+          if (-not (Select-String -Path "release/$metadataName" -SimpleMatch "version: $version" -Quiet)) {
+            throw "$metadataName does not contain the release version."
           }
 
       - name: Upload Windows assets to draft Release
@@ -233,8 +247,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
         run: |
+          $metadataName = if ($env:MOTUSAI_UPDATE_CHANNEL -eq 'stable') { 'latest.yml' } else { 'beta.yml' }
           gh release upload $env:RELEASE_VERSION `
-            release/latest.yml `
+            "release/$metadataName" `
             "release/MotusAI-Seed-$env:RELEASE_VERSION-win-x64.exe" `
             "release/MotusAI-Seed-$env:RELEASE_VERSION-win-x64.exe.blockmap" `
             --clobber
@@ -261,15 +276,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ '${{ needs.metadata.outputs.channel }}' = stable ]; then
+            mac_metadata=latest-mac.yml
+            windows_metadata=latest.yml
+          else
+            mac_metadata=beta-mac.yml
+            windows_metadata=beta.yml
+          fi
           expected=(
             RELEASE_NOTES.md
             website-release-notes.json
-            latest-mac.yml
+            "$mac_metadata"
             "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg"
             "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg.blockmap"
             "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.zip"
             "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.zip.blockmap"
-            latest.yml
+            "$windows_metadata"
             "MotusAI-Seed-${RELEASE_VERSION}-win-x64.exe"
             "MotusAI-Seed-${RELEASE_VERSION}-win-x64.exe.blockmap"
           )
@@ -286,7 +308,10 @@ jobs:
                 exit 1
               }
           done
-          gh release edit "$RELEASE_VERSION" --draft=false --latest
+          gh release edit "$RELEASE_VERSION" \
+            --draft=false \
+            --prerelease='${{ needs.metadata.outputs.prerelease }}' \
+            --latest='${{ needs.metadata.outputs.prerelease == 'false' }}'
           echo "tag=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
 
   notify-website:
