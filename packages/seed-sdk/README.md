@@ -96,6 +96,20 @@ ctx.effect(() => {
 
 ## 文档与示例
 
+### 通用音频采集
+
+声明 `device.audio.capture` 后，可调用 `ctx.invokeHost('seed.audio', { operation: 'capture.start', source })`。
+`source` 可选 `microphone`（默认）、`system`、`mixed`，分别采集默认麦克风、系统输出及两者混合。
+音源在会话开始时确定，暂停/继续不更换音源；状态和持久会话记录返回 `source`。
+三种音源共用现有 `capture.segment/stop/consume/read/ack` PCM16 单声道 16 kHz 与持久分段协议。
+麦克风通过隔离 AudioWorklet 按 20 ms 分块采集，由浏览器统一重采样至 16 kHz。混合模式对齐两路音频帧，以固定 1:1 比例混音，只输出一条音轨，不做额外自动增益、音乐压低或活跃判断；它不是语音分离，重叠人声的识别效果仍取决于转写模型。
+系统音频由宿主的原生 Core Audio Tap（macOS 14.2+）或 WASAPI 回环（Windows）采集，不调用屏幕共享 API、不创建视频轨道，也不显示屏幕选择器。麦克风继续使用原有隔离采集窗口；混合模式在宿主合并两路 PCM，复用同一持久分段流程。
+Linux 继续支持麦克风，但当前不支持系统音频；权限拒绝、格式错误、音源断开或混音队列失步会失败，不自动降级为其他音源。
+macOS 使用锁定的 AudioTee 通用二进制，作为应用资源置于 ASAR 外；Windows 使用锁定的 WASAPI 平台 N-API 包。只加载当前平台所需的纯音频后端，Linux 不加载系统音频后端。
+非法音源返回 `audio_source_invalid`，不支持的平台返回 `audio_source_unsupported`，采集失败返回 `audio_capture_failed`。
+macOS 应用包必须声明 `NSAudioCaptureUsageDescription`；首次使用可能请求“系统音频录制”权限，但不需要选择共享屏幕。开发时从终端/IDE 启动 Electron 也受系统权限归属限制。
+宿主在本机用户数据目录 `audio-debug/latest` 保留最近一次录音的 WAV，下一次录音覆盖，不积累历史。混合模式保存麦克风、系统声音和最终混合音；单音源模式只保存实际输入及最终输出，不复制模型请求或增加转写调用。
+
 - [插件开发手册](https://github.com/agimx-ai/motusai-seed/blob/main/docs/插件开发手册.md)
 - [插件包规范](https://github.com/agimx-ai/motusai-seed/blob/main/docs/社区插件与插件包规范.md)
 - [官方插件示例](https://github.com/agimx-ai/motusai-seed-official-plugins)

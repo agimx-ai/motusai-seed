@@ -50,7 +50,8 @@ export default {
   directories: { output: 'release' },
   electronDist: 'node_modules/electron/dist',
   asar: true,
-  files: ['dist/renderer/**/*', 'dist/electron/**/*', 'package.json'],
+  asarUnpack: ['node_modules/@native-audio-node/**'],
+  files: ['dist/renderer/**/*', 'dist/electron/**/*', 'package.json', '!node_modules/audiotee/**'],
   protocols: [
     { name: `${productName} sign-in`, schemes: [appId] },
     { name: `${productName} deep links`, schemes: ['motusai-seed'] },
@@ -58,6 +59,10 @@ export default {
   extraResources: [
     { from: appResources, to: 'app' },
     { from: 'resources/python', to: 'python' },
+    ...(process.platform === 'darwin' ? [
+      { from: 'node_modules/audiotee/bin/audiotee', to: 'audio/audiotee' },
+      { from: 'node_modules/audiotee/README.md', to: 'audio/audiotee-README.md' },
+    ] : []),
   ],
   publish: [{ provider: 'generic', url: updateUrl, channel: publishChannel }],
   mac: {
@@ -67,6 +72,7 @@ export default {
     artifactName: 'MotusAI-Seed-${version}-mac-${arch}.${ext}',
     extendInfo: {
       NSMicrophoneUsageDescription: `${productName} uses the microphone only when you start a recording from your connected MotusAI workspace.`,
+      NSAudioCaptureUsageDescription: `${productName} captures system audio only when you explicitly select system audio or mixed audio for a recording.`,
     },
   },
   dmg: { icon: appIconIcns },

@@ -440,7 +440,7 @@ export class SeedRuntime {
     this.audioService = new AudioService(() => {
       audioStateChanged()
       void this.publishSnapshot()
-    }, join(app.getPath('userData'), 'plugin-data'))
+    }, join(app.getPath('userData'), 'plugin-data'), undefined, join(app.getPath('userData'), 'audio-debug'))
     this.sandboxHost = new SeedPluginSandboxSupervisor((packageId, service, argumentsValue) => (
       this.invokePluginBroker(packageId, service, argumentsValue)
     ), (packageId, event, message, details) => this.diagnostics.record({
@@ -1882,7 +1882,7 @@ export class SeedRuntime {
     }
     if (service === 'seed.audio') {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId)
-      if (!plugin?.permissions.includes('device.audio.capture')) throw Object.assign(new Error('插件未声明麦克风采集权限。'), { code: 'broker_permission_denied' })
+      if (!plugin?.permissions.includes('device.audio.capture')) throw Object.assign(new Error('插件未声明音频采集权限。'), { code: 'broker_permission_denied' })
       return await this.audioService.invoke(argumentsValue, packageId)
     }
     if (service === 'seed.configuration') {

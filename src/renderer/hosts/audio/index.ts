@@ -1,9 +1,4 @@
-type AudioContextConstructor = new () => AudioContext
-type AudioCaptureCommand =
-  | { type: 'start'; session_id: string }
-  | { type: 'pause'; session_id: string }
-  | { type: 'resume'; session_id: string }
-  | { type: 'stop'; session_id: string }
+import type { AudioCaptureCommand } from '../../../shared/audio-capture'
 
 declare global {
   interface Window {
@@ -17,94 +12,116 @@ declare global {
 }
 
 let sessionId = ''
+let generation = 0
 let stream: MediaStream | null = null
 let context: AudioContext | null = null
 let source: MediaStreamAudioSourceNode | null = null
-let processor: ScriptProcessorNode | null = null
-function audioContextConstructor() {
-  const audioWindow = window as typeof window & { webkitAudioContext?: AudioContextConstructor }
-  return window.AudioContext || audioWindow.webkitAudioContext
-}
+let processor: AudioWorkletNode | null = null
+let finish: (() => Promise<void>) | null = null
+let flushInput: (() => Promise<void>) | null = null
+let cleanupTask: Promise<void> | null = null
 
-function resamplePcm16(samples: Float32Array, sourceSampleRate: number) {
-  if (!samples.length || !sourceSampleRate) return new ArrayBuffer(0)
-  const ratio = sourceSampleRate / 16_000
-  const sampleCount = Math.max(1, Math.floor(samples.length / ratio))
-  const buffer = new ArrayBuffer(sampleCount * 2)
-  const view = new DataView(buffer)
-  for (let index = 0; index < sampleCount; index += 1) {
-    const start = Math.floor(index * ratio)
-    const end = Math.max(start + 1, Math.min(samples.length, Math.floor((index + 1) * ratio)))
-    let sum = 0
-    for (let sourceIndex = start; sourceIndex < end; sourceIndex += 1) sum += samples[sourceIndex]
-    const sample = Math.max(-1, Math.min(1, sum / (end - start)))
-    view.setInt16(index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true)
-  }
-  return buffer
-}
-
-async function cleanup() {
-  processor?.disconnect()
-  source?.disconnect()
+function cleanup(): Promise<void> {
+  if (cleanupTask) return cleanupTask
+  const currentContext = context
+  const currentProcessor = processor
+  const currentSource = source
+  const currentStream = stream
+  const finishCapture = finish
+  context = null
   processor = null
   source = null
-  stream?.getTracks().forEach((track) => track.stop())
   stream = null
-  const current = context
-  context = null
-  if (current && current.state !== 'closed') await current.close().catch(() => undefined)
+  finish = null
+  flushInput = null
+  cleanupTask = (async () => {
+    await finishCapture?.()
+    if (currentProcessor) {
+      currentProcessor.port.onmessage = null
+      currentProcessor.port.close()
+      currentProcessor.disconnect()
+    }
+    currentSource?.disconnect()
+    currentStream?.getTracks().forEach((track) => { track.onended = null; track.stop() })
+    if (currentContext && currentContext.state !== 'closed') await currentContext.close().catch(() => undefined)
+  })().finally(() => { cleanupTask = null })
+  return cleanupTask
 }
 
-async function start(command: Extract<AudioCaptureCommand, { type: 'start' }>) {
+async function start(command: Extract<AudioCaptureCommand, { type: 'start' }>, currentGeneration: number) {
   await cleanup()
-  const AudioCtx = audioContextConstructor()
-  if (!AudioCtx || !navigator.mediaDevices?.getUserMedia) throw new Error('当前系统不支持麦克风采集。')
+  if (currentGeneration !== generation) return
   sessionId = command.session_id
-  stream = await navigator.mediaDevices.getUserMedia({
+  if (!window.AudioContext || !navigator.mediaDevices?.getUserMedia) throw new Error('当前系统不支持麦克风采集。')
+  const captured = await navigator.mediaDevices.getUserMedia({
     audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true, channelCount: 1 },
   })
-  context = new AudioCtx()
-  await context.resume()
-  source = context.createMediaStreamSource(stream)
-  processor = context.createScriptProcessor(4096, 1, 1)
-  processor.onaudioprocess = (event) => {
-    if (!sessionId || context?.state !== 'running') return
-    const samples = event.inputBuffer.getChannelData(0)
-    const pcm = resamplePcm16(samples, context.sampleRate)
-    if (pcm.byteLength) window.seedAudioCapture.chunk(sessionId, pcm)
+  if (currentGeneration !== generation) {
+    captured.getTracks().forEach((track) => track.stop())
+    return
   }
-  source.connect(processor)
-  processor.connect(context.destination)
+  stream = captured
+  const tracks = captured.getAudioTracks()
+  if (!tracks.length || tracks.some((track) => track.readyState !== 'live')) throw new Error('未获取到麦克风音频，请检查设备及权限。')
+  const audioContext = new AudioContext({ sampleRate: 16_000 })
+  context = audioContext
+  if (audioContext.sampleRate !== 16_000) throw new Error('麦克风无法初始化为 16 kHz 音频。')
+  await audioContext.audioWorklet.addModule(new URL('./capture-processor.js?no-inline', import.meta.url))
+  if (currentGeneration !== generation) return
+  const node = new AudioWorkletNode(audioContext, 'seed-pcm-capture', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] })
+  processor = node
+  let accepting = true
+  let flushed: (() => void) | null = null
+  node.port.onmessage = (event: MessageEvent<{ type: string; pcm?: ArrayBuffer }>) => {
+    if (event.data.type === 'flushed') { flushed?.(); return }
+    if (accepting && sessionId === command.session_id && event.data.pcm?.byteLength) window.seedAudioCapture.chunk(command.session_id, event.data.pcm)
+  }
+  const flush = () => new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 250)
+      flushed = () => { clearTimeout(timer); resolve() }
+      node.port.postMessage({ type: 'flush' })
+    })
+  flushInput = flush
+  finish = async () => {
+    await flush()
+    accepting = false
+  }
+  node.onprocessorerror = () => {
+    if (accepting && currentGeneration === generation) window.seedAudioCapture.emit({ type: 'error', session_id: command.session_id, message: '麦克风音频处理器已中断。' })
+  }
+  for (const track of tracks) track.onended = () => {
+    if (currentGeneration === generation) window.seedAudioCapture.emit({ type: 'error', session_id: command.session_id, message: '麦克风已断开，请检查设备。' })
+  }
+  source = audioContext.createMediaStreamSource(captured)
+  source.connect(node)
+  node.connect(audioContext.destination)
+  await audioContext.resume()
+  if (currentGeneration !== generation) return
   window.seedAudioCapture.emit({ type: 'started', session_id: sessionId, sample_rate: 16_000, channels: 1, format: 'pcm16' })
 }
 
-window.seedAudioCapture.subscribe((command) => {
-  void (async () => {
-    if (command.type !== 'start' && command.session_id !== sessionId) return
-    if (command.type === 'start') return await start(command)
-    if (command.type === 'pause') {
-      await context?.suspend()
-      window.seedAudioCapture.emit({ type: 'paused', session_id: sessionId })
+async function handle(command: AudioCaptureCommand) {
+  if (command.type !== 'start' && command.session_id !== sessionId) return
+  const currentGeneration = command.type === 'start' || command.type === 'stop' ? ++generation : generation
+  try {
+    if (command.type === 'start') return await start(command, currentGeneration)
+    if (command.type === 'pause' || command.type === 'resume') {
+      if (command.type === 'pause') { await flushInput?.(); await context?.suspend() }
+      else await context?.resume()
+      if (currentGeneration === generation) window.seedAudioCapture.emit({ type: command.type === 'pause' ? 'paused' : 'resumed', session_id: sessionId })
       return
     }
-    if (command.type === 'resume') {
-      await context?.resume()
-      window.seedAudioCapture.emit({ type: 'resumed', session_id: sessionId })
-      return
-    }
+    const stoppedId = sessionId
     await cleanup()
-    const stoppedSessionId = sessionId
+    if (currentGeneration !== generation) return
     sessionId = ''
-    window.seedAudioCapture.emit({ type: 'stopped', session_id: stoppedSessionId })
-  })().catch((error) => {
-    window.seedAudioCapture.emit({
-      type: 'error',
-      session_id: command.session_id,
-      message: error instanceof Error ? error.message : String(error),
-    })
-  })
-})
+    window.seedAudioCapture.emit({ type: 'stopped', session_id: stoppedId })
+  } catch (error) {
+    if (currentGeneration !== generation || sessionId !== command.session_id) return
+    await cleanup()
+    window.seedAudioCapture.emit({ type: 'error', session_id: command.session_id, message: error instanceof Error ? error.message : String(error) })
+  }
+}
 
+window.seedAudioCapture.subscribe((command) => { void handle(command) })
 window.seedAudioCapture.ready()
-
-export {}

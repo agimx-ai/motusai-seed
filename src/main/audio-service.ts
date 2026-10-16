@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { BrowserWindow, ipcMain, session, systemPreferences } from 'electron'
+import { parseAudioCaptureSource, type AudioCaptureSource } from '../shared/audio-capture'
+import { SystemAudioCapture, type SystemAudioRecorderFactory } from './system-audio-capture'
+import { AudioPcmMixer } from './audio-pcm-mixer'
 import { mascotTiming } from './mascot-timing'
 import { AudioSegmentStore } from './audio-segment-store'
+import { AudioDebugRecording } from './audio-debug-recording'
 
 export type AudioState = 'idle' | 'starting' | 'recording' | 'paused' | 'stopping' | 'failed'
-export type AudioStatus = { session_id?: string; state: AudioState; duration_ms: number; error?: string }
+export type AudioStatus = { session_id?: string; state: AudioState; duration_ms: number; source: AudioCaptureSource; error?: string }
 type PendingEvent = { resolve(value: Record<string, unknown>): void; reject(error: Error): void; timer: NodeJS.Timeout }
+type CapturedSegment = { audio_session_id: string; segment_id: string; start_ms: number; end_ms: number }
 type CompletedAudio = { pcm: Buffer; durationMs: number; expiresAt: number; captureSessionId: string; packageId: string }
 
 const maxPcmBytes = 10 * 1024 * 1024
@@ -20,13 +25,17 @@ function codedError(message: string, code: string) {
   return error
 }
 
-/** Captures microphone PCM locally. Audio only leaves this service through consume(). */
+/** Captures audio only. All sources share the same durable PCM segment pipeline. */
 export class AudioService {
   private window: BrowserWindow | null = null
   private ready: Promise<void> | null = null
   private readyResolve: (() => void) | null = null
   private sessionId = ''
   private ownerPackageId = ''
+  private source: AudioCaptureSource = 'microphone'
+  private captureGeneration = 0
+  private systemCapture: SystemAudioCapture | null = null
+  private readonly mixer = new AudioPcmMixer()
   private state: AudioState = 'idle'
   private failureResetTimer: ReturnType<typeof setTimeout> | null = null
   private error = ''
@@ -39,9 +48,12 @@ export class AudioService {
   private pcmBaseOffsetBytes = 0
   private readonly completedAudio = new Map<string, CompletedAudio>()
   private readonly pendingEvents = new Map<string, PendingEvent>()
+  private segmentTask: Promise<CapturedSegment> | null = null
   private readonly durableStore: AudioSegmentStore | null
+  private debugRecording: AudioDebugRecording | null = null
+  private debugSaveTask: Promise<void> = Promise.resolve()
 
-  constructor(private readonly stateChanged: (status: AudioStatus) => void = () => undefined, pluginDataRoot?: string) {
+  constructor(private readonly stateChanged: (status: AudioStatus) => void = () => undefined, pluginDataRoot?: string, private readonly systemRecorderFactory?: SystemAudioRecorderFactory, private readonly audioDebugRoot?: string) {
     this.durableStore = pluginDataRoot ? new AudioSegmentStore(pluginDataRoot) : null
     ipcMain.on('seed-audio:ready', this.handleReady)
     ipcMain.on('seed-audio:event', this.handleCaptureEvent)
@@ -75,14 +87,38 @@ export class AudioService {
 
   private handleChunk = (event: Electron.IpcMainEvent, sessionId: string, pcm: ArrayBuffer) => {
     this.trustedSender(event)
-    if (sessionId !== this.sessionId || this.state !== 'recording' || !pcm?.byteLength) return
+    if (sessionId !== this.sessionId || !pcm?.byteLength) return
+    this.acceptPcm('microphone', Buffer.from(pcm))
+  }
+
+  private acceptPcm(source: 'microphone' | 'system', pcm: Buffer) {
+    if (!['recording', 'stopping'].includes(this.state) || (this.source !== 'mixed' && this.source !== source)) return
+    try {
+      this.debugRecording?.append(source, pcm)
+      this.appendPcm(this.source === 'mixed' ? this.mixer.push(source, pcm) : pcm)
+    } catch (error) { this.fail(error instanceof Error ? error.message : String(error)) }
+  }
+
+  private appendPcm(pcm: Buffer) {
+    if (!pcm.length) return
     if (this.pcmBytes + pcm.byteLength > maxPcmBytes) {
       this.fail('录音过长，请缩短后重试。')
       return
     }
-    const chunk = Buffer.from(pcm)
-    this.pcmChunks.push(chunk)
-    this.pcmBytes += chunk.byteLength
+    this.pcmChunks.push(pcm)
+    this.pcmBytes += pcm.byteLength
+    this.debugRecording?.append('output', pcm)
+  }
+
+  private finishDebugRecording() {
+    const recording = this.debugRecording
+    this.debugRecording = null
+    if (recording) {
+      const save = recording.finish().then((directory) => { console.info('[audio-debug] Saved local recording:', directory) })
+        .catch((error) => { console.warn('[audio-debug] Could not save local recording:', error) })
+      this.debugSaveTask = Promise.all([this.debugSaveTask, save]).then(() => undefined)
+    }
+    return this.debugSaveTask
   }
 
   private waitForCaptureEvent(type: string, timeoutMs = 20_000) {
@@ -134,14 +170,17 @@ export class AudioService {
       },
     })
     this.window = window
-    captureSession.setPermissionCheckHandler((webContents, permission) => webContents === window.webContents && permission === 'media')
-    captureSession.setPermissionRequestHandler((webContents, permission, callback) => callback(webContents === window.webContents && permission === 'media'))
+    const allowed = (contents: Electron.WebContents | null, permission: string) => contents === window.webContents && permission === 'media' && this.source !== 'system'
+    captureSession.setPermissionCheckHandler((contents, permission) => allowed(contents, permission))
+    captureSession.setPermissionRequestHandler((contents, permission, callback) => callback(allowed(contents, permission)))
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event) => event.preventDefault())
-    window.webContents.on('render-process-gone', (_event, details) => this.fail(`音频采集进程已退出：${details.reason}`))
+    window.webContents.on('render-process-gone', (_event, details) => {
+      if (this.window === window && this.source !== 'system' && this.state !== 'idle') this.fail(`音频采集进程已退出：${details.reason}`)
+    })
     window.on('closed', () => {
       if (this.window === window) this.window = null
-      if (this.state !== 'idle') this.fail('音频采集窗口已关闭。')
+      if (this.source !== 'system' && this.state !== 'idle') this.fail('音频采集窗口已关闭。')
     })
     if (process.env.VITE_DEV_SERVER_URL) await window.loadURL(`${process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '')}/src/renderer/hosts/audio/index.html`)
     else await window.loadFile(join(__dirname, '../../renderer/src/renderer/hosts/audio/index.html'))
@@ -156,12 +195,16 @@ export class AudioService {
   }
 
   snapshot(): AudioStatus {
-    return { session_id: this.sessionId || undefined, state: this.state, duration_ms: this.durationMs(), ...(this.error ? { error: this.error } : {}) }
+    return { session_id: this.sessionId || undefined, state: this.state, source: this.source, duration_ms: this.durationMs(), ...(this.error ? { error: this.error } : {}) }
   }
 
   private setState(state: AudioState) { this.state = state; this.stateChanged(this.snapshot()) }
 
   private fail(message: string) {
+    void this.finishDebugRecording()
+    void this.systemCapture?.stop().catch(() => undefined)
+    this.systemCapture = null
+    this.mixer.clear()
     if (this.failureResetTimer) clearTimeout(this.failureResetTimer)
     this.error = message
     this.setState('failed')
@@ -185,10 +228,21 @@ export class AudioService {
   }
 
   private reset() {
+    void this.finishDebugRecording()
+    void this.systemCapture?.stop().catch(() => undefined)
+    this.systemCapture = null
+    this.mixer.clear()
+    this.captureGeneration += 1
+    for (const pending of this.pendingEvents.values()) {
+      clearTimeout(pending.timer)
+      pending.reject(codedError('音频采集已取消。', 'audio_capture_cancelled'))
+    }
+    this.pendingEvents.clear()
     if (this.failureResetTimer) clearTimeout(this.failureResetTimer)
     this.failureResetTimer = null
     this.sessionId = ''
     this.ownerPackageId = ''
+    this.source = 'microphone'
     this.error = ''
     this.startedAt = 0
     this.pausedAt = 0
@@ -201,42 +255,89 @@ export class AudioService {
   }
 
   private async start(argumentsValue: Record<string, unknown>, packageId: string) {
+    const source = parseAudioCaptureSource(argumentsValue.source)
+    if (source !== 'microphone' && !['darwin', 'win32'].includes(process.platform)) {
+      throw codedError('当前平台不支持系统音频采集。请选择麦克风。', 'audio_source_unsupported')
+    }
     const sessionId = String(argumentsValue.session_id || '').trim() || randomUUID()
     if (sessionId.length > 128) throw codedError('录音会话 ID 无效。', 'audio_session_invalid')
     if (this.state === 'failed') this.reset()
     if (this.state !== 'idle') {
-      if (this.sessionId === sessionId && (this.state === 'recording' || this.state === 'paused')) return this.snapshot()
+      if (this.ownerPackageId === packageId && this.sessionId === sessionId && this.source === source && (this.state === 'recording' || this.state === 'paused')) return this.snapshot()
       throw codedError('另一段录音正在进行。', 'audio_session_busy')
     }
     this.sessionId = sessionId
     this.ownerPackageId = packageId
+    this.source = source
+    const generation = ++this.captureGeneration
+    const assertStarting = () => {
+      if (this.captureGeneration !== generation || this.state !== 'starting') throw codedError('音频采集已取消。', 'audio_capture_cancelled')
+    }
     this.pcmChunks = []
     this.pcmBytes = 0
     this.segmentOffsetBytes = 0
     this.pcmBaseOffsetBytes = 0
     this.setState('starting')
     try {
-      await this.durableStore?.create(packageId, sessionId)
-      await this.ensureMicrophonePermission()
-      const window = await this.ensureWindow()
-      const started = this.waitForCaptureEvent('started')
-      window.webContents.send('seed-audio:command', { type: 'start', session_id: sessionId })
-      await started
+      await this.durableStore?.create(packageId, sessionId, source)
+      assertStarting()
+      if (source !== 'system') await this.ensureMicrophonePermission()
+      assertStarting()
+      if (source !== 'system') {
+        const window = await this.ensureWindow()
+        assertStarting()
+        const started = this.waitForCaptureEvent('started')
+        window.webContents.send('seed-audio:command', { type: 'start', session_id: sessionId })
+        await started
+        assertStarting()
+      }
+      if (source !== 'microphone') {
+        const capture = new SystemAudioCapture(
+          (pcm) => { if (this.captureGeneration === generation) this.acceptPcm('system', pcm) },
+          (error) => { if (this.captureGeneration === generation) this.fail(error.message) },
+          this.systemRecorderFactory,
+        )
+        this.systemCapture = capture
+        await capture.start()
+      }
+      assertStarting()
+      if (this.audioDebugRoot) {
+        const setup = this.debugSaveTask.then(async () => {
+          assertStarting()
+          const recording = await AudioDebugRecording.start(this.audioDebugRoot!, source)
+            .catch((error) => { console.warn('[audio-debug] Could not start local recording:', error); return null })
+          try { assertStarting() } catch (error) {
+            await recording?.finish().catch(() => undefined)
+            throw error
+          }
+          return recording
+        })
+        this.debugSaveTask = setup.then(() => undefined, () => undefined)
+        this.debugRecording = await setup
+      }
       this.startedAt = Date.now()
       this.setState('recording')
       return this.snapshot()
     } catch (error) {
+      if (this.captureGeneration !== generation) throw error
       await this.durableStore?.discard(packageId, sessionId).catch(() => undefined)
-      this.fail(error instanceof Error ? error.message : String(error))
-      throw error
+      const message = error instanceof Error ? error.message : String(error)
+      this.fail(message)
+      if (error && typeof error === 'object' && 'code' in error) throw error
+      throw codedError(message, 'audio_capture_failed')
     }
   }
 
   private async pause() {
-    if (this.state !== 'recording' || !this.window) throw codedError('当前没有可暂停的录音。', 'audio_session_not_recording')
-    const paused = this.waitForCaptureEvent('paused')
-    this.window.webContents.send('seed-audio:command', { type: 'pause', session_id: this.sessionId })
-    await paused
+    if (this.state !== 'recording') throw codedError('当前没有可暂停的录音。', 'audio_session_not_recording')
+    if (this.source !== 'system' && this.window) {
+      const paused = this.waitForCaptureEvent('paused')
+      this.window.webContents.send('seed-audio:command', { type: 'pause', session_id: this.sessionId })
+      await paused
+    }
+    this.appendPcm(this.mixer.flush())
+    this.mixer.clear()
+    await this.segmentTask
     this.pausedAt = Date.now()
     await this.durableStore?.updateState(this.ownerPackageId, this.sessionId, 'paused')
     this.setState('paused')
@@ -244,10 +345,13 @@ export class AudioService {
   }
 
   private async resume() {
-    if (this.state !== 'paused' || !this.window) throw codedError('当前没有已暂停的录音。', 'audio_session_not_paused')
-    const resumed = this.waitForCaptureEvent('resumed')
-    this.window.webContents.send('seed-audio:command', { type: 'resume', session_id: this.sessionId })
-    await resumed
+    if (this.state !== 'paused') throw codedError('当前没有已暂停的录音。', 'audio_session_not_paused')
+    this.mixer.clear()
+    if (this.source !== 'system' && this.window) {
+      const resumed = this.waitForCaptureEvent('resumed')
+      this.window.webContents.send('seed-audio:command', { type: 'resume', session_id: this.sessionId })
+      await resumed
+    }
     this.pausedTotalMs += Math.max(0, Date.now() - this.pausedAt)
     this.pausedAt = 0
     await this.durableStore?.updateState(this.ownerPackageId, this.sessionId, 'recording')
@@ -255,17 +359,29 @@ export class AudioService {
     return this.snapshot()
   }
 
-  private compactSegmentBuffer(buffered: Buffer) {
+  private compactSegmentBuffer() {
     const discardBytes = Math.max(0, this.segmentOffsetBytes - segmentOverlapBytes)
     if (!discardBytes) return
-    const retained = Buffer.from(buffered.subarray(discardBytes))
+    const retained = Buffer.concat(this.pcmChunks, this.pcmBytes).subarray(discardBytes)
     this.pcmChunks = retained.byteLength ? [retained] : []
     this.pcmBytes = retained.byteLength
     this.segmentOffsetBytes -= discardBytes
     this.pcmBaseOffsetBytes += discardBytes
   }
 
-  private async captureSegment() {
+  private captureSegment(): Promise<CapturedSegment> {
+    if (!this.segmentTask) {
+      const task = this.captureSegmentImpl()
+      this.segmentTask = task
+      void task.finally(() => { if (this.segmentTask === task) this.segmentTask = null }).catch(() => undefined)
+    }
+    return this.segmentTask
+  }
+
+  private async captureSegmentImpl(): Promise<CapturedSegment> {
+    const generation = this.captureGeneration
+    const sessionId = this.sessionId
+    const packageId = this.ownerPackageId
     const endByte = this.pcmBytes
     const globalEndByte = this.pcmBaseOffsetBytes + endByte
     if (endByte <= this.segmentOffsetBytes) {
@@ -279,12 +395,13 @@ export class AudioService {
     const buffered = Buffer.concat(this.pcmChunks, this.pcmBytes)
     const pcm = Buffer.from(buffered.subarray(startByte, endByte))
     const durable = await this.durableStore?.append(
-      this.ownerPackageId,
-      this.sessionId,
+      packageId,
+      sessionId,
       pcm,
       Math.round(globalStartByte / pcmBytesPerMs),
       Math.round(globalEndByte / pcmBytesPerMs),
     )
+    if (generation !== this.captureGeneration || this.state === 'failed') throw codedError('音频采集已取消。', 'audio_capture_cancelled')
     const audioSessionId = durable?.segment_id || randomUUID()
     this.completedAudio.set(audioSessionId, {
       pcm,
@@ -294,7 +411,7 @@ export class AudioService {
       packageId: this.ownerPackageId,
     })
     this.segmentOffsetBytes = endByte
-    this.compactSegmentBuffer(buffered)
+    this.compactSegmentBuffer()
     return {
       audio_session_id: audioSessionId,
       segment_id: audioSessionId,
@@ -309,24 +426,26 @@ export class AudioService {
   }
 
   private async stop() {
-    if (!['recording', 'paused'].includes(this.state) || !this.window) throw codedError('当前没有可停止的录音。', 'audio_session_not_recording')
+    if (!['recording', 'paused'].includes(this.state)) throw codedError('当前没有可停止的录音。', 'audio_session_not_recording')
     this.setState('stopping')
     const durationMs = this.durationMs()
-    const stopped = this.waitForCaptureEvent('stopped')
-    this.window.webContents.send('seed-audio:command', { type: 'stop', session_id: this.sessionId })
-    await stopped
+    await this.stopInputs()
+    await this.segmentTask
+    this.appendPcm(this.mixer.flush())
     const sessionId = this.sessionId
     if (!this.pcmBytes) {
       this.fail('没有采集到可转写的音频。')
       throw codedError('没有采集到可转写的音频。', 'audio_empty')
     }
     const segment = await this.captureSegment()
+    await this.finishDebugRecording()
     await this.durableStore?.updateState(this.ownerPackageId, sessionId, 'stopped')
     this.reset()
     return { session_id: sessionId, state: 'captured', duration_ms: durationMs, ...segment }
   }
 
   private async cancel() {
+    this.invalidateStart()
     const sessionId = this.sessionId
     const packageId = this.ownerPackageId
     if (this.state === 'failed') {
@@ -334,11 +453,9 @@ export class AudioService {
       await this.durableStore?.discard(packageId, sessionId)
       return { session_id: sessionId, state: 'cancelled' }
     }
-    if (this.window && sessionId) {
-      const stopped = this.waitForCaptureEvent('stopped', 5_000)
-      this.window.webContents.send('seed-audio:command', { type: 'stop', session_id: sessionId })
-      await stopped.catch(() => undefined)
-    }
+    await this.stopInputs()
+    await this.segmentTask?.catch(() => undefined)
+    await this.finishDebugRecording()
     for (const [id, audio] of this.completedAudio) if (audio.captureSessionId === sessionId) this.completedAudio.delete(id)
     if (packageId && sessionId) await this.durableStore?.discard(packageId, sessionId)
     this.reset()
@@ -346,15 +463,15 @@ export class AudioService {
   }
 
   private async interrupt() {
+    this.invalidateStart()
     const sessionId = this.sessionId
     const packageId = this.ownerPackageId
     if (!sessionId || !packageId) return { session_id: sessionId, state: 'interrupted' }
-    if (this.window && !this.window.isDestroyed() && ['recording', 'paused', 'starting', 'stopping'].includes(this.state)) {
-      const stopped = this.waitForCaptureEvent('stopped', 1_000)
-      this.window.webContents.send('seed-audio:command', { type: 'stop', session_id: sessionId })
-      await stopped.catch(() => undefined)
-    }
+    await this.stopInputs()
+    await this.segmentTask?.catch(() => undefined)
+    this.appendPcm(this.mixer.flush())
     if (this.pcmBytes > this.segmentOffsetBytes) await this.captureSegment()
+    await this.finishDebugRecording()
     await this.durableStore?.updateState(packageId, sessionId, 'interrupted').catch(() => undefined)
     this.reset()
     return { session_id: sessionId, state: 'interrupted' }
@@ -367,6 +484,27 @@ export class AudioService {
     if (!audio || audio.packageId !== packageId) throw codedError('录音数据不存在或已过期。', 'audio_session_unavailable')
     this.completedAudio.delete(sessionId)
     return { pcm: audio.pcm, durationMs: audio.durationMs, sampleRate: 16_000, channels: 1 as const }
+  }
+
+  private async stopInputs() {
+    await this.systemCapture?.stop()
+    this.systemCapture = null
+    if (this.source !== 'system' && this.window && !this.window.isDestroyed() && this.sessionId) {
+      const stopped = this.waitForCaptureEvent('stopped', 1_000)
+      this.window.webContents.send('seed-audio:command', { type: 'stop', session_id: this.sessionId })
+      await stopped.catch(() => undefined)
+    }
+  }
+
+  private invalidateStart() {
+    if (this.state !== 'starting') return
+    this.captureGeneration += 1
+    const pending = this.pendingEvents.get('started')
+    if (pending) {
+      clearTimeout(pending.timer)
+      pending.reject(codedError('音频采集已取消。', 'audio_capture_cancelled'))
+      this.pendingEvents.delete('started')
+    }
   }
 
   async invoke(argumentsValue: Record<string, unknown>, packageId = '') {
@@ -419,6 +557,8 @@ export class AudioService {
 
   async destroy() {
     await this.interrupt().catch(() => undefined)
+    this.reset()
+    await this.debugSaveTask
     this.completedAudio.clear()
     this.window?.destroy()
     this.window = null

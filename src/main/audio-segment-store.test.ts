@@ -17,12 +17,13 @@ describe('AudioSegmentStore', () => {
     const pcm = Buffer.alloc(16_000 * 2 * 2)
     for (let index = 0; index < pcm.byteLength / 2; index += 1) pcm.writeInt16LE(Math.round(Math.sin(index / 12) * 8_000), index * 2)
 
-    await store.create('com.example.recorder', 'capture-1')
+    await store.create('com.example.recorder', 'capture-1', 'mixed')
     const segment = await store.append('com.example.recorder', 'capture-1', pcm, 0, 2_000)
     const sessions = await store.list('com.example.recorder')
     const restored = await store.readSegment('com.example.recorder', 'capture-1', segment.segment_id)
 
-    expect(sessions).toMatchObject([{ session_id: 'capture-1', state: 'interrupted', segments: [{ segment_id: segment.segment_id }] }])
+    expect(sessions).toMatchObject([{ session_id: 'capture-1', source: 'mixed', state: 'interrupted', segments: [{ segment_id: segment.segment_id }] }])
+    expect(await new AudioSegmentStore(root).list('com.example.recorder')).toMatchObject([{ source: 'mixed' }])
     expect(restored.pcm.equals(pcm)).toBe(true)
     await store.acknowledge('com.example.recorder', 'capture-1', segment.segment_id)
     expect((await store.readSession('com.example.recorder', 'capture-1')).segments).toEqual([])

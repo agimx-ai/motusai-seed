@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { decodePcm16Flac, encodePcm16Flac } from './audio-flac'
+import type { AudioCaptureSource } from '../shared/audio-capture'
 
 export type DurableAudioSegment = {
   segment_id: string
@@ -16,6 +17,7 @@ export type DurableAudioSession = {
   version: 1
   package_id: string
   session_id: string
+  source?: AudioCaptureSource
   state: 'recording' | 'paused' | 'stopped' | 'interrupted'
   sample_rate: number
   channels: number
@@ -52,12 +54,12 @@ export class AudioSegmentStore {
     return join(this.sessionDirectory(packageId, sessionId), 'session.json')
   }
 
-  async create(packageId: string, sessionId: string) {
+  async create(packageId: string, sessionId: string, source: AudioCaptureSource = 'microphone') {
     const directory = this.sessionDirectory(packageId, sessionId)
     await mkdir(join(directory, 'segments'), { recursive: true, mode: 0o700 })
     const now = new Date().toISOString()
     const session: DurableAudioSession = {
-      version: 1, package_id: packageId, session_id: sessionId, state: 'recording',
+      version: 1, package_id: packageId, session_id: sessionId, source, state: 'recording',
       sample_rate: 16_000, channels: 1, created_at: now, updated_at: now, segments: [],
     }
     await atomicJson(this.manifestPath(packageId, sessionId), session)

@@ -5,6 +5,18 @@ vi.mock('./updater', () => ({ SeedUpdater: class {} }))
 import { SeedRuntime } from './runtime'
 
 describe('Runtime Cloud relay', () => {
+  it('rejects undeclared Cloud relay permissions before forwarding', async () => {
+    const relay = vi.fn()
+    const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
+      runtimePlugins: [{ package_id: 'com.example.plugin', permissions: [], capabilities: [] }],
+      creditBilling: { relay },
+    })
+    await expect(Reflect.get(runtime, 'invokePluginBroker').call(runtime, 'com.example.plugin', 'seed.cloud.relay', {
+      capability_id: 'hosted_models', method: 'complete', payload: {},
+    })).rejects.toMatchObject({ code: 'broker_permission_denied' })
+    expect(relay).not.toHaveBeenCalled()
+  })
+
   it.each(['seed.cloud.relay', 'seed.cloud.relay.stream.start'])('does not impose a second 1 MiB limit on %s', async (service) => {
     const relay = vi.fn(async () => ({ payload: {} }))
     const startRelayStream = vi.fn(async () => ({ stream_id: 'c14cb3bb-cc6c-4009-b1d9-7ebae4b00694' }))
