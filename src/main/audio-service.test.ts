@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
 }))
 
 import { AudioService } from './audio-service'
-import { AudioDebugRecording } from './audio-debug-recording'
+import { LatestAudioRecording } from './latest-audio-recording'
 
 type AudioServiceInternals = {
   window: { webContents: { send: ReturnType<typeof vi.fn> }; isDestroyed(): boolean }
@@ -65,12 +65,12 @@ describe('AudioService segmented capture', () => {
     const internal = service as unknown as AudioServiceInternals & { acceptPcm(source: string, pcm: Buffer): void }
     const webContents = { send: vi.fn() }
     Object.assign(service, {
-      window: { webContents, isDestroyed: () => false }, sessionId: 'diagnostic', ownerPackageId: 'plugin-a', source: 'mixed', state: 'recording',
-      debugRecording: { append, finish: vi.fn(async () => '/local/debug') },
+      window: { webContents, isDestroyed: () => false }, sessionId: 'local-recording', ownerPackageId: 'plugin-a', source: 'mixed', state: 'recording',
+      localRecording: { append, finish: vi.fn(async () => '/local/recordings') },
     })
     const mic = new Int16Array(320).fill(1_000).buffer
     const sys = Buffer.from(new Int16Array(320).fill(2_000).buffer)
-    internal.handleChunk({ sender: webContents }, 'diagnostic', mic)
+    internal.handleChunk({ sender: webContents }, 'local-recording', mic)
     internal.acceptPcm('system', sys)
     expect(append.mock.calls.map(([name]) => name)).toEqual(['microphone', 'system', 'output'])
     const segment = await service.invoke({ operation: 'capture.segment' }, 'plugin-a') as { audio_session_id: string }
@@ -81,10 +81,10 @@ describe('AudioService segmented capture', () => {
     await service.destroy()
   })
 
-  it('does not fail capture if diagnostic setup or final saving fails', async () => {
+  it('does not fail capture if local recording setup or final saving fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const setup = vi.spyOn(AudioDebugRecording, 'start').mockRejectedValue(new Error('debug disk unavailable'))
-    const service = new AudioService(undefined, undefined, undefined, '/local/debug')
+    const setup = vi.spyOn(LatestAudioRecording, 'start').mockRejectedValue(new Error('recording disk unavailable'))
+    const service = new AudioService(undefined, undefined, undefined, '/local/recordings')
     const internal = service as unknown as AudioServiceInternals & {
       ensureMicrophonePermission(): Promise<void>; ensureWindow(): Promise<unknown>
       handleCaptureEvent(event: { sender: unknown }, value: Record<string, unknown>): void
@@ -96,10 +96,10 @@ describe('AudioService segmented capture', () => {
     vi.spyOn(internal, 'ensureMicrophonePermission').mockResolvedValue()
     vi.spyOn(internal, 'ensureWindow').mockResolvedValue(internal.window)
     try {
-      expect(await service.invoke({ operation: 'capture.start', session_id: 'debug-failure' })).toMatchObject({ state: 'recording' })
-      const debug = { append: vi.fn(), finish: vi.fn(async () => { throw new Error('disk full') }) }
-      Object.assign(service, { debugRecording: debug })
-      internal.handleChunk({ sender: webContents }, 'debug-failure', new Int16Array(320).fill(123).buffer)
+      expect(await service.invoke({ operation: 'capture.start', session_id: 'recording-failure' })).toMatchObject({ state: 'recording' })
+      const recording = { append: vi.fn(), finish: vi.fn(async () => { throw new Error('disk full') }) }
+      Object.assign(service, { localRecording: recording })
+      internal.handleChunk({ sender: webContents }, 'recording-failure', new Int16Array(320).fill(123).buffer)
       const result = await service.invoke({ operation: 'capture.stop' }) as { audio_session_id: string }
       expect(service.consume(result.audio_session_id).pcm.readInt16LE(0)).toBe(123)
       expect(service.snapshot().state).toBe('idle')
@@ -112,14 +112,14 @@ describe('AudioService segmented capture', () => {
     }
   })
 
-  it('automatically saves every capture and waits for the old files to close before starting new diagnostics', async () => {
-    const service = new AudioService(undefined, undefined, undefined, '/local/debug')
+  it('automatically saves every capture and waits for the old files to close before opening new recording files', async () => {
+    const service = new AudioService(undefined, undefined, undefined, '/local/recordings')
     let finishFirst!: () => void
-    const first = { append: vi.fn(), finish: vi.fn(() => new Promise<string>((resolve) => { finishFirst = () => resolve('/local/debug/latest') })) }
-    const second = { append: vi.fn(), finish: vi.fn(async () => '/local/debug/latest') }
-    const setup = vi.spyOn(AudioDebugRecording, 'start')
-      .mockResolvedValueOnce(first as unknown as AudioDebugRecording)
-      .mockResolvedValueOnce(second as unknown as AudioDebugRecording)
+    const first = { append: vi.fn(), finish: vi.fn(() => new Promise<string>((resolve) => { finishFirst = () => resolve('/local/recordings/latest') })) }
+    const second = { append: vi.fn(), finish: vi.fn(async () => '/local/recordings/latest') }
+    const setup = vi.spyOn(LatestAudioRecording, 'start')
+      .mockResolvedValueOnce(first as unknown as LatestAudioRecording)
+      .mockResolvedValueOnce(second as unknown as LatestAudioRecording)
     const internal = service as unknown as AudioServiceInternals & {
       ensureMicrophonePermission(): Promise<void>; ensureWindow(): Promise<unknown>
       handleCaptureEvent(event: { sender: unknown }, value: Record<string, unknown>): void
@@ -133,7 +133,7 @@ describe('AudioService segmented capture', () => {
     vi.spyOn(internal, 'ensureWindow').mockResolvedValue(internal.window)
     try {
       await service.invoke({ operation: 'capture.start', session_id: 'first' })
-      expect(setup).toHaveBeenCalledExactlyOnceWith('/local/debug', 'microphone')
+      expect(setup).toHaveBeenCalledExactlyOnceWith('/local/recordings', 'microphone')
       internal.fail('capture failed')
       const starting = service.invoke({ operation: 'capture.start', session_id: 'second' })
       await Promise.resolve()
@@ -152,11 +152,11 @@ describe('AudioService segmented capture', () => {
     }
   })
 
-  it('closes diagnostics cancelled during setup before allowing another recording to reuse the destination', async () => {
-    const service = new AudioService(undefined, undefined, undefined, '/local/debug')
-    const debug = { append: vi.fn(), finish: vi.fn(async () => '/local/debug/latest') }
-    let ready!: (recording: AudioDebugRecording) => void
-    const setup = vi.spyOn(AudioDebugRecording, 'start').mockImplementationOnce(() => new Promise((resolve) => { ready = resolve }))
+  it('closes recording files cancelled during setup before allowing another recording to reuse the destination', async () => {
+    const service = new AudioService(undefined, undefined, undefined, '/local/recordings')
+    const recording = { append: vi.fn(), finish: vi.fn(async () => '/local/recordings/latest') }
+    let ready!: (recording: LatestAudioRecording) => void
+    const setup = vi.spyOn(LatestAudioRecording, 'start').mockImplementationOnce(() => new Promise((resolve) => { ready = resolve }))
     const internal = service as unknown as AudioServiceInternals & {
       ensureMicrophonePermission(): Promise<void>; ensureWindow(): Promise<unknown>
       handleCaptureEvent(event: { sender: unknown }, value: Record<string, unknown>): void
@@ -172,10 +172,10 @@ describe('AudioService segmented capture', () => {
       const rejected = expect(starting).rejects.toMatchObject({ code: 'audio_capture_cancelled' })
       await vi.waitFor(() => expect(ready).toBeTypeOf('function'))
       const cancelled = service.invoke({ operation: 'capture.cancel' })
-      ready(debug as unknown as AudioDebugRecording)
+      ready(recording as unknown as LatestAudioRecording)
       await rejected
       expect(await cancelled).toMatchObject({ state: 'cancelled' })
-      expect(debug.finish).toHaveBeenCalledOnce()
+      expect(recording.finish).toHaveBeenCalledOnce()
       expect(service.snapshot().state).toBe('idle')
     } finally {
       Object.assign(internal, { window: null })

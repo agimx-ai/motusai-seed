@@ -440,7 +440,7 @@ export class SeedRuntime {
     this.audioService = new AudioService(() => {
       audioStateChanged()
       void this.publishSnapshot()
-    }, join(app.getPath('userData'), 'plugin-data'), undefined, join(app.getPath('userData'), 'audio-debug'))
+    }, join(app.getPath('userData'), 'plugin-data'), undefined, join(app.getPath('userData'), 'recordings'))
     this.sandboxHost = new SeedPluginSandboxSupervisor((packageId, service, argumentsValue) => (
       this.invokePluginBroker(packageId, service, argumentsValue)
     ), (packageId, event, message, details) => this.diagnostics.record({

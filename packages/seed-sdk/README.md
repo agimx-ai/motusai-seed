@@ -108,7 +108,7 @@ Linux 继续支持麦克风，但当前不支持系统音频；权限拒绝、�
 macOS 使用锁定的 AudioTee 通用二进制，作为应用资源置于 ASAR 外；Windows 使用锁定的 WASAPI 平台 N-API 包。只加载当前平台所需的纯音频后端，Linux 不加载系统音频后端。
 非法音源返回 `audio_source_invalid`，不支持的平台返回 `audio_source_unsupported`，采集失败返回 `audio_capture_failed`。
 macOS 应用包必须声明 `NSAudioCaptureUsageDescription`；首次使用可能请求“系统音频录制”权限，但不需要选择共享屏幕。开发时从终端/IDE 启动 Electron 也受系统权限归属限制。
-宿主在本机用户数据目录 `audio-debug/latest` 保留最近一次录音的 WAV，下一次录音覆盖，不积累历史。混合模式保存麦克风、系统声音和最终混合音；单音源模式只保存实际输入及最终输出，不复制模型请求或增加转写调用。
+宿主在本机用户数据目录 `recordings/latest` 保留最近一次录音的 WAV，下一次录音覆盖，不积累历史。混合模式保存麦克风、系统声音和最终混合音；单音源模式只保存实际输入及最终输出，不复制模型请求或增加转写调用。
 
 - [插件开发手册](https://github.com/agimx-ai/motusai-seed/blob/main/docs/插件开发手册.md)
 - [插件包规范](https://github.com/agimx-ai/motusai-seed/blob/main/docs/社区插件与插件包规范.md)

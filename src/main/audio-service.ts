@@ -6,7 +6,7 @@ import { SystemAudioCapture, type SystemAudioRecorderFactory } from './system-au
 import { AudioPcmMixer } from './audio-pcm-mixer'
 import { mascotTiming } from './mascot-timing'
 import { AudioSegmentStore } from './audio-segment-store'
-import { AudioDebugRecording } from './audio-debug-recording'
+import { LatestAudioRecording } from './latest-audio-recording'
 
 export type AudioState = 'idle' | 'starting' | 'recording' | 'paused' | 'stopping' | 'failed'
 export type AudioStatus = { session_id?: string; state: AudioState; duration_ms: number; source: AudioCaptureSource; error?: string }
@@ -50,10 +50,10 @@ export class AudioService {
   private readonly pendingEvents = new Map<string, PendingEvent>()
   private segmentTask: Promise<CapturedSegment> | null = null
   private readonly durableStore: AudioSegmentStore | null
-  private debugRecording: AudioDebugRecording | null = null
-  private debugSaveTask: Promise<void> = Promise.resolve()
+  private localRecording: LatestAudioRecording | null = null
+  private recordingSaveTask: Promise<void> = Promise.resolve()
 
-  constructor(private readonly stateChanged: (status: AudioStatus) => void = () => undefined, pluginDataRoot?: string, private readonly systemRecorderFactory?: SystemAudioRecorderFactory, private readonly audioDebugRoot?: string) {
+  constructor(private readonly stateChanged: (status: AudioStatus) => void = () => undefined, pluginDataRoot?: string, private readonly systemRecorderFactory?: SystemAudioRecorderFactory, private readonly recordingsRoot?: string) {
     this.durableStore = pluginDataRoot ? new AudioSegmentStore(pluginDataRoot) : null
     ipcMain.on('seed-audio:ready', this.handleReady)
     ipcMain.on('seed-audio:event', this.handleCaptureEvent)
@@ -94,7 +94,7 @@ export class AudioService {
   private acceptPcm(source: 'microphone' | 'system', pcm: Buffer) {
     if (!['recording', 'stopping'].includes(this.state) || (this.source !== 'mixed' && this.source !== source)) return
     try {
-      this.debugRecording?.append(source, pcm)
+      this.localRecording?.append(source, pcm)
       this.appendPcm(this.source === 'mixed' ? this.mixer.push(source, pcm) : pcm)
     } catch (error) { this.fail(error instanceof Error ? error.message : String(error)) }
   }
@@ -107,18 +107,18 @@ export class AudioService {
     }
     this.pcmChunks.push(pcm)
     this.pcmBytes += pcm.byteLength
-    this.debugRecording?.append('output', pcm)
+    this.localRecording?.append('output', pcm)
   }
 
-  private finishDebugRecording() {
-    const recording = this.debugRecording
-    this.debugRecording = null
+  private finishLocalRecording() {
+    const recording = this.localRecording
+    this.localRecording = null
     if (recording) {
-      const save = recording.finish().then((directory) => { console.info('[audio-debug] Saved local recording:', directory) })
-        .catch((error) => { console.warn('[audio-debug] Could not save local recording:', error) })
-      this.debugSaveTask = Promise.all([this.debugSaveTask, save]).then(() => undefined)
+      const save = recording.finish().then((directory) => { console.info('[audio] Saved local recording:', directory) })
+        .catch((error) => { console.warn('[audio] Could not save local recording:', error) })
+      this.recordingSaveTask = Promise.all([this.recordingSaveTask, save]).then(() => undefined)
     }
-    return this.debugSaveTask
+    return this.recordingSaveTask
   }
 
   private waitForCaptureEvent(type: string, timeoutMs = 20_000) {
@@ -201,7 +201,7 @@ export class AudioService {
   private setState(state: AudioState) { this.state = state; this.stateChanged(this.snapshot()) }
 
   private fail(message: string) {
-    void this.finishDebugRecording()
+    void this.finishLocalRecording()
     void this.systemCapture?.stop().catch(() => undefined)
     this.systemCapture = null
     this.mixer.clear()
@@ -228,7 +228,7 @@ export class AudioService {
   }
 
   private reset() {
-    void this.finishDebugRecording()
+    void this.finishLocalRecording()
     void this.systemCapture?.stop().catch(() => undefined)
     this.systemCapture = null
     this.mixer.clear()
@@ -301,19 +301,19 @@ export class AudioService {
         await capture.start()
       }
       assertStarting()
-      if (this.audioDebugRoot) {
-        const setup = this.debugSaveTask.then(async () => {
+      if (this.recordingsRoot) {
+        const setup = this.recordingSaveTask.then(async () => {
           assertStarting()
-          const recording = await AudioDebugRecording.start(this.audioDebugRoot!, source)
-            .catch((error) => { console.warn('[audio-debug] Could not start local recording:', error); return null })
+          const recording = await LatestAudioRecording.start(this.recordingsRoot!, source)
+            .catch((error) => { console.warn('[audio] Could not start local recording:', error); return null })
           try { assertStarting() } catch (error) {
             await recording?.finish().catch(() => undefined)
             throw error
           }
           return recording
         })
-        this.debugSaveTask = setup.then(() => undefined, () => undefined)
-        this.debugRecording = await setup
+        this.recordingSaveTask = setup.then(() => undefined, () => undefined)
+        this.localRecording = await setup
       }
       this.startedAt = Date.now()
       this.setState('recording')
@@ -438,7 +438,7 @@ export class AudioService {
       throw codedError('没有采集到可转写的音频。', 'audio_empty')
     }
     const segment = await this.captureSegment()
-    await this.finishDebugRecording()
+    await this.finishLocalRecording()
     await this.durableStore?.updateState(this.ownerPackageId, sessionId, 'stopped')
     this.reset()
     return { session_id: sessionId, state: 'captured', duration_ms: durationMs, ...segment }
@@ -455,7 +455,7 @@ export class AudioService {
     }
     await this.stopInputs()
     await this.segmentTask?.catch(() => undefined)
-    await this.finishDebugRecording()
+    await this.finishLocalRecording()
     for (const [id, audio] of this.completedAudio) if (audio.captureSessionId === sessionId) this.completedAudio.delete(id)
     if (packageId && sessionId) await this.durableStore?.discard(packageId, sessionId)
     this.reset()
@@ -471,7 +471,7 @@ export class AudioService {
     await this.segmentTask?.catch(() => undefined)
     this.appendPcm(this.mixer.flush())
     if (this.pcmBytes > this.segmentOffsetBytes) await this.captureSegment()
-    await this.finishDebugRecording()
+    await this.finishLocalRecording()
     await this.durableStore?.updateState(packageId, sessionId, 'interrupted').catch(() => undefined)
     this.reset()
     return { session_id: sessionId, state: 'interrupted' }
@@ -558,7 +558,7 @@ export class AudioService {
   async destroy() {
     await this.interrupt().catch(() => undefined)
     this.reset()
-    await this.debugSaveTask
+    await this.recordingSaveTask
     this.completedAudio.clear()
     this.window?.destroy()
     this.window = null

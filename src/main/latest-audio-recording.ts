@@ -25,7 +25,7 @@ function wavHeader(bytes: number) {
 }
 
 /** Private, local WAVs for the latest capture only. Never sends audio to a model. */
-export class AudioDebugRecording {
+export class LatestAudioRecording {
   private writes: Promise<void> = Promise.resolve()
   private saveTask: Promise<string> | null = null
   private pendingBytes = 0
@@ -36,13 +36,13 @@ export class AudioDebugRecording {
   static async start(root: string, source: AudioCaptureSource) {
     await mkdir(root, { recursive: true, mode: 0o700 })
     const info = await lstat(root)
-    if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Audio debug root must be a local directory.')
+    if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Recording root must be a local directory.')
     const directory = join(root, 'latest')
     const previous = await lstat(directory).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== 'ENOENT') throw error
       return null
     })
-    if (previous && (!previous.isDirectory() || previous.isSymbolicLink())) throw new Error('Audio debug destination must be a local directory.')
+    if (previous && (!previous.isDirectory() || previous.isSymbolicLink())) throw new Error('Recording destination must be a local directory.')
     await rm(directory, { recursive: true, force: true })
     await mkdir(directory, { mode: 0o700 })
     const names: TrackName[] = source === 'mixed' ? ['microphone', 'system', 'output'] : [source, 'output']
@@ -54,7 +54,7 @@ export class AudioDebugRecording {
         tracks.set(name, { file, bytes: 0 })
         await file.writeFile(wavHeader(0))
       }
-      return new AudioDebugRecording(directory, tracks)
+      return new LatestAudioRecording(directory, tracks)
     } catch (error) {
       await Promise.allSettled([...tracks.values()].map((track) => track.file.close()))
       throw error
@@ -65,14 +65,14 @@ export class AudioDebugRecording {
     const track = this.tracks.get(name)
     if (!track || this.saveTask || this.error || !pcm.length) return
     if (this.pendingBytes + pcm.length > maxPendingBytes) {
-      this.error = new Error('Audio debug disk writes cannot keep up with capture.')
+      this.error = new Error('Recording disk writes cannot keep up with capture.')
       return
     }
     const copy = Buffer.from(pcm)
     this.pendingBytes += copy.length
     this.writes = this.writes.then(async () => {
       if (this.error) return
-      if (track.bytes + copy.length > 0xffff_ffff - 36) throw new Error('Audio debug WAV exceeds the RIFF size limit.')
+      if (track.bytes + copy.length > 0xffff_ffff - 36) throw new Error('Recording WAV exceeds the RIFF size limit.')
       await track.file.writeFile(copy)
       track.bytes += copy.length
     }).catch((error) => { this.error = error }).finally(() => { this.pendingBytes -= copy.length })
