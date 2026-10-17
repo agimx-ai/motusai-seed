@@ -1196,6 +1196,7 @@ export class SeedRuntime {
           runtime_kind: plugin.runtimeKind, enabled: plugin.enabled, status: plugin.status,
           capabilities: plugin.capabilities.map((capability) => capability.id) })),
         crashDumpDirectory: app.getPath('crashDumps'),
+        latestRecordingDirectory: join(app.getPath('userData'), 'recordings', 'latest'),
         startAt,
         endAt,
       }, {

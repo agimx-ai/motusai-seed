@@ -109,6 +109,7 @@ macOS 使用锁定的 AudioTee 通用二进制，作为应用资源置于 ASAR �
 非法音源返回 `audio_source_invalid`，不支持的平台返回 `audio_source_unsupported`，采集失败返回 `audio_capture_failed`。
 macOS 应用包必须声明 `NSAudioCaptureUsageDescription`；首次使用可能请求“系统音频录制”权限，但不需要选择共享屏幕。开发时从终端/IDE 启动 Electron 也受系统权限归属限制。
 宿主在本机用户数据目录 `recordings/latest` 保留最近一次录音的 WAV，下一次录音覆盖，不积累历史。混合模式保存麦克风、系统声音和最终混合音；单音源模式只保存实际输入及最终输出，不复制模型请求或增加转写调用。
+用户主动上传诊断包时，会附带 `recordings/latest` 中存在的 `microphone.wav`、`system.wav` 和 `mixed.wav`，不扫描历史目录。上传前生成独立快照，续传复用同一份诊断包；缺少录音时仍可上传普通诊断记录。
 
 - [插件开发手册](https://github.com/agimx-ai/motusai-seed/blob/main/docs/插件开发手册.md)
 - [插件包规范](https://github.com/agimx-ai/motusai-seed/blob/main/docs/社区插件与插件包规范.md)

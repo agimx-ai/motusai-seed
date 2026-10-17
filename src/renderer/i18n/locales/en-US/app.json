@@ -259,7 +259,7 @@
     "uploadLogs": "Upload diagnostic package",
     "uploadingLogs": "Uploading diagnostic package…",
     "uploadLogsTitle": "Upload diagnostic package",
-    "uploadLogsDescription": "Upload activity records from the selected time range with system and version information to MotusAI Cloud for diagnostics. Interrupted uploads can resume. The package excludes sign-in tokens and real roots of filesystem roots.",
+    "uploadLogsDescription": "Upload activity records from the selected time range, system and version information, and the latest recording's microphone, system audio, and mixed WAV files, when available, to MotusAI Cloud for diagnostics. Only the latest recording is included, not recording history. Interrupted uploads can resume. The package excludes sign-in tokens and real roots of filesystem roots.",
     "uploadRange": "Record range",
     "uploadRangeDays": "Last {{count}} day",
     "uploadRangeDays_other": "Last {{count}} days",

@@ -259,7 +259,7 @@
     "uploadLogs": "上传诊断包",
     "uploadingLogs": "正在上传诊断包…",
     "uploadLogsTitle": "上传诊断包",
-    "uploadLogsDescription": "将所选时间范围内的活动记录、系统与版本信息打包上传到 MotusAI Cloud，用于排查问题。上传中断后可续传；诊断包不包含登录令牌或文件系统根目录的真实根路径。",
+    "uploadLogsDescription": "将所选时间范围内的活动记录、系统与版本信息，以及最近一次录音的麦克风、系统声音和混合音文件（如有）上传到 MotusAI Cloud，用于排查问题。只收集最近一次录音，不包含历史录音。上传中断后可续传；诊断包不包含登录令牌或文件系统根目录的真实根路径。",
     "uploadRange": "记录范围",
     "uploadRangeDays": "最近 {{count}} 天",
     "uploadRangeDays_other": "最近 {{count}} 天",

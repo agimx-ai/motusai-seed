@@ -17,4 +17,9 @@ describe('Seed i18n', () => {
     expect(normalizeSeedLocale('en-GB')).toBe('en-US')
     expect(normalizeSeedLocale('fr-FR')).toBeUndefined()
   })
+
+  it('discloses that diagnostic uploads include the latest recording in both languages', () => {
+    expect(seedI18nResources['en-US'].app.activity.uploadLogsDescription).toContain("latest recording's")
+    expect(seedI18nResources['zh-CN'].app.activity.uploadLogsDescription).toContain('最近一次录音')
+  })
 })

@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { constants, createReadStream, createWriteStream, type Stats } from 'node:fs'
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { arch, release, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { Readable, type Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import * as archiverModule from 'archiver'
@@ -15,7 +15,7 @@ type UploadInput = {
   cloudUrl: string; accessToken: string; accountId: string; workDirectory: string; days: number
   appName: string; appVersion: string; platform: NodeJS.Platform
   entries: Iterable<AuditEntry> | AsyncIterable<AuditEntry>; entryCount: number
-  plugins?: PluginInventoryEntry[]; crashDumpDirectory?: string; startAt: string; endAt: string
+  plugins?: PluginInventoryEntry[]; crashDumpDirectory?: string; latestRecordingDirectory?: string; startAt: string; endAt: string
 }
 type UploadOptions = { signal?: AbortSignal; onProgress?: (progress: TerminalLogUploadProgress) => void }
 type ZipArchive = Transform & { append(body: Buffer | Readable, options: { name: string; date: Date }): void; finalize(): Promise<void> }
@@ -47,7 +47,7 @@ async function fileSha256(path: string) {
   return hash.digest('hex')
 }
 
-async function recentCrashDumps(directory: string | undefined, startAt: string, endAt: string) {
+async function recentCrashDumps(directory: string | undefined, startAt: string, endAt: string, maxBytes: number) {
   if (!directory) return []
   const found: Array<{ path: string; name: string; modified: number; size: number }> = []
   const walk = async (path: string, depth: number) => {
@@ -68,19 +68,74 @@ async function recentCrashDumps(directory: string | undefined, startAt: string, 
   return found.sort((a, b) => b.modified - a.modified).filter((item) => {
     // Keep crash evidence within the 512 MiB upload ceiling, leaving room for the
     // unified activity/diagnostic records and plugin inventory in the same archive.
-    if (size + item.size > 448 * 1024 * 1024) return false
+    if (size + item.size > maxBytes) return false
     size += item.size
     return true
   })
 }
 
-export async function createCloudDiagnosticArchive(input: Pick<UploadInput, 'appName' | 'appVersion' | 'platform' | 'entries' | 'entryCount' | 'plugins' | 'crashDumpDirectory' | 'startAt' | 'endAt'>, temporaryParent = tmpdir()) {
+function unchangedFile(before: Stats, after: Stats) {
+  return before.dev === after.dev && before.ino === after.ino && before.size === after.size
+    && before.mtimeMs === after.mtimeMs && before.ctimeMs === after.ctimeMs
+}
+
+async function optionalFile(path: string) {
+  return lstat(path).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error
+    return null
+  })
+}
+
+/** Snapshot only the latest host-owned WAVs; never enumerate history or follow links. */
+async function snapshotLatestRecording(source: string | undefined, destination: string) {
+  if (!source) return []
+  const directory = await optionalFile(source)
+  if (!directory) return []
+  const parent = await optionalFile(dirname(source))
+  if (!directory.isDirectory() || directory.isSymbolicLink() || parent?.isSymbolicLink()) throw new Error('最近录音目录无效，请检查本地录音文件后重试。')
+  const files: Array<{ name: string; path: string; metadata: Stats }> = []
+  let size = 0
+  for (const name of ['microphone.wav', 'system.wav', 'mixed.wav']) {
+    const path = join(source, name)
+    const metadata = await optionalFile(path)
+    if (!metadata?.isFile() || metadata.isSymbolicLink()) continue
+    size += metadata.size
+    assertDiagnosticArchiveSize(size)
+    files.push({ name, path, metadata })
+  }
+  if (!files.length) return []
+  const changed = () => new Error('最近一次录音尚未保存完成或已发生变化，请停止录音后重新上传诊断包。')
+  await mkdir(destination, { recursive: true, mode: 0o700 })
+  for (const file of files) {
+    const handle = await open(file.path, constants.O_RDONLY | (constants.O_NOFOLLOW || 0))
+    try {
+      if (!unchangedFile(file.metadata, await handle.stat())) throw changed()
+      const header = Buffer.alloc(44)
+      const { bytesRead } = await handle.read(header, 0, header.length, 0)
+      if (bytesRead !== 44 || header.toString('ascii', 0, 4) !== 'RIFF' || header.toString('ascii', 8, 12) !== 'WAVE'
+        || header.toString('ascii', 36, 40) !== 'data' || header.readUInt32LE(40) !== file.metadata.size - 44) throw changed()
+      await pipeline(
+        handle.createReadStream({ autoClose: false, start: 0, end: file.metadata.size - 1 }),
+        createWriteStream(join(destination, file.name), { flags: 'wx', mode: 0o600 }),
+      )
+      if (!unchangedFile(file.metadata, await handle.stat())) throw changed()
+    } finally { await handle.close() }
+  }
+  const current = await optionalFile(source)
+  if (!current || !unchangedFile(directory, current)) throw changed()
+  return files.map((file) => ({ name: file.name, path: join(destination, file.name), size: file.metadata.size }))
+}
+
+export async function createCloudDiagnosticArchive(input: Pick<UploadInput, 'appName' | 'appVersion' | 'platform' | 'entries' | 'entryCount' | 'plugins' | 'crashDumpDirectory' | 'latestRecordingDirectory' | 'startAt' | 'endAt'>, temporaryParent = tmpdir()) {
   const directory = await mkdtemp(join(temporaryParent, 'motusai-seed-diagnostics-'))
   const path = join(directory, 'diagnostics.zip')
   const generatedAt = new Date()
   const archiveDate = new Date('1980-01-01T00:00:00.000Z')
   try {
-    const crashDumps = await recentCrashDumps(input.crashDumpDirectory, input.startAt, input.endAt)
+    const recordingDirectory = join(directory, 'recordings', 'latest')
+    const recordings = await snapshotLatestRecording(input.latestRecordingDirectory, recordingDirectory)
+    const recordingBytes = recordings.reduce((total, recording) => total + recording.size, 0)
+    const crashDumps = await recentCrashDumps(input.crashDumpDirectory, input.startAt, input.endAt, Math.max(0, 448 * 1024 * 1024 - recordingBytes))
     const archive = archiveFactory()
     const writing = pipeline(archive, createWriteStream(path, { mode: 0o600 }))
     archive.append(json({
@@ -90,13 +145,17 @@ export async function createCloudDiagnosticArchive(input: Pick<UploadInput, 'app
         node: process.versions.node, electron: process.versions.electron, chrome: process.versions.chrome },
       activity_range: { start_at: input.startAt, end_at: input.endAt }, record_count: input.entryCount,
       crash_dump_count: crashDumps.length,
+      recording_file_count: recordings.length,
     }), { name: 'system/manifest.json', date: archiveDate })
     archive.append(entriesJson(input.entries), { name: 'activity/records.json', date: archiveDate })
     archive.append(json({ plugins: input.plugins || [] }), { name: 'plugins/inventory.json', date: archiveDate })
+    for (const recording of recordings) archive.append(createReadStream(recording.path), { name: `recordings/latest/${recording.name}`, date: archiveDate })
     for (const dump of crashDumps) archive.append(createReadStream(dump.path), { name: `crashes/${dump.name}`, date: archiveDate })
     await archive.finalize()
     await writing
+    await rm(join(directory, 'recordings'), { recursive: true, force: true })
     const fileSize = (await stat(path)).size
+    assertDiagnosticArchiveSize(fileSize)
     return { path, directory, fileSize, fileSha256: await fileSha256(path), generatedAt }
   } catch (error) {
     await rm(directory, { recursive: true, force: true })
@@ -130,6 +189,12 @@ export class CloudDiagnosticUploader {
     const accountKey = createHash('sha256').update(input.accountId).digest('hex')
     const directory = join(input.workDirectory, accountKey)
     await mkdir(directory, { recursive: true, mode: 0o700 })
+    // Remove unfinished package snapshots left by a process exit, not pending upload ZIPs.
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && /^motusai-seed-diagnostics-[A-Za-z0-9]{6}$/.test(entry.name)) {
+        await rm(join(directory, entry.name), { recursive: true, force: true })
+      }
+    }
     const statePath = join(directory, 'pending.json')
     const archivePath = join(directory, 'diagnostics.zip')
     const baseUrl = `${input.cloudUrl.replace(/\/+$/, '')}/api/v1/diagnostics/uploads`
@@ -163,7 +228,6 @@ export class CloudDiagnosticUploader {
       options.onProgress?.({ phase: 'preparing', percent: 0, transferred: 0, total: 0 })
       const archive = await createCloudDiagnosticArchive(input, directory)
       try {
-        assertDiagnosticArchiveSize(archive.fileSize)
         await rm(archivePath, { force: true })
         await rename(archive.path, archivePath)
         pending = { accountId: input.accountId, days: input.days, createdAt: new Date().toISOString(), idempotencyKey: randomUUID(),
