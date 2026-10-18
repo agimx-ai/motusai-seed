@@ -7,6 +7,7 @@ import { useSeedI18n } from '../../i18n';
 import { cx } from '../../lib/display';
 import {
   activityCategory,
+  activityHeadline,
   activityHierarchy,
   activityRisk,
   groupActivityEntriesByDay,
@@ -105,7 +106,35 @@ function AnimatedDisclosure({ expanded, children }: { expanded: boolean; childre
   );
 }
 
-function FlatLabel({ entry, locale, fallback }: { entry: AuditEntry; locale: string; fallback: ReactNode }) {
+function FlatLabel({
+  entry,
+  locale,
+  fallback,
+  headline,
+}: {
+  entry: AuditEntry;
+  locale: string;
+  fallback: ReactNode;
+  headline?: string;
+}) {
+  if (headline) {
+    const name = pluginName(entry, locale);
+    return (
+      <>
+        {name && (
+          <span className="font-medium text-foreground transition-colors group-hover/activity:text-accent-strong">
+            「{name}」
+          </span>
+        )}
+        {name && (
+          <span aria-hidden="true" className="mx-1.5 text-muted-foreground/60">
+            ·
+          </span>
+        )}
+        <span className="text-foreground transition-colors group-hover/activity:text-accent-strong">{headline}</span>
+      </>
+    );
+  }
   if (entry.recordKind === 'span') {
     const name = pluginName(entry, locale);
     const parts = operationParts(entry.operation);
@@ -171,6 +200,7 @@ function ActivityRow({
   hasChildren,
   expanded,
   depth,
+  headline,
   onToggle,
 }: {
   entry: AuditEntry;
@@ -178,6 +208,7 @@ function ActivityRow({
   hasChildren: boolean;
   expanded: boolean;
   depth: number;
+  headline?: string;
   onToggle(): void;
 }) {
   const { t } = useTranslation();
@@ -233,7 +264,7 @@ function ActivityRow({
         >
           <span className="min-w-0 truncate text-[13px] leading-5">
             <span className="min-w-0 truncate">
-              <FlatLabel entry={entry} locale={locale} fallback={fallback} />
+              <FlatLabel entry={entry} locale={locale} fallback={fallback} headline={headline} />
             </span>
           </span>
           <span className="flex shrink-0 items-center">
@@ -315,6 +346,7 @@ function ActivityNode({
 }) {
   const [expanded, setExpanded] = useState(false);
   const children = entry.spanId ? visibleActivityChildren(entry.spanId, childrenByParent) : [];
+  const headline = activityHeadline(entry, children);
   return (
     <div
       className={cx(
@@ -337,6 +369,7 @@ function ActivityNode({
         entry={entry}
         expanded={expanded}
         hasChildren={children.length > 0}
+        headline={headline}
         onToggle={() => setExpanded((value) => !value)}
       >
         {children.map((child, index) => (

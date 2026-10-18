@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AuditEntry } from '../../../shared/contracts'
-import { activityCategory, activityHierarchy, activityRisk, filterActivityEntries, groupActivityEntriesByDay, pluginActivityPresentation, visibleActivityChildren } from './activity-model'
+import { activityCategory, activityHeadline, activityHierarchy, activityRisk, filterActivityEntries, groupActivityEntriesByDay, pluginActivityPresentation, visibleActivityChildren } from './activity-model'
 
 function entry(overrides: Partial<AuditEntry> = {}): AuditEntry {
   return {
@@ -128,5 +128,33 @@ describe('activity model', () => {
     expect(hierarchy.roots.map((item) => item.id)).toEqual(['request'])
     expect(visibleActivityChildren('request', hierarchy.childrenByParent).map((item) => item.id)).toEqual(['agent'])
     expect(visibleActivityChildren('agent', hierarchy.childrenByParent).map((item) => item.id)).toEqual(['files'])
+  })
+
+  it('uses a plugin activity summary instead of a raw local HTTP path for the card headline', () => {
+    const request = entry({
+      id: 'request',
+      operation: 'POST /workspaces/workspace-id/conversations/conversation-id/messages',
+      pluginId: 'com.example.agent',
+      recordKind: 'span',
+    })
+    const children = [
+      entry({
+        id: 'started',
+        operation: 'plugin.com.example.agent.conversation.started',
+        pluginId: 'com.example.agent',
+        recordKind: 'event',
+        summary: 'Agent conversation started.',
+      }),
+      entry({
+        id: 'completed',
+        operation: 'plugin.com.example.agent.conversation.completed',
+        pluginId: 'com.example.agent',
+        recordKind: 'event',
+        summary: 'Agent conversation completed.',
+      }),
+    ]
+
+    expect(activityHeadline(request, children)).toBe('Agent conversation completed.')
+    expect(activityHeadline(entry({ operation: 'files.read_file', recordKind: 'span' }), children)).toBeUndefined()
   })
 })

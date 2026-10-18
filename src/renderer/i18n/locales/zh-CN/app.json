@@ -233,7 +233,7 @@
         "allowed": "已更新「{{pluginName}}」的{{actionLabel}}配置"
       },
       "client": {
-        "allowed": "已允许{{clientName}}连接「{{pluginName}}」"
+        "allowed": "已允许 {{clientName}} 连接「{{pluginName}}」"
       }
     },
     "summary": {

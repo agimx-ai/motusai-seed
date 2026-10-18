@@ -77,3 +77,17 @@ export function visibleActivityChildren(spanId: string, childrenByParent: Map<st
     return child.spanId ? visibleActivityChildren(child.spanId, childrenByParent) : []
   })
 }
+
+export function activityHeadline(entry: AuditEntry, children: AuditEntry[]) {
+  const [method, path] = entry.operation.split(' ', 2)
+  if (
+    entry.recordKind !== 'span' ||
+    !['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].includes(method || '') ||
+    !path?.startsWith('/')
+  ) return undefined
+  const ownEventPrefix = entry.pluginId ? `plugin.${entry.pluginId}.` : 'plugin.'
+  return [...children]
+    .reverse()
+    .find((child) => child.recordKind === 'event' && child.operation.startsWith(ownEventPrefix) && child.summary.trim())
+    ?.summary.trim()
+}
