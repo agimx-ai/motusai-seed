@@ -153,7 +153,7 @@ function AnnouncementDeck({ announcements, locale }: { announcements: SeedAnnoun
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       data-template={announcement.template}
-      className={`m-auto max-h-[calc(100dvh-104px)] max-w-none overflow-y-auto rounded-[24px] border-0 bg-[#f5f4ee] p-0 text-[#0a0a0c] shadow-2xl outline-none [container-type:inline-size] backdrop:bg-black/25 backdrop:backdrop-blur-md ${imageAbove ? 'w-[min(820px,calc(100vw-64px),calc((100dvh-104px)*1.128))]' : 'w-[min(1000px,calc(100vw-64px),calc((100dvh-104px)*1.508))]'}`}
+      className={`m-auto max-h-[calc(100dvh-104px)] max-w-none overflow-hidden rounded-[24px] border-0 bg-[#f5f4ee] p-0 text-[#0a0a0c] shadow-2xl outline-none [container-type:inline-size] backdrop:bg-black/25 backdrop:backdrop-blur-md ${imageAbove ? 'w-[min(820px,calc(100vw-64px),calc((100dvh-104px)*1.128))]' : 'w-[min(1000px,calc(100vw-64px),calc((100dvh-104px)*1.508))]'}`}
       onCancel={(event) => {
         event.preventDefault();
         void finish(false);
@@ -168,7 +168,7 @@ function AnnouncementDeck({ announcements, locale }: { announcements: SeedAnnoun
       }}
     >
       <div
-        className={`relative isolate flex flex-col overflow-hidden rounded-[inherit] ${imageAbove ? 'min-h-[88.6cqw]' : 'min-h-[66.3cqw]'}`}
+        className={`relative isolate flex flex-col overflow-hidden rounded-[inherit] ${imageAbove ? 'h-[min(88.6cqw,calc(100dvh-104px))] min-h-0' : 'min-h-[66.3cqw]'}`}
       >
         {background && (
           <img
@@ -201,11 +201,11 @@ function AnnouncementDeck({ announcements, locale }: { announcements: SeedAnnoun
             <X size={18} />
           </button>
         </header>
-        {imageAbove && <div aria-hidden="true" className="h-[44cqw] shrink-0" />}
+        {imageAbove && <div aria-hidden="true" className="min-h-32 flex-1" />}
         <section
           className={
             imageAbove
-              ? 'flex flex-1 flex-col justify-center px-10 pb-4 pt-4 text-center'
+              ? 'shrink-0 px-10 pb-4 pt-4 text-center'
               : 'mt-auto px-[65px] pb-[90px] pt-12'
           }
         >
@@ -221,7 +221,7 @@ function AnnouncementDeck({ announcements, locale }: { announcements: SeedAnnoun
           >
             {announcement.description[locale]}
           </p>
-          <div className={`flex flex-wrap items-center gap-2 ${imageAbove ? 'mt-12 justify-center' : '-ml-[13px] mt-[42px]'}`}>
+          <div className={`flex flex-wrap items-center gap-2 ${imageAbove ? 'mt-8 justify-center' : '-ml-[13px] mt-[42px]'}`}>
             {announcement.action && (
               <ActionButton
                 type="button"

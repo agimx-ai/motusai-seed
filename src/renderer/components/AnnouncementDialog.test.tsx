@@ -77,6 +77,23 @@ describe('fixed announcement template', () => {
     expect(imageAboveTitle.className).toContain('text-[clamp(28px,3.9cqw,32px)]');
     expect(imageAboveDescription.className).toContain('text-[clamp(16px,2.1cqw,17px)]');
   });
+  it('keeps image-above announcements inside the viewport without an inner scrollbar', async () => {
+    render(
+      <AnnouncementDialog
+        announcements={[{ ...announcement, template: 'image-above' }]}
+        locale="zh-CN"
+      />,
+    );
+    await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
+    const dialog = document.querySelector('dialog')!;
+    const card = dialog.firstElementChild as HTMLElement;
+    const spacer = card.querySelector('[aria-hidden="true"]') as HTMLElement;
+    expect(dialog.className).toContain('overflow-hidden');
+    expect(dialog.className).not.toContain('overflow-y-auto');
+    expect(card.className).toContain('h-[min(88.6cqw,calc(100dvh-104px))]');
+    expect(spacer.className).toContain('flex-1');
+    expect(spacer.className).not.toContain('shrink-0');
+  });
   it('marks read on Escape and close, without accepting native automatic closure before persistence', async () => {
     render(<AnnouncementDialog announcements={[announcement]} locale="en-US" />);
     await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
