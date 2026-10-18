@@ -7,7 +7,7 @@ afterEach(cleanup);
 
 it('keeps the flow connector independent of conflicting display utilities and preserves step content', () => {
   const { container } = render(
-    <Flow summary="Route summary">
+    <Flow>
       <FlowStep icon="A" title="Device">
         Origin
       </FlowStep>
@@ -28,5 +28,5 @@ it('keeps the flow connector independent of conflicting display utilities and pr
     'Relay',
     'Provider',
   ]);
-  expect(container.querySelector('p')?.textContent).toBe('Route summary');
+  expect(container.querySelector('p')).toBeNull();
 });

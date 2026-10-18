@@ -2,15 +2,7 @@ import type { ReactNode } from 'react';
 import './Flow.css';
 
 /** Pure layout components. Plugins compose JSX and can supply any icon or step content. */
-export function Flow({
-  children,
-  summary,
-  className = 'mt-3',
-}: {
-  children: ReactNode;
-  summary: ReactNode;
-  className?: string;
-}) {
+export function Flow({ children, className = 'mt-3' }: { children: ReactNode; className?: string }) {
   return (
     <section className={`${className} rounded-[16px] border border-border bg-muted/15 px-5 py-5`}>
       <div className="relative flex items-stretch justify-between gap-8 max-[700px]:flex-col">
@@ -20,7 +12,6 @@ export function Flow({
         />
         {children}
       </div>
-      <p className="mb-0 mt-4 text-[12px] leading-5 text-muted-foreground">{summary}</p>
     </section>
   );
 }
