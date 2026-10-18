@@ -1,7 +1,9 @@
 .seed-collection {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  column-gap: 32px;
+  row-gap: 4px;
+  padding-top: 8px;
 }
 .seed-collection-card {
   min-width: 0;
@@ -15,9 +17,10 @@
   display: flex;
   width: 100%;
   min-width: 0;
+  min-height: 68px;
   gap: 12px;
   align-items: center;
-  padding: 12px;
+  padding: 8px;
   text-align: left;
   border: 0;
   background: transparent;
@@ -26,23 +29,36 @@
 .seed-collection-icon {
   display: inline-flex;
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
-  border-radius: 11px;
+  border-radius: 10px;
   background: var(--card);
+  overflow: hidden;
 }
-.seed-collection-icon > svg,
+.seed-collection-icon > svg {
+  width: 18px;
+  height: 18px;
+}
 .seed-collection-icon > img {
-  width: 16px;
-  height: 16px;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+}
+.seed-collection-icon > .seed-themed-icon {
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  mask-origin: content-box;
+  mask-clip: content-box;
 }
 .seed-collection-text {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 .seed-collection-text > * {
   overflow: hidden;
@@ -50,7 +66,8 @@
   white-space: nowrap;
 }
 .seed-collection-text strong {
-  font-weight: 500;
+  font-weight: 400;
+  font-size: 13px;
 }
 .seed-collection-text > span {
   color: var(--muted-foreground);
@@ -118,10 +135,12 @@
   gap: 8px;
   padding: 0 24px 24px;
 }
-@media (max-width: 600px) {
+@media (max-width: 900px) {
   .seed-collection {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+@media (max-width: 600px) {
   .seed-preview-backdrop {
     padding: 32px 12px;
   }
