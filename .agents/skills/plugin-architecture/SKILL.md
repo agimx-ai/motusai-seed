@@ -1,104 +1,51 @@
 ---
 name: plugin-architecture
-description: 维护 MotusAI Seed 的插件架构、共享协议、插件代码 UI、Plugin Host、Core Broker、本地 HTTP/SSE 与全局生命周期。新增或修改插件能力、配置、管理视图、动作、跨插件调用、宿主服务或插件相关客户端界面时使用；用于确保客户端不硬编码插件业务。
+description: 维护 Seed Plugin API v2 的 SDK、构建工具、DOM 承载、隔离后端、安装与宿主协议；涉及通用插件框架边界或生命周期时使用，不承接插件业务实现。
 ---
 
-# Seed 插件架构维护
+# Seed 插件框架维护
 
-涉及整屏截图、二进制写入、原子创建或跨进程插件错误时，另读 [宿主截图、文件与错误边界](references/host-screen-and-files.md)。该参考中的路径均以本仓库根目录为基准，不要求普通插件代码 UI 改动运行全部原生检查。
+## 判断归属
 
-## 不可违背的边界
+单个插件的配置、业务、界面、文案和交互留在插件；确有多方需求的组件或系统机制才进入 SDK／宿主。接口按通用语义设计，不用插件 ID 或现有业务字段伪装通用能力。
 
-“一切皆是插件”指所有可安装业务功能及其呈现都由插件拥有。Seed Core 只拥有安全且通用的机制：安装与校验、隔离运行环境、版本化协议、共享组件、授权与审批、审计、生命周期传输，以及少量经过审查的 Broker/Host Service。
+沿受影响链路核对：SDK → 构建产物 → 静态校验／安装 → 后端与 Broker → DOM 宿主 → 提供方和消费方。规范入口见仓库 AGENTS.md；截图、文件和跨进程错误另读 [宿主服务参考](references/host-screen-and-files.md)。
 
-插件必须通过代码实现并拥有：
+## 作者接口与产物
 
-- 能力、方法、Schema、错误码、风险等级和 exposure；
-- 配置字段、校验、布局、默认值及配置操作；
-- 设置页、视图、列表、卡片、按钮、图标、顺序、状态和确认流程；
-- 本地业务路由与业务 SSE 事件；
-- 跨插件能力的精确白名单或通用 annotation 匹配条件；
-- 所有运行时贡献的注册与清理。
+- 源码 Manifest 扁平轻量：身份、兼容要求、必要权限／消费边界和资源引用。能力、Schema、风险、错误键、命令和视图由代码注册；禁止恢复 YAML 能力文件、声明式 UI 或第二份作者维护的功能清单。
+- `buildPlugin` 分别构建 view/service 依赖图，输出单个 `main.js` 的 `loadView`／可选 `loadService`；两端不共享实例，前端不能导入 Node 或后端代码。
+- `apiVersion`、runtime、service、资源摘要由工具生成。自动生成的 `metadata.json` 供 Cloud 静态读取；客户端以实际服务注册为准，不能用该索引替代运行时注册。
+- 源码文案采用独立 i18next 资源；Manifest 引用翻译键，不执行插件代码也能读取基础信息。已发布外部协议的 `snake_case`、`en_US`／`zh_Hans` 与错误码保持其契约。
+- `.seedpkg` 只是声明产物的 ZIP；不包含源码工作区、用户配置、凭据或业务数据。校验目录与压缩包复用同一套规则，不旁路摘要、路径和资源范围检查。
 
-客户端不得硬编码：
+## 承载、样式与生命周期
 
-- 插件 ID、能力 ID、Skill/模型/搜索服务等业务概念；
-- 某插件是否显示、如何排序、显示什么按钮或调用哪个方法；
-- 某插件的默认记录、兜底详情页、内置安装包或私有路由；
-- 仅为绕过当前协议而增加的兼容分支、旧版本重试或静默 fallback。
+- 可信前端挂载产品文档的普通 HTMLElement；布局和滚动由浏览器处理，不创建 iframe、WebContentsView 或高度／坐标／滚动同步链路。
+- 前端共享 Renderer 且关闭 Node，不宣称逐插件安全沙箱。native-host 是可信进程隔离，不是 OS 沙箱；sandboxed-web 服务保持 Node-free 及其能力限制。
+- 插件独立构建样式；工具类限定在插件根和 portal 作用域，自定义 CSS 也须隔离，不能污染产品壳或其他插件。SDK 共享组件由客户端与插件直接导入。
+- Component 的注册、事件、计时器、子组件和异步清理绑定生命周期。页面隐藏只释放显示资源，不停止后端；卸载／重载撤销贡献、RPC、资源和旧代次写入。
+- Events 是内存通知，不提供重启回放。持久任务与会话由所属插件及其权威存储恢复，不能通过保留旧 DOM 模拟恢复。
 
-发现客户端出现 `if (pluginId === ...)`、按能力名称推断 UI、复制插件列表样式形成近似组件，或卸载后仍保留入口时，先停止局部修补，回到协议和贡献模型重新设计。
+## 数据、权限与调用
 
-## 决策方法
+- 普通 `loadData/saveData` 与仅后端可用的 `app.settings` 保持各自加密存储和 CAS。宿主不解释配置类型、不注入 profiles/default_profile_id/values 等结构；不能把凭据放入前后端共享数据或页面响应。
+- 更新继续读取同 ID 的配置、凭据及数据；解密失败或冲突不能当成空数据、静默补默认值或覆盖。
+- 跨插件只通过声明的 consumes 与公开能力代理。保留逐方法 opt-in、Schema、风险审批、审计、循环保护和取消，不导入提供方实现。
+- 宿主受控服务在触碰资源前检查声明权限；声明不代表用户／OS 已授权。不要把未受检查的权限字符串或 publisher_type 当成实际安全边界。
+- Local HTTP 由宿主统一监听并管理 Origin、授权、限流、请求大小和撤权。插件注册业务相对路由，不自行监听端口或取得原始 Bearer Token。
+- 业务 SSE 使用 SeedLocalEventStream；Core `/v1/events` 负责框架生命周期。全局任务观察覆盖能力调用、本地网关和后台任务事实，不在渲染组件推断业务状态。
 
-按以下顺序确定归属：
+## 开发与正式安装
 
-1. **业务是否只属于一个插件？** 放入插件声明或实现。
-2. **多个插件是否需要同类表达能力？** 扩展通用 SDK 组件、生命周期、annotation 或 Broker API；命名描述展示语义，不绑定当前插件形态。
-3. **是否需要操作系统权限、原始凭据、绝对路径、文件、音频、任意网络或本机进程？** 设计为 Core Broker/Host Service，并进行安全审查。插件只持有短期句柄和最小结果。
-4. **是否必须覆盖全部插件调用入口？** 放在共享框架边界。授权、审批、审计和全局任务状态不能只挂在某一种调用路径上。
+- 固定 `plugins/development/<id>` 只在未打包且通过开发服务器启动时启用；自动发现符合规范的手动目录或 dev 同步产物，不要求选择工程目录或先上传云端。
+- 完整构建原子同步，宿主运行不可变快照；失败保留最后有效产物，同版本开发重载不改正式安装记录、凭据和数据。移除覆盖后恢复已授权正式版本。
+- 开发同步不等于客户端加载成功；用实际活动记录和页面确认。正式安装仍校验不可变版本、摘要和授权，不能因开发便利降低门禁。
+- 新客户端使用 `/api/v2` 目录并携带真实客户端版本；Cloud 对旧客户端保留的 v1 分发协议不代表 Seed 恢复 v1 执行入口。
+- 新增 SDK 接口时核对插件的最低客户端版本；本地可加载不证明正式 SDK／客户端兼容，版本准备与发布仍需明确授权。
 
-新插件使用现有 Broker 时通常只改插件；新增摄像头、系统命令等高权限原语才需要改客户端。若一个需求仍要求插件专属客户端分支，说明抽象尚未完成。
+## 验证
 
-## 变更前追踪
+按改动范围运行类型检查、目标／全量测试、Electron 与 renderer 构建。SDK 变化先构建 SDK，再验证依赖方；可见变化遵循 AGENTS.md 的真实页面验收。
 
-1. 运行 `git status --short`，记录并保留已有修改。
-2. 确认真正应修改的仓库。Seed 是宿主；官方插件通常位于独立的 `motusai-seed-official-plugins`；Obsidian 等调用端也有自己的仓库。
-3. 沿完整链路搜索：
-   - Manifest/能力声明；
-   - `src/shared` 的类型、Schema 和 normalizer；
-   - `src/connector/plugin-host.ts` 与 Host 执行边界；
-   - `src/connector/local-http-gateway.ts` 与统一网关；
-   - `src/renderer` 的可信插件 DOM 宿主；
-   - `packages/seed-sdk` 的公开接口；
-   - 插件实现、调用端和相关测试。
-4. 只在必要时读取对应规范：
-   - 架构/权限：`../../../docs/插件架构与安全边界.md`
-   - Manifest/配置/管理视图：`../../../docs/插件开发手册.md`
-   - SDK/生命周期：`../../../packages/seed-sdk/README.md`
-   - 打包/目录：`../../../docs/社区插件与插件包规范.md`
-
-## 协议与运行时约束
-
-- Manifest 是轻量元数据和静态权限边界；能力、方法、Schema 与风险由 SDK 代码注册，宿主在隔离环境校验。
-- 已发布外部协议保持 `snake_case` 与 `en_US`／`zh_Hans` 展示结构；插件源码文案使用独立 i18next `en-US`／`zh-CN` 资源，Manifest 引用翻译键。
-- 插件通过公开 SDK 的 Plugin/PluginService 类注册，界面与后端分图构建为一个 main.js；资源清理绑定 Component 生命周期。
-- 跨插件调用只允许 Manifest `consumes` 通过精确 capability/method 或通用方法 annotation 匹配后，再使用 `ctx.capabilities.list/invoke`；不得导入提供方代码或绕过能力代理。动态发现必须由提供方逐方法显式 opt-in，不能无条件暴露全部能力。
-- `agent.tool: true` 的方法必须审计 Agent 最终看到的名称、描述和参数。显式 `agent.tool_name` 使用小写字母开头，只包含小写字母、数字、下划线或连字符且不超过 64 个字符；名称采用“动作 + 明确对象”，避免 `read`、`search`、`run`、`roots` 等脱离上下文的宽泛词。不同资源类型不得共用一个工具后再按参数或路径猜测分流。
-- 最终 Agent 工具名在全部插件和消费方内置工具之间必须唯一；非法名称或重名直接拒绝创建运行时，不得静默改名、按顺序覆盖或增加旧名 fallback。改名时同步 capability annotation、消费方提示词、命令替代规则、文档、测试与提供方/消费方版本，并用全仓搜索确认旧别名已清除。
-- 公开能力方法必须直接使用最终规范名称，不得保留 `read`、`write`、`roots` 等旧方法再依赖别名或兼容分支。Files v1 的公开方法与 Agent 工具同名；Core Broker 内部操作码不属于插件公开契约。
-- `terminal` 能力参与服务端注册；`local` 能力只在本地。过滤规则必须通用，禁止插件 ID 特判。
-- 配置验证和界面由插件代码负责；Seed 提供加密存储与 CAS，不解释字段业务含义。
-- 共享组件直接通过 SDK 导出，不新增声明式 Renderer 或旧 action 协议。
-- 同一插件版本不可变；不要内置 `.seedpkg` 或把 `publisher_type` 当作密码学信任。
-
-## Local HTTP、SSE 与生命周期
-
-- 插件声明 `local.http-api`，通过 `ctx.localApi.register()` 注册相对业务路由。Seed 统一拥有 loopback 监听器、`/v1` 前缀、Origin、授权、限流、请求大小和撤权。
-- 插件不得自行启动 HTTP Server，也不得接收原始 Bearer Token。
-- 业务事件使用 `SeedLocalEventStream`，复用事件 ID、回放、心跳和断连清理；全局任务生命周期使用 Core 的 `/v1/events`，不能伪装成某插件业务流。
-- `SeedPluginHost.invoke()` 与 `SeedLocalHttpGateway` 都可能发起工作。修改全局忙碌、吉祥物状态、审计或任务完成判断时，必须覆盖两条入口并处理并发、失败、取消和清理。
-- 调用端遇到 `workspace_not_found` 应使旧 workspace 失效并重新创建，不能只刷新模型或在陈旧状态上无限重试。
-
-## 插件代码 UI 与视觉一致性
-
-- 官方可信前端直接在产品文档的普通 DOM 容器中实现 DOM/React；客户端只提供容器、后端隔离、可取消 RPC、共享组件和主题，不解释插件表单、动作或业务状态。
-- 模型选择、下拉、图标、卡片、预览等组件通过 @motus-ai/seed-sdk/react 直接导入；自定义页面和样式由插件构建并随包携带。
-- 要求样式一致时复用同一组件实现，不复制 CSS 或按插件 ID 分支；加载态、草稿、空态、错误态也由插件代码组合。
-- Native 后端是官方可信进程隔离，不是操作系统沙箱。可信前端与产品壳共享 Renderer，不是逐插件安全沙箱；Renderer 关闭 Node 并使用统一 CSP。资源、RPC、事件和取消绑定实际插件、窗口与代次。禁止为普通插件页面创建 iframe、WebContentsView 或坐标／滚动转发链路。
-- 改 UI 后验证宽窄、亮暗、键盘焦点、溢出以及隐藏/卸载清理。
-
-## 验证与交付
-
-根据改动范围执行：
-
-```bash
-npm run typecheck
-npm test
-npm run build
-npm run smoke:plugin-host   # Plugin Host、沙箱或运行时变化
-```
-
-协议变化至少覆盖成功、Schema 拒绝、权限拒绝、取消/失败、卸载/重载清理和多入口生命周期。共享类型变化后先构建 `@motus-ai/seed-sdk`，再检查依赖方。可见 UI 变化必须在真实页面验证窄宽、溢出、悬停、滚动、亮暗主题和插件卸载后的消失行为。
-
-最终分别报告类型检查、测试、构建、视觉验收、打包、提交和推送结果。不要把其中一项成功描述成全部完成；用户未明确要求时，不提升版本、不打包、不提交、不推送。
+运行时变化按需执行 `smoke:plugin-sdk`、`smoke:plugin-isolation`、`smoke:native-isolation`；本地发现／重载用 `smoke:plugin-development`。单包安装 smoke 需要显式包路径：`npm run smoke:plugin-host -- /absolute/plugin.seedpkg`。这些验证不授予打包、重启用户应用或发布权限。

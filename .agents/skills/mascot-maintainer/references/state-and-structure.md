@@ -4,9 +4,9 @@
 
 框架级任务链路固定为：
 
-`SeedPluginHost.invoke` → `GlobalTaskActivityObserver` → `task.changed` → `main/runtime.ts activeTasks` → `SeedSnapshot.mascot` → `companionPresentation` → `bloubStateForPresentation` → `BotEngine.setState`
+`SeedPluginHost.invoke / SeedLocalHttpGateway` → `GlobalTaskActivityObserver` → `task.changed` → `main/runtime.ts activeTasks` → `SeedSnapshot.mascot` → `companionPresentation` → `bloubStateForPresentation` → `BotEngine.setState`
 
-观察器位于框架统一能力执行边界，覆盖 Socket、插件间和本地来源的能力调用。它只转发开始、完成和失败事实，不创建、调度或控制任务。插件只执行能力；吉祥物不得读取插件 ID、操作名称或插件内部状态。
+观察器覆盖能力执行与本地网关入口，只转发开始、完成和失败事实，不调度任务。SDK 后台 tasks 通过宿主任务服务进入同一活动汇总；吉祥物只消费框架事实，不读取插件 ID、操作名称或内部状态。
 
 运行时视觉状态分为：
 
@@ -50,10 +50,10 @@ React 渲染层应保持以下顺序：
 - 多任务共享一个主姿势，通过 `activeTaskCount` 和文案表达数量。
 - 快速任务仍遵守 `mascot-timing.ts` 的最短展示时长；失败和完成状态停留后再返回空闲。
 
-## 品牌、主题和尺寸
+## 应用配色、主题和尺寸
 
-- 每个 `resources/brands/<branding>/brand.json` 提供 `mascot.light` 与 `mascot.dark` 六位十六进制颜色。
-- `generate-build-config.mjs` 根据 `MOTUSAI_BRANDING` 读取当前品牌令牌；组件只读取生成后的 `buildConfig`。
+- `resources/app/theme.json` 提供 `mascot.light` 与 `mascot.dark` 六位十六进制颜色；本客户端没有品牌变体目录。
+- `generate-build-config.mjs` 生成配色令牌；组件只读取生成后的 `buildConfig`，不添加品牌选择或插件特判。
 - 页面底色用于眼睛孔洞和粒子深度混合。切换主题时必须同时更新 ink 与 paper。
 - 通知蓝点和连接状态点保持语义颜色，不随品牌色覆盖。
 - 正常页面尺寸范围为 176–208px；状态总览应按实际尺寸检查，放大模式用于观察 mask、粒子和轨道细节。
