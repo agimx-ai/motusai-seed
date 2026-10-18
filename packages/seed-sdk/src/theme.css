@@ -1,0 +1,42 @@
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --font-sans: var(--app-font-sans);
+  --font-display: var(--app-font-display);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-plugin-icon-border: var(--seed-plugin-icon-border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --color-accent: var(--seed-accent);
+  --color-accent-strong: var(--seed-accent-strong);
+  --color-accent-hover: var(--seed-accent-hover);
+  --color-accent-foreground: var(--seed-accent-foreground);
+  --color-accent-soft: var(--seed-accent-soft);
+  --color-accent-halo: var(--seed-accent-halo);
+  --color-accent-glow: var(--seed-accent-glow);
+  --color-warning: var(--seed-warning);
+  --color-warning-soft: var(--seed-warning-soft);
+  --color-info: var(--seed-info);
+  --color-info-soft: var(--seed-info-soft);
+  --color-info-hover: var(--seed-info-hover);
+  --color-info-border: var(--seed-info-border);
+  --color-danger: var(--seed-danger);
+  --color-danger-soft: var(--seed-danger-soft);
+  --color-success: var(--seed-success);
+  --color-control: var(--seed-control);
+  --color-control-soft: var(--seed-control-soft);
+  --color-success-soft: var(--seed-success-soft);
+  --color-app-glow: var(--seed-app-glow);
+  --color-highlight: var(--surface-highlight);
+}

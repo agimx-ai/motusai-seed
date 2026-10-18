@@ -1,0 +1,125 @@
+.seed-collection {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.seed-collection-card {
+  min-width: 0;
+  border-radius: 16px;
+  transition: background 0.15s;
+}
+.seed-collection-card:hover {
+  background: var(--muted);
+}
+.seed-collection-open {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.seed-collection-icon {
+  display: inline-flex;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--card);
+}
+.seed-collection-icon > svg,
+.seed-collection-icon > img {
+  width: 16px;
+  height: 16px;
+}
+.seed-collection-text {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.seed-collection-text > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seed-collection-text strong {
+  font-weight: 500;
+}
+.seed-collection-text > span {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.seed-collection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.seed-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #0003;
+  backdrop-filter: blur(4px);
+}
+.seed-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 100%);
+  max-height: calc(100vh - 40px);
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 18px 70px #0002;
+}
+.seed-preview-dialog > header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 24px;
+}
+.seed-preview-dialog > header > div {
+  flex: 1;
+  min-width: 0;
+}
+.seed-preview-dialog h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 18px;
+  font-weight: 600;
+}
+.seed-preview-dialog header p {
+  margin: 5px 0 0;
+  color: var(--muted-foreground);
+}
+.seed-preview-content {
+  overflow: auto;
+  min-height: 0;
+  padding: 0 24px 24px;
+}
+.seed-preview-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 24px 24px;
+}
+@media (max-width: 600px) {
+  .seed-collection {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .seed-preview-backdrop {
+    padding: 12px;
+  }
+}

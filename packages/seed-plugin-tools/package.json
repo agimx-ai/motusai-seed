@@ -1,0 +1,23 @@
+{
+  "name": "@motus-ai/seed-plugin-tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./index.mjs",
+  "bin": {
+    "seed-plugin-tools": "./cli.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "cli.mjs",
+    "development.mjs"
+  ],
+  "dependencies": {
+    "@tailwindcss/node": "4.3.3",
+    "@tailwindcss/oxide": "4.3.3",
+    "tailwindcss": "4.3.3",
+    "@motus-ai/seed-sdk": "^0.2.6",
+    "archiver": "^8.0.0",
+    "esbuild": "^0.28.2"
+  }
+}

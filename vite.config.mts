@@ -1,16 +1,38 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { randomBytes } from 'node:crypto';
 
-const projectRoot = fileURLToPath(new URL('.', import.meta.url))
+const projectRoot = fileURLToPath(new URL('.', import.meta.url));
+const developmentNonce = randomBytes(32).toString('base64');
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: './',
-  plugins: [react(), tailwindcss()],
+  html: command === 'serve' ? { cspNonce: developmentNonce } : undefined,
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: 'sdk-license-notices',
+      async generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'third-party-notices/liquid-gooey.txt',
+          source: await readFile(
+            resolve(projectRoot, 'packages/seed-sdk/src/react/vendor/liquid-gooey/LICENSE'),
+            'utf8',
+          ),
+        });
+      },
+    },
+  ],
   resolve: {
     alias: {
+      '@motus-ai/seed-sdk/styles.css': resolve(projectRoot, 'packages/seed-sdk/dist/styles.css'),
+      '@motus-ai/seed-sdk/react': resolve(projectRoot, 'packages/seed-sdk/src/react/index.ts'),
       '@motus-ai/seed-sdk': resolve(projectRoot, 'packages/seed-sdk/src/index.ts'),
       '@renderer': resolve(projectRoot, 'src/renderer'),
       '@shared': resolve(projectRoot, 'src/shared'),
@@ -30,5 +52,6 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    headers: { 'X-Seed-Development-Nonce': developmentNonce },
   },
-})
+}));

@@ -1,3 +1,5 @@
+import { pluginHostContentSecurityPolicy } from './plugin-host-policy'
+import { registerPluginViewProtocol } from './plugin-view-host'
 import { join, resolve } from 'node:path'
 import { release } from 'node:os'
 import { seedDeepLinkScheme, type SeedNavigationTarget } from '@motus-ai/seed-sdk'
@@ -234,16 +236,14 @@ app.on('second-instance', (_event, commandLine) => {
 })
 
 app.whenReady().then(async () => {
+  registerPluginViewProtocol(session.defaultSession)
   if (!app.isPackaged) app.dock?.setIcon(nativeImage.createFromPath(appAsset('app-icon.png')))
   app.setAboutPanelOptions({ applicationName: buildConfig.appName, applicationVersion: app.getVersion() })
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    const development = Boolean(process.env.VITE_DEV_SERVER_URL)
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        ...(!development ? {
-          'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"],
-        } : {}),
+        'Content-Security-Policy': [pluginHostContentSecurityPolicy('product', details, process.env.VITE_DEV_SERVER_URL)],
       },
     })
   })

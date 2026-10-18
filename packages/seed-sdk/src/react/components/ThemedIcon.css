@@ -1,0 +1,11 @@
+.seed-themed-icon-dark {
+  display: none;
+}
+
+:root[data-theme='dark'] .seed-themed-icon-light {
+  display: none;
+}
+
+:root[data-theme='dark'] .seed-themed-icon-dark {
+  display: block;
+}

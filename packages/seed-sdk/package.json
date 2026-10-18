@@ -10,23 +10,73 @@
     "CHANGELOG.md"
   ],
   "exports": {
+    "./styles.css": "./dist/styles.css",
+    "./theme.css": "./dist/theme.css",
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "require": "./dist/react/index.js"
     }
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "npm run clean && tsc -p tsconfig.json",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/copy-react-assets.mjs && node scripts/build-styles.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "prepack": "npm run build"
   },
   "devDependencies": {
-    "typescript": "7.0.2"
+    "@tailwindcss/node": "4.3.3",
+    "@tailwindcss/oxide": "4.3.3",
+    "tailwindcss": "4.3.3",
+    "streamdown": "^2.6.0",
+    "react-i18next": "^17.0.12",
+    "typescript": "7.0.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "lucide-react": "^0.468.0"
+  },
+  "peerDependencies": {
+    "streamdown": "^2.6.0",
+    "react-i18next": "^17.0.12",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.468.0"
+  },
+  "peerDependenciesMeta": {
+    "streamdown": {
+      "optional": true
+    },
+    "react-i18next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "lucide-react": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "i18next": "^26.4.0"
   }
 }

@@ -1,45 +1,43 @@
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { loadEnv } from 'vite'
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { loadEnv } from 'vite';
 
-const env = loadEnv('production', import.meta.dirname, 'MOTUSAI_')
-const productName = 'MotusAI Seed'
-const appId = 'com.motusai.seed'
-const updateChannel = process.env.MOTUSAI_UPDATE_CHANNEL?.trim() || env.MOTUSAI_UPDATE_CHANNEL?.trim() || 'stable'
-const releasePlatform = process.env.MOTUSAI_RELEASE_PLATFORM?.trim() || env.MOTUSAI_RELEASE_PLATFORM?.trim()
-const seedCloudUrl = process.env.MOTUSAI_SEED_CLOUD_URL?.trim() || env.MOTUSAI_SEED_CLOUD_URL?.trim()
-const distributionId = 'motusai'
-const publishChannel = updateChannel === 'stable' ? 'latest' : 'beta'
-const appResources = 'resources/app'
-const appIconPng = `${appResources}/app-icon.png`
-const appIconIcns = `${appResources}/app-icon.icns`
-const appIconComposer = `${appResources}/app-icon.icon`
+const env = loadEnv('production', import.meta.dirname, 'MOTUSAI_');
+const productName = 'MotusAI Seed';
+const appId = 'com.motusai.seed';
+const updateChannel = process.env.MOTUSAI_UPDATE_CHANNEL?.trim() || env.MOTUSAI_UPDATE_CHANNEL?.trim() || 'stable';
+const releasePlatform = process.env.MOTUSAI_RELEASE_PLATFORM?.trim() || env.MOTUSAI_RELEASE_PLATFORM?.trim();
+const seedCloudUrl = process.env.MOTUSAI_SEED_CLOUD_URL?.trim() || env.MOTUSAI_SEED_CLOUD_URL?.trim();
+const distributionId = 'motusai';
+const publishChannel = updateChannel === 'stable' ? 'latest' : 'beta';
+const appResources = 'resources/app';
+const appIconPng = `${appResources}/app-icon.png`;
+const appIconIcns = `${appResources}/app-icon.icns`;
+const appIconComposer = `${appResources}/app-icon.icon`;
 
-if (updateChannel !== 'stable' && updateChannel !== 'beta') throw new Error('MOTUSAI_UPDATE_CHANNEL must be stable or beta.')
+if (updateChannel !== 'stable' && updateChannel !== 'beta')
+  throw new Error('MOTUSAI_UPDATE_CHANNEL must be stable or beta.');
 if (!/^(mac-(arm64|x64|universal)|win-(x64|arm64)|linux-(x64|arm64))$/.test(releasePlatform || '')) {
-  throw new Error('MOTUSAI_RELEASE_PLATFORM must identify the packaged update target.')
+  throw new Error('MOTUSAI_RELEASE_PLATFORM must identify the packaged update target.');
 }
-let updateUrl
+let updateUrl;
 try {
-  const cloud = new URL(seedCloudUrl || '')
+  const cloud = new URL(seedCloudUrl || '');
   if (!['https:', 'http:'].includes(cloud.protocol) || cloud.username || cloud.password || cloud.search || cloud.hash) {
-    throw new Error('invalid Seed Cloud URL')
+    throw new Error('invalid Seed Cloud URL');
   }
-  cloud.pathname = `${cloud.pathname.replace(/\/+$/, '')}/updates/${encodeURIComponent(distributionId)}/${updateChannel}/${releasePlatform}`
-  updateUrl = cloud.toString().replace(/\/$/, '')
+  cloud.pathname = `${cloud.pathname.replace(/\/+$/, '')}/updates/${encodeURIComponent(distributionId)}/${updateChannel}/${releasePlatform}`;
+  updateUrl = cloud.toString().replace(/\/$/, '');
 } catch {
-  throw new Error('MOTUSAI_SEED_CLOUD_URL must be a valid HTTP or HTTPS URL before packaging.')
+  throw new Error('MOTUSAI_SEED_CLOUD_URL must be a valid HTTP or HTTPS URL before packaging.');
 }
 if (!existsSync(resolve(import.meta.dirname, appIconPng))) {
-  throw new Error(`Missing generated icon asset: ${appIconPng}. Run npm run icons:generate.`)
-}
-if (!existsSync(resolve(import.meta.dirname, 'resources/python'))) {
-  throw new Error('Missing bundled Python runtime. Run npm run python:prepare before packaging.')
+  throw new Error(`Missing generated icon asset: ${appIconPng}. Run npm run icons:generate.`);
 }
 if (process.platform === 'darwin') {
   for (const asset of [appIconIcns, appIconComposer]) {
     if (!existsSync(resolve(import.meta.dirname, asset))) {
-      throw new Error(`Missing generated icon asset: ${asset}. Run npm run icons:generate on macOS.`)
+      throw new Error(`Missing generated icon asset: ${asset}. Run npm run icons:generate on macOS.`);
     }
   }
 }
@@ -58,11 +56,12 @@ export default {
   ],
   extraResources: [
     { from: appResources, to: 'app' },
-    { from: 'resources/python', to: 'python' },
-    ...(process.platform === 'darwin' ? [
-      { from: 'node_modules/audiotee/bin/audiotee', to: 'audio/audiotee' },
-      { from: 'node_modules/audiotee/README.md', to: 'audio/audiotee-README.md' },
-    ] : []),
+    ...(process.platform === 'darwin'
+      ? [
+          { from: 'node_modules/audiotee/bin/audiotee', to: 'audio/audiotee' },
+          { from: 'node_modules/audiotee/README.md', to: 'audio/audiotee-README.md' },
+        ]
+      : []),
   ],
   publish: [{ provider: 'generic', url: updateUrl, channel: publishChannel }],
   mac: {
@@ -91,4 +90,4 @@ export default {
     target: ['AppImage', 'deb'],
     artifactName: 'MotusAI-Seed-${version}-linux-${arch}.${ext}',
   },
-}
+};

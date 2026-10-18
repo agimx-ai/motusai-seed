@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AuditEntry } from '../shared/contracts'
 
 type Statement = {
   run(...values: unknown[]): { changes: number }

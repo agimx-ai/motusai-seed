@@ -1,10 +1,11 @@
-import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import createKnex from 'knex'
-import { SeedStore } from './store'
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import createKnex from 'knex';
+import { safeStorage } from 'electron';
+import { SeedStore } from './store';
 
 vi.mock('electron', () => ({
   safeStorage: {
@@ -12,137 +13,343 @@ vi.mock('electron', () => ({
     encryptString: (value: string) => Buffer.from(value, 'utf8'),
     decryptString: (value: Buffer) => value.toString('utf8'),
   },
-}))
+}));
 
-const temporaryDirectories: string[] = []
+const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { force: true, recursive: true })))
-})
+  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { force: true, recursive: true })));
+});
 
 async function temporaryDirectory() {
-  const path = await mkdtemp(join(tmpdir(), 'motusai-seed-store-'))
-  temporaryDirectories.push(path)
-  return path
+  const path = await mkdtemp(join(tmpdir(), 'motusai-seed-store-'));
+  temporaryDirectories.push(path);
+  return path;
 }
 
 describe('SeedStore SQLite persistence', () => {
-  it('enumerates configuration-only and credential-only plugin data and removes exact plugin scopes', async () => {
-    const store = new SeedStore(await temporaryDirectory(), 'MotusAI Seed')
-    await store.load()
+  it('roundtrips arbitrary plugin JSON across SQLite restart without adding form fields', async () => {
+    const directory = await temporaryDirectory(),
+      store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    const records = [false, 0, '', null, ['one', { enabled: true }], { nested: { retries: 3, flags: [true, false] } }];
+    await Promise.all(
+      records.map((record, i) => store.setPluginConfiguration('com.example.opaque:record-' + i, record)),
+    );
+    await store.close();
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
     try {
-      const configuration = { schema_version: 1 as const, profiles: [], default_profile_id: '', values: {} }
-      await store.setPluginConfiguration('com.example.removed:settings', configuration)
-      await store.setPluginConfiguration('com.example.removed-other:settings', configuration)
-      await store.setPluginSecret('com.example.credentials', 'token', 'secret')
-      expect(store.pluginDataIds().sort()).toEqual(['com.example.credentials', 'com.example.removed', 'com.example.removed-other'])
-      await store.removePluginConfigurations('com.example.removed')
-      await store.removePluginSecrets('com.example.credentials')
-      expect(store.pluginDataIds()).toEqual(['com.example.removed-other'])
-      expect(store.pluginConfiguration('com.example.removed-other:settings')).toEqual(configuration)
-      expect(store.pluginSecret('com.example.credentials', 'token')).toBeUndefined()
-    } finally { await store.close() }
-  })
+      for (const [i, record] of records.entries())
+        expect(reopened.pluginConfiguration('com.example.opaque:record-' + i)).toEqual(record);
+    } finally {
+      await reopened.close();
+    }
+  });
+  it('retains profile-only v1 records and unknown metadata without persisting read defaults', async () => {
+    const directory = await temporaryDirectory(),
+      store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    const database = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: store.databasePath },
+      useNullAsDefault: true,
+    });
+    const legacy = {
+      'com.example.legacy:settings': {
+        schema_version: 1,
+        profiles: [{ id: 'same-id', token: 'same-value' }],
+        default_profile_id: 'same-id',
+        future_metadata: { preserved: true },
+      },
+    };
+    const encrypted = Buffer.from(JSON.stringify(legacy)).toString('base64');
+    await database('app_settings').insert({ key: 'encrypted_plugin_configurations', value: encrypted });
+    await store.close();
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
+    try {
+      expect(reopened.pluginConfiguration('com.example.legacy:settings')).toEqual(
+        legacy['com.example.legacy:settings'],
+      );
+      expect((await database('app_settings').where({ key: 'encrypted_plugin_configurations' }).first()).value).toBe(
+        encrypted,
+      );
+    } finally {
+      await reopened.close();
+      await database.destroy();
+    }
+  });
+  it('preserves concurrent configuration and secret writes from different plugins', async () => {
+    const store = new SeedStore(await temporaryDirectory(), 'MotusAI Seed');
+    await store.load();
+    try {
+      await Promise.all(
+        Array.from({ length: 12 }, async (_value, index) => {
+          await store.setPluginConfiguration(`com.example.plugin-${index}:settings`, {
+            schema_version: 1,
+            profiles: [],
+            default_profile_id: '',
+            values: { index: String(index) },
+          });
+          await store.setPluginSecret(`com.example.plugin-${index}`, 'token', `fixture-${index}`);
+        }),
+      );
+      for (let index = 0; index < 12; index++) {
+        expect(
+          (store.pluginConfiguration(`com.example.plugin-${index}:settings`) as { values: Record<string, string> })
+            .values.index,
+        ).toBe(String(index));
+        expect(store.pluginSecret(`com.example.plugin-${index}`, 'token')).toBe(`fixture-${index}`);
+      }
+    } finally {
+      await store.close();
+    }
+  });
+
+  it('reads the authoritative encrypted aggregate before writing from a stale store instance', async () => {
+    const directory = await temporaryDirectory(),
+      first = new SeedStore(directory, 'MotusAI Seed');
+    await first.load();
+    const second = new SeedStore(directory, 'MotusAI Seed');
+    await second.load();
+    try {
+      await first.setPluginSecret('com.example.first', 'token', 'first');
+      await second.setPluginSecret('com.example.second', 'token', 'second');
+      await first.setPluginSecret('com.example.third', 'token', 'third');
+      expect(first.pluginSecret('com.example.second', 'token')).toBe('second');
+      expect(first.pluginSecret('com.example.first', 'token')).toBe('first');
+    } finally {
+      await first.close();
+      await second.close();
+    }
+  });
+
+  it('does not overwrite corrupted or locked encrypted data with empty defaults', async () => {
+    const directory = await temporaryDirectory(),
+      store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    const database = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: store.databasePath },
+      useNullAsDefault: true,
+    });
+    try {
+      await database('app_settings').insert({
+        key: 'encrypted_plugin_secrets',
+        value: Buffer.from('corrupted').toString('base64'),
+      });
+      await expect(store.setPluginSecret('com.example.any', 'token', 'replacement')).rejects.toMatchObject({
+        code: 'plugin_storage_unreadable',
+      });
+      expect((await database('app_settings').where({ key: 'encrypted_plugin_secrets' }).first()).value).toBe(
+        Buffer.from('corrupted').toString('base64'),
+      );
+      const available = vi.spyOn(safeStorage, 'isEncryptionAvailable').mockReturnValue(false);
+      try {
+        await expect(
+          store.setPluginConfiguration('com.example.any:settings', {
+            schema_version: 1,
+            profiles: [],
+            default_profile_id: '',
+            values: {},
+          }),
+        ).rejects.toMatchObject({ code: 'plugin_storage_unavailable' });
+      } finally {
+        available.mockRestore();
+      }
+      expect(await database('app_settings').where({ key: 'encrypted_plugin_configurations' }).first()).toBeUndefined();
+    } finally {
+      await database.destroy();
+      await store.close();
+    }
+  });
+
+  it('persists private plugin data and rejects stale saves after a restart or explicit deletion', async () => {
+    const directory = await temporaryDirectory(),
+      store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    expect(await store.loadPluginData('com.example.any')).toEqual({ revision: 0, data: null });
+    const data = { enabled: false, count: 0, value: '', unknown: { nested: 'preserved' } };
+    await store.savePluginData('com.example.any', data, 0);
+    await expect(store.savePluginData('com.example.any', {}, 0)).rejects.toMatchObject({
+      code: 'plugin_data_conflict',
+    });
+    await store.close();
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
+    try {
+      expect(await reopened.loadPluginData('com.example.any')).toEqual({ revision: 1, data });
+      expect(reopened.pluginDataIds()).toContain('com.example.any');
+      await reopened.removePluginData('com.example.any');
+      await expect(reopened.savePluginData('com.example.any', data, 1)).rejects.toMatchObject({
+        code: 'plugin_data_conflict',
+      });
+      expect(await reopened.loadPluginData('com.example.any')).toEqual({ revision: 0, data: null });
+    } finally {
+      await reopened.close();
+    }
+  });
+
+  it('checks the runtime generation inside the serialized write, not only before queuing', async () => {
+    const store = new SeedStore(await temporaryDirectory(), 'MotusAI Seed');
+    await store.load();
+    let active = true;
+    try {
+      const pending = store.savePluginData('com.example.any', { stale: true }, 0, () => {
+        if (!active) throw new Error('runtime_stopped');
+      });
+      active = false;
+      await expect(pending).rejects.toThrow('runtime_stopped');
+      expect(await store.loadPluginData('com.example.any')).toEqual({ revision: 0, data: null });
+    } finally {
+      await store.close();
+    }
+  });
+  it('enumerates configuration-only and credential-only plugin data and removes exact plugin scopes', async () => {
+    const store = new SeedStore(await temporaryDirectory(), 'MotusAI Seed');
+    await store.load();
+    try {
+      const configuration = { schema_version: 1 as const, profiles: [], default_profile_id: '', values: {} };
+      await store.setPluginConfiguration('com.example.removed:settings', configuration);
+      await store.setPluginConfiguration('com.example.removed-other:settings', configuration);
+      await store.setPluginSecret('com.example.credentials', 'token', 'secret');
+      expect(store.pluginDataIds().sort()).toEqual([
+        'com.example.credentials',
+        'com.example.removed',
+        'com.example.removed-other',
+      ]);
+      await store.removePluginConfigurations('com.example.removed');
+      await store.removePluginSecrets('com.example.credentials');
+      expect(store.pluginDataIds()).toEqual(['com.example.removed-other']);
+      expect(store.pluginConfiguration('com.example.removed-other:settings')).toEqual(configuration);
+      expect(store.pluginSecret('com.example.credentials', 'token')).toBeUndefined();
+    } finally {
+      await store.close();
+    }
+  });
   it('uses the normalized app name and fresh database defaults', async () => {
-    const directory = await temporaryDirectory()
+    const directory = await temporaryDirectory();
 
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
 
-    expect(store.databasePath).toBe(join(directory, 'motusai_seed.sqlite3'))
-    expect(store.preventSystemSleep()).toBe(false)
-    expect(store.languagePreference()).toBe('system')
-    expect(store.themePreference()).toBe('system')
-    expect((await store.queryAudit()).items).toEqual([])
-    await expect(readFile(store.databasePath)).resolves.toBeInstanceOf(Buffer)
-    await store.close()
-  })
+    expect(store.databasePath).toBe(join(directory, 'motusai_seed.sqlite3'));
+    expect(store.preventSystemSleep()).toBe(false);
+    expect(store.languagePreference()).toBe('system');
+    expect(store.themePreference()).toBe('system');
+    expect((await store.queryAudit()).items).toEqual([]);
+    await expect(readFile(store.databasePath)).resolves.toBeInstanceOf(Buffer);
+    await store.close();
+  });
 
   it('persists renderer preferences and plugin installation state in SQLite', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
-    await store.setThemePreference('dark')
-    await store.setLanguagePreference('en-US')
-    await store.setInstalledPluginState({ schema_version: 1, plugins: [] })
-    await store.close()
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    await store.setThemePreference('dark');
+    await store.setLanguagePreference('en-US');
+    await store.setInstalledPluginState({ schema_version: 1, plugins: [] });
+    await store.close();
 
-    const reopened = new SeedStore(directory, 'MotusAI Seed')
-    await reopened.load()
-    expect(reopened.themePreference()).toBe('dark')
-    expect(reopened.languagePreference()).toBe('en-US')
-    await expect(reopened.installedPluginState()).resolves.toEqual({ schema_version: 1, plugins: [] })
-    await reopened.close()
-  })
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
+    expect(reopened.themePreference()).toBe('dark');
+    expect(reopened.languagePreference()).toBe('en-US');
+    await expect(reopened.installedPluginState()).resolves.toEqual({ schema_version: 1, plugins: [] });
+    await reopened.close();
+  });
 
   it('persists plugin profiles through encrypted system storage', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
     await store.setPluginConfiguration('com.example.agent:models', {
       schema_version: 1,
-      profiles: [{ id: 'deepseek-main', provider: 'deepseek', api_key: 'chat-secret-key', base_url: '', model: 'deepseek-v4-flash' }],
+      profiles: [
+        {
+          id: 'deepseek-main',
+          provider: 'deepseek',
+          api_key: 'chat-secret-key',
+          base_url: '',
+          model: 'deepseek-v4-flash',
+        },
+      ],
       default_profile_id: 'deepseek-main',
       values: { system_prompt: 'Test assistant' },
-    })
-    await store.close()
+    });
+    await store.close();
 
-    expect((await readFile(store.databasePath)).toString('utf8')).not.toContain('chat-secret-key')
-    const reopened = new SeedStore(directory, 'MotusAI Seed')
-    await reopened.load()
+    expect((await readFile(store.databasePath)).toString('utf8')).not.toContain('chat-secret-key');
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
     expect(reopened.pluginConfiguration('com.example.agent:models')).toEqual({
       schema_version: 1,
-      profiles: [{ id: 'deepseek-main', provider: 'deepseek', api_key: 'chat-secret-key', base_url: '', model: 'deepseek-v4-flash' }],
+      profiles: [
+        {
+          id: 'deepseek-main',
+          provider: 'deepseek',
+          api_key: 'chat-secret-key',
+          base_url: '',
+          model: 'deepseek-v4-flash',
+        },
+      ],
       default_profile_id: 'deepseek-main',
       values: { system_prompt: 'Test assistant' },
-    })
-    await reopened.close()
-  })
+    });
+    await reopened.close();
+  });
 
   it('removes every configuration owned by an uninstalled plugin', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
     await store.setPluginConfiguration('com.example.agent:models', {
       schema_version: 1,
       profiles: [{ id: 'deepseek-main', api_key: 'chat-secret' }],
       default_profile_id: 'deepseek-main',
       values: {},
-    })
+    });
     await store.setPluginConfiguration('com.example.agent:search', {
       schema_version: 1,
       profiles: [{ id: 'search-main', api_key: 'search-secret' }],
       default_profile_id: 'search-main',
       values: {},
-    })
+    });
     await store.setPluginConfiguration('com.example.other:models', {
       schema_version: 1,
       profiles: [{ id: 'other-main', api_key: 'other-secret' }],
       default_profile_id: 'other-main',
       values: {},
-    })
+    });
 
-    await store.removePluginConfigurations('com.example.agent')
-    expect(store.pluginConfiguration('com.example.agent:models')).toBeUndefined()
-    expect(store.pluginConfiguration('com.example.agent:search')).toBeUndefined()
-    expect(store.pluginConfiguration('com.example.other:models')?.profiles[0]?.api_key).toBe('other-secret')
-    await store.close()
+    await store.removePluginConfigurations('com.example.agent');
+    expect(store.pluginConfiguration('com.example.agent:models')).toBeUndefined();
+    expect(store.pluginConfiguration('com.example.agent:search')).toBeUndefined();
+    expect(
+      (store.pluginConfiguration('com.example.other:models') as { profiles: Array<{ api_key: string }> }).profiles[0]
+        ?.api_key,
+    ).toBe('other-secret');
+    await store.close();
 
-    const reopened = new SeedStore(directory, 'MotusAI Seed')
-    await reopened.load()
-    expect(reopened.pluginConfiguration('com.example.agent:models')).toBeUndefined()
-    expect(reopened.pluginConfiguration('com.example.other:models')?.profiles[0]?.api_key).toBe('other-secret')
-    expect((await readFile(reopened.databasePath)).toString('utf8')).not.toContain('chat-secret')
-    expect((await readFile(reopened.databasePath)).toString('utf8')).not.toContain('search-secret')
-    expect((await readFile(reopened.databasePath)).toString('utf8')).not.toContain('other-secret')
-    await reopened.close()
-  })
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
+    expect(reopened.pluginConfiguration('com.example.agent:models')).toBeUndefined();
+    expect(
+      (reopened.pluginConfiguration('com.example.other:models') as { profiles: Array<{ api_key: string }> }).profiles[0]
+        ?.api_key,
+    ).toBe('other-secret');
+    expect((await readFile(reopened.databasePath)).toString('utf8')).not.toContain('chat-secret');
+    expect((await readFile(reopened.databasePath)).toString('utf8')).not.toContain('search-secret');
+    expect((await readFile(reopened.databasePath)).toString('utf8')).not.toContain('other-secret');
+    await reopened.close();
+  });
 
   it('stores only a local client token digest and revokes access', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
-    const token = 'local-client-secret-token'
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    const token = 'local-client-secret-token';
     const [id, recordingId] = await Promise.all([
       store.authorizeLocalClient({
         pluginId: 'com.motusai.seed.agent-harness',
@@ -160,98 +367,143 @@ describe('SeedStore SQLite persistence', () => {
         deviceName: 'Duzhijun MacBook Pro',
         token,
       }),
-    ])
-    expect(recordingId).toBe(id)
-    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', token)).resolves.toBe(id)
-    await expect(store.hasLocalClientAuthorization('com.motusai.seed.agent-harness', id)).resolves.toBe(true)
-    await expect(store.hasLocalClientAuthorization('com.example.other', id)).resolves.toBe(false)
-    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', 'wrong-token')).resolves.toBeNull()
-    await expect(store.localClientAuthorizationId('com.motusai.seed.recording', token)).resolves.toBe(id)
-    expect(await store.localClients()).toEqual([expect.objectContaining({
-      id,
-      clientId: 'com.motusai.obsidian',
-      deviceName: 'Duzhijun MacBook Pro',
-      pluginIds: ['com.motusai.seed.agent-harness', 'com.motusai.seed.recording'],
-    })])
-    await store.removePluginLocalClientAuthorizations('com.motusai.seed.recording')
-    await expect(store.hasLocalClientAuthorization('com.motusai.seed.recording', id)).resolves.toBe(false)
-    await expect(store.hasLocalClientAuthorization('com.motusai.seed.agent-harness', id)).resolves.toBe(true)
-    expect(await store.localClients()).toEqual([expect.objectContaining({
-      id, pluginIds: ['com.motusai.seed.agent-harness'],
-    })])
-    await store.removePluginLocalClientAuthorizations('com.motusai.seed.agent-harness')
-    await expect(store.localClients()).resolves.toEqual([])
-    expect((await readFile(store.databasePath)).toString('utf8')).not.toContain(token)
-    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', token)).resolves.toBeNull()
-    await store.close()
-    const database = createKnex({ client: 'better-sqlite3', connection: { filename: store.databasePath }, useNullAsDefault: true })
-    await expect(database('local_client_authorization_scopes').count<{ count: number }[]>({ count: '*' }).first()).resolves.toMatchObject({ count: 0 })
-    await database.destroy()
-  })
+    ]);
+    expect(recordingId).toBe(id);
+    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', token)).resolves.toBe(id);
+    await expect(store.hasLocalClientAuthorization('com.motusai.seed.agent-harness', id)).resolves.toBe(true);
+    await expect(store.hasLocalClientAuthorization('com.example.other', id)).resolves.toBe(false);
+    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', 'wrong-token')).resolves.toBeNull();
+    await expect(store.localClientAuthorizationId('com.motusai.seed.recording', token)).resolves.toBe(id);
+    expect(await store.localClients()).toEqual([
+      expect.objectContaining({
+        id,
+        clientId: 'com.motusai.obsidian',
+        deviceName: 'Duzhijun MacBook Pro',
+        pluginIds: ['com.motusai.seed.agent-harness', 'com.motusai.seed.recording'],
+      }),
+    ]);
+    await store.removePluginLocalClientAuthorizations('com.motusai.seed.recording');
+    await expect(store.hasLocalClientAuthorization('com.motusai.seed.recording', id)).resolves.toBe(false);
+    await expect(store.hasLocalClientAuthorization('com.motusai.seed.agent-harness', id)).resolves.toBe(true);
+    expect(await store.localClients()).toEqual([
+      expect.objectContaining({
+        id,
+        pluginIds: ['com.motusai.seed.agent-harness'],
+      }),
+    ]);
+    await store.removePluginLocalClientAuthorizations('com.motusai.seed.agent-harness');
+    await expect(store.localClients()).resolves.toEqual([]);
+    expect((await readFile(store.databasePath)).toString('utf8')).not.toContain(token);
+    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', token)).resolves.toBeNull();
+    await store.close();
+    const database = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: store.databasePath },
+      useNullAsDefault: true,
+    });
+    await expect(
+      database('local_client_authorization_scopes').count<{ count: number }[]>({ count: '*' }).first(),
+    ).resolves.toMatchObject({ count: 0 });
+    await database.destroy();
+  });
 
   it('migrates per-plugin authorizations into one client identity with plugin scopes', async () => {
-    const directory = await temporaryDirectory()
-    const databasePath = join(directory, 'motusai_seed.sqlite3')
-    const legacy = createKnex({ client: 'better-sqlite3', connection: { filename: databasePath }, useNullAsDefault: true })
+    const directory = await temporaryDirectory();
+    const databasePath = join(directory, 'motusai_seed.sqlite3');
+    const legacy = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: databasePath },
+      useNullAsDefault: true,
+    });
     await legacy.schema.createTable('local_client_authorizations', (table) => {
-      table.text('id').primary(); table.text('plugin_id').notNullable(); table.text('client_id').notNullable(); table.text('installation_id').notNullable()
-      table.text('display_name').notNullable(); table.text('token_hash').notNullable().unique(); table.text('created_at').notNullable(); table.text('updated_at').notNullable()
-      table.unique(['plugin_id', 'client_id', 'installation_id'], { indexName: 'local_client_identity_unique' })
-    })
-    const oldToken = 'old-plugin-token'
-    const currentToken = 'current-client-token'
+      table.text('id').primary();
+      table.text('plugin_id').notNullable();
+      table.text('client_id').notNullable();
+      table.text('installation_id').notNullable();
+      table.text('display_name').notNullable();
+      table.text('token_hash').notNullable().unique();
+      table.text('created_at').notNullable();
+      table.text('updated_at').notNullable();
+      table.unique(['plugin_id', 'client_id', 'installation_id'], { indexName: 'local_client_identity_unique' });
+    });
+    const oldToken = 'old-plugin-token';
+    const currentToken = 'current-client-token';
     await legacy('local_client_authorizations').insert([
       {
-        id: 'authorization-old', plugin_id: 'com.motusai.seed.agent-harness', client_id: 'com.motusai.obsidian', installation_id: 'installation-test',
-        display_name: 'MotusAI for Obsidian', token_hash: createHash('sha256').update(oldToken).digest('hex'),
-        created_at: '2026-09-01T00:00:00.000Z', updated_at: '2026-09-01T00:00:00.000Z',
+        id: 'authorization-old',
+        plugin_id: 'com.motusai.seed.agent-harness',
+        client_id: 'com.motusai.obsidian',
+        installation_id: 'installation-test',
+        display_name: 'MotusAI for Obsidian',
+        token_hash: createHash('sha256').update(oldToken).digest('hex'),
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-01T00:00:00.000Z',
       },
       {
-        id: 'authorization-current', plugin_id: 'com.motusai.seed.recording', client_id: 'com.motusai.obsidian', installation_id: 'installation-test',
-        display_name: 'MotusAI for Obsidian', token_hash: createHash('sha256').update(currentToken).digest('hex'),
-        created_at: '2026-09-01T01:00:00.000Z', updated_at: '2026-09-01T01:00:00.000Z',
+        id: 'authorization-current',
+        plugin_id: 'com.motusai.seed.recording',
+        client_id: 'com.motusai.obsidian',
+        installation_id: 'installation-test',
+        display_name: 'MotusAI for Obsidian',
+        token_hash: createHash('sha256').update(currentToken).digest('hex'),
+        created_at: '2026-09-01T01:00:00.000Z',
+        updated_at: '2026-09-01T01:00:00.000Z',
       },
-    ])
-    await legacy.destroy()
+    ]);
+    await legacy.destroy();
 
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
-    expect(await store.localClients()).toEqual([expect.objectContaining({
-      id: 'authorization-current',
-      pluginIds: ['com.motusai.seed.agent-harness', 'com.motusai.seed.recording'],
-    })])
-    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', currentToken)).resolves.toBe('authorization-current')
-    await expect(store.localClientAuthorizationId('com.motusai.seed.recording', currentToken)).resolves.toBe('authorization-current')
-    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', oldToken)).resolves.toBeNull()
-    await store.close()
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    expect(await store.localClients()).toEqual([
+      expect.objectContaining({
+        id: 'authorization-current',
+        pluginIds: ['com.motusai.seed.agent-harness', 'com.motusai.seed.recording'],
+      }),
+    ]);
+    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', currentToken)).resolves.toBe(
+      'authorization-current',
+    );
+    await expect(store.localClientAuthorizationId('com.motusai.seed.recording', currentToken)).resolves.toBe(
+      'authorization-current',
+    );
+    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', oldToken)).resolves.toBeNull();
+    await store.close();
 
-    const migrated = createKnex({ client: 'better-sqlite3', connection: { filename: databasePath }, useNullAsDefault: true })
-    await expect(migrated.schema.hasColumn('local_client_authorizations', 'plugin_id')).resolves.toBe(false)
-    await expect(migrated.schema.hasColumn('local_client_authorizations', 'device_name')).resolves.toBe(true)
-    await expect(migrated.schema.hasTable('local_client_authorization_scopes')).resolves.toBe(true)
-    await migrated.destroy()
-  })
+    const migrated = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: databasePath },
+      useNullAsDefault: true,
+    });
+    await expect(migrated.schema.hasColumn('local_client_authorizations', 'plugin_id')).resolves.toBe(false);
+    await expect(migrated.schema.hasColumn('local_client_authorizations', 'device_name')).resolves.toBe(true);
+    await expect(migrated.schema.hasTable('local_client_authorization_scopes')).resolves.toBe(true);
+    await migrated.destroy();
+  });
 
   it('migrates existing client metadata and legacy authorization scope columns', async () => {
-    const directory = await temporaryDirectory()
-    const databasePath = join(directory, 'motusai_seed.sqlite3')
-    const current = createKnex({ client: 'better-sqlite3', connection: { filename: databasePath }, useNullAsDefault: true })
+    const directory = await temporaryDirectory();
+    const databasePath = join(directory, 'motusai_seed.sqlite3');
+    const current = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: databasePath },
+      useNullAsDefault: true,
+    });
     await current.schema.createTable('local_client_authorizations', (table) => {
-      table.text('id').primary()
-      table.text('client_id').notNullable()
-      table.text('installation_id').notNullable()
-      table.text('display_name').notNullable()
-      table.text('token_hash').notNullable().unique()
-      table.text('created_at').notNullable()
-      table.text('updated_at').notNullable()
-      table.unique(['client_id', 'installation_id'], { indexName: 'local_client_identity_unique' })
-    })
+      table.text('id').primary();
+      table.text('client_id').notNullable();
+      table.text('installation_id').notNullable();
+      table.text('display_name').notNullable();
+      table.text('token_hash').notNullable().unique();
+      table.text('created_at').notNullable();
+      table.text('updated_at').notNullable();
+      table.unique(['client_id', 'installation_id'], { indexName: 'local_client_identity_unique' });
+    });
     await current.schema.createTable('local_client_authorization_scopes', (table) => {
-      table.text('authorization_id').notNullable()
-      table.text('plugin_id').notNullable()
-      table.text('created_at').notNullable()
-      table.primary(['authorization_id', 'plugin_id'])
-    })
+      table.text('authorization_id').notNullable();
+      table.text('plugin_id').notNullable();
+      table.text('created_at').notNullable();
+      table.primary(['authorization_id', 'plugin_id']);
+    });
     await current('local_client_authorizations').insert({
       id: 'authorization-current',
       client_id: 'com.motusai.obsidian',
@@ -260,57 +512,70 @@ describe('SeedStore SQLite persistence', () => {
       token_hash: createHash('sha256').update('current-client-token').digest('hex'),
       created_at: '2026-09-01T00:00:00.000Z',
       updated_at: '2026-09-01T00:00:00.000Z',
-    })
+    });
     await current('local_client_authorization_scopes').insert({
       authorization_id: 'authorization-current',
       plugin_id: 'com.motusai.seed.agent-harness',
       created_at: '2026-09-01T00:00:00.000Z',
-    })
-    await current.destroy()
+    });
+    await current.destroy();
 
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
     await store.updateLocalClientMetadata('authorization-current', {
       displayName: 'MotusAI for Obsidian',
       deviceName: 'Duzhijun MacBook Pro',
-    })
-    expect(await store.localClients()).toEqual([expect.objectContaining({
-      id: 'authorization-current',
-      deviceName: 'Duzhijun MacBook Pro',
-    })])
-    await expect(store.localClientAuthorizationId('com.motusai.seed.agent-harness', 'current-client-token'))
-      .resolves.toBe('authorization-current')
-    await store.close()
+    });
+    expect(await store.localClients()).toEqual([
+      expect.objectContaining({
+        id: 'authorization-current',
+        deviceName: 'Duzhijun MacBook Pro',
+      }),
+    ]);
+    await expect(
+      store.localClientAuthorizationId('com.motusai.seed.agent-harness', 'current-client-token'),
+    ).resolves.toBe('authorization-current');
+    await store.close();
 
-    const migrated = createKnex({ client: 'better-sqlite3', connection: { filename: databasePath }, useNullAsDefault: true })
-    await expect(migrated.schema.hasColumn('local_client_authorization_scopes', 'authorization_id')).resolves.toBe(false)
-    await expect(migrated.schema.hasColumn('local_client_authorization_scopes', 'auth_id')).resolves.toBe(true)
-    await migrated.destroy()
-  })
+    const migrated = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: databasePath },
+      useNullAsDefault: true,
+    });
+    await expect(migrated.schema.hasColumn('local_client_authorization_scopes', 'authorization_id')).resolves.toBe(
+      false,
+    );
+    await expect(migrated.schema.hasColumn('local_client_authorization_scopes', 'auth_id')).resolves.toBe(true);
+    await migrated.destroy();
+  });
 
   it('renames the local client scope foreign key to the current auth_id contract', async () => {
-    const directory = await temporaryDirectory()
-    const databasePath = join(directory, 'motusai_seed.sqlite3')
-    const legacy = createKnex({ client: 'better-sqlite3', connection: { filename: databasePath }, useNullAsDefault: true })
+    const directory = await temporaryDirectory();
+    const databasePath = join(directory, 'motusai_seed.sqlite3');
+    const legacy = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: databasePath },
+      useNullAsDefault: true,
+    });
     await legacy.schema.createTable('local_client_authorizations', (table) => {
-      table.text('id').primary()
-      table.text('client_id').notNullable()
-      table.text('installation_id').notNullable()
-      table.text('display_name').notNullable()
-      table.text('device_name')
-      table.text('token_hash').notNullable().unique()
-      table.text('created_at').notNullable()
-      table.text('updated_at').notNullable()
-      table.unique(['client_id', 'installation_id'], { indexName: 'local_client_identity_unique' })
-    })
+      table.text('id').primary();
+      table.text('client_id').notNullable();
+      table.text('installation_id').notNullable();
+      table.text('display_name').notNullable();
+      table.text('device_name');
+      table.text('token_hash').notNullable().unique();
+      table.text('created_at').notNullable();
+      table.text('updated_at').notNullable();
+      table.unique(['client_id', 'installation_id'], { indexName: 'local_client_identity_unique' });
+    });
     await legacy.schema.createTable('local_client_authorization_scopes', (table) => {
-      table.text('authorization_id').notNullable()
-      table.text('plugin_id').notNullable()
-      table.text('created_at').notNullable()
-      table.primary(['authorization_id', 'plugin_id'])
-      table.foreign('authorization_id').references('id').inTable('local_client_authorizations').onDelete('CASCADE')
-      table.index(['plugin_id', 'authorization_id'], 'local_client_scope_plugin_index')
-    })
+      table.text('authorization_id').notNullable();
+      table.text('plugin_id').notNullable();
+      table.text('created_at').notNullable();
+      table.primary(['authorization_id', 'plugin_id']);
+      table.foreign('authorization_id').references('id').inTable('local_client_authorizations').onDelete('CASCADE');
+      table.index(['plugin_id', 'authorization_id'], 'local_client_scope_plugin_index');
+    });
     await legacy('local_client_authorizations').insert({
       id: 'authorization-current',
       client_id: 'com.motusai.obsidian',
@@ -320,75 +585,105 @@ describe('SeedStore SQLite persistence', () => {
       token_hash: createHash('sha256').update('current-client-token').digest('hex'),
       created_at: '2026-09-01T00:00:00.000Z',
       updated_at: '2026-09-01T00:00:00.000Z',
-    })
+    });
     await legacy('local_client_authorization_scopes').insert({
       authorization_id: 'authorization-current',
       plugin_id: 'com.motusai.seed.terminal',
       created_at: '2026-09-01T00:00:00.000Z',
-    })
-    await legacy.destroy()
+    });
+    await legacy.destroy();
 
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
-    await expect(store.hasLocalClientAuthorization('com.motusai.seed.terminal', 'authorization-current')).resolves.toBe(true)
-    await store.removePluginLocalClientAuthorizations('com.motusai.seed.terminal')
-    await expect(store.localClients()).resolves.toEqual([])
-    await store.close()
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    await expect(store.hasLocalClientAuthorization('com.motusai.seed.terminal', 'authorization-current')).resolves.toBe(
+      true,
+    );
+    await store.removePluginLocalClientAuthorizations('com.motusai.seed.terminal');
+    await expect(store.localClients()).resolves.toEqual([]);
+    await store.close();
 
-    const migrated = createKnex({ client: 'better-sqlite3', connection: { filename: databasePath }, useNullAsDefault: true })
-    await expect(migrated.schema.hasColumn('local_client_authorization_scopes', 'auth_id')).resolves.toBe(true)
-    await expect(migrated.schema.hasColumn('local_client_authorization_scopes', 'authorization_id')).resolves.toBe(false)
-    await migrated.destroy()
-  })
+    const migrated = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: databasePath },
+      useNullAsDefault: true,
+    });
+    await expect(migrated.schema.hasColumn('local_client_authorization_scopes', 'auth_id')).resolves.toBe(true);
+    await expect(migrated.schema.hasColumn('local_client_authorization_scopes', 'authorization_id')).resolves.toBe(
+      false,
+    );
+    await migrated.destroy();
+  });
 
   it('searches and paginates the complete local activity history', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
-    await store.addAudit({ source: 'agent', operation: 'files.write_file', outcome: 'allowed', summary: '写入年度报告', relativePath: 'reports/annual.md' })
-    await store.addAudit({ source: 'agent', operation: 'com.motusai.seed.files.list_directory', capability: 'com.motusai.seed.files', method: 'list_directory', risk: 'read', outcome: 'allowed', summary: '列出项目文件' })
-    await store.addAudit({ source: 'system', operation: 'logs.upload', outcome: 'failed', summary: '上传诊断包失败' })
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    await store.addAudit({
+      source: 'agent',
+      operation: 'files.write_file',
+      outcome: 'allowed',
+      summary: '写入年度报告',
+      relativePath: 'reports/annual.md',
+    });
+    await store.addAudit({
+      source: 'agent',
+      operation: 'com.motusai.seed.files.list_directory',
+      capability: 'com.motusai.seed.files',
+      method: 'list_directory',
+      risk: 'read',
+      outcome: 'allowed',
+      summary: '列出项目文件',
+    });
+    await store.addAudit({ source: 'system', operation: 'logs.upload', outcome: 'failed', summary: '上传诊断包失败' });
 
-    const first = await store.queryAudit({ limit: 1 })
-    expect(first.total).toBe(3)
-    expect(first.items).toHaveLength(1)
-    expect(first.nextCursor).toBeTruthy()
-    const second = await store.queryAudit({ cursor: first.nextCursor, limit: 1 })
-    expect(second.items).toHaveLength(1)
-    expect((await store.queryAudit({ category: 'capabilities' })).items).toHaveLength(2)
-    expect((await store.queryAudit({ category: 'capabilities', query: 'annual.md' })).items).toHaveLength(1)
-    expect((await store.queryAudit({ risk: 'write' })).items).toHaveLength(2)
-    expect((await store.queryAudit({ status: 'attention' })).items).toHaveLength(1)
-    expect((await store.queryAudit({ status: 'attention', risk: 'write' })).items).toHaveLength(1)
-    const diagnosticAudit = await store.auditForDiagnostics('2000-01-01T00:00:00.000Z', '2100-01-01T00:00:00.000Z')
-    const diagnosticEntries = []
-    for await (const entry of diagnosticAudit.entries) diagnosticEntries.push(entry)
-    expect(diagnosticAudit.count).toBe(3)
-    expect(diagnosticEntries).toHaveLength(3)
-    const emptyDiagnosticAudit = await store.auditForDiagnostics('2000-01-01T00:00:00.000Z', '2000-01-02T00:00:00.000Z')
-    expect(emptyDiagnosticAudit.count).toBe(0)
-    await store.close()
-  })
+    const first = await store.queryAudit({ limit: 1 });
+    expect(first.total).toBe(3);
+    expect(first.items).toHaveLength(1);
+    expect(first.nextCursor).toBeTruthy();
+    const second = await store.queryAudit({ cursor: first.nextCursor, limit: 1 });
+    expect(second.items).toHaveLength(1);
+    expect((await store.queryAudit({ category: 'capabilities' })).items).toHaveLength(2);
+    expect((await store.queryAudit({ category: 'capabilities', query: 'annual.md' })).items).toHaveLength(1);
+    expect((await store.queryAudit({ risk: 'write' })).items).toHaveLength(2);
+    expect((await store.queryAudit({ status: 'attention' })).items).toHaveLength(1);
+    expect((await store.queryAudit({ status: 'attention', risk: 'write' })).items).toHaveLength(1);
+    const diagnosticAudit = await store.auditForDiagnostics('2000-01-01T00:00:00.000Z', '2100-01-01T00:00:00.000Z');
+    const diagnosticEntries = [];
+    for await (const entry of diagnosticAudit.entries) diagnosticEntries.push(entry);
+    expect(diagnosticAudit.count).toBe(3);
+    expect(diagnosticEntries).toHaveLength(3);
+    const emptyDiagnosticAudit = await store.auditForDiagnostics(
+      '2000-01-01T00:00:00.000Z',
+      '2000-01-02T00:00:00.000Z',
+    );
+    expect(emptyDiagnosticAudit.count).toBe(0);
+    await store.close();
+  });
 
   it('streams diagnostic activity across page boundaries', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
     for (let index = 0; index < 501; index += 1) {
-      await store.addAudit({ source: 'system', operation: 'diagnostic.test', outcome: 'allowed', summary: `event-${index}` })
+      await store.addAudit({
+        source: 'system',
+        operation: 'diagnostic.test',
+        outcome: 'allowed',
+        summary: `event-${index}`,
+      });
     }
-    const diagnosticAudit = await store.auditForDiagnostics('2000-01-01T00:00:00.000Z', '2100-01-01T00:00:00.000Z')
-    let count = 0
-    for await (const _entry of diagnosticAudit.entries) count += 1
-    expect(diagnosticAudit.count).toBe(501)
-    expect(count).toBe(501)
-    await store.close()
-  })
+    const diagnosticAudit = await store.auditForDiagnostics('2000-01-01T00:00:00.000Z', '2100-01-01T00:00:00.000Z');
+    let count = 0;
+    for await (const _entry of diagnosticAudit.entries) count += 1;
+    expect(diagnosticAudit.count).toBe(501);
+    expect(count).toBe(501);
+    await store.close();
+  });
 
   it('persists structured plugin activity metadata without conversation content', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
     await store.addAudit({
       source: 'plugin',
       operation: 'plugin.com.motusai.seed.agent-harness.conversation.completed',
@@ -399,107 +694,174 @@ describe('SeedStore SQLite persistence', () => {
       runId: 'run-test',
       summary: 'com.motusai.seed.agent-harness: conversation.completed',
       metadata: { workspace_id: 'vault-test', duration_ms: 321, input_length: 12, output_length: 34 },
-    })
-    await store.close()
+    });
+    await store.close();
 
-    const reopened = new SeedStore(directory, 'MotusAI Seed')
-    await reopened.load()
-    const [entry] = (await reopened.queryAudit({ query: 'vault-test' })).items
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
+    const [entry] = (await reopened.queryAudit({ query: 'vault-test' })).items;
     expect(entry).toMatchObject({
       source: 'plugin',
       method: 'conversation.completed',
       runId: 'run-test',
       metadata: { workspace_id: 'vault-test', duration_ms: 321, input_length: 12, output_length: 34 },
-    })
+    });
     reopened.observations.record({
-      level: 'info', source: 'plugin-host', event: 'capability.invoke', message: 'Capability invocation started.',
-      plugin_id: 'com.example.paid', request_id: 'paid-call', operation: 'example.run',
-      trace_id: 'usage-credit-trace', span_id: 'usage-credit-span', phase: 'started',
-    })
+      level: 'info',
+      source: 'plugin-host',
+      event: 'capability.invoke',
+      message: 'Capability invocation started.',
+      plugin_id: 'com.example.paid',
+      request_id: 'paid-call',
+      operation: 'example.run',
+      trace_id: 'usage-credit-trace',
+      span_id: 'usage-credit-span',
+      phase: 'started',
+    });
     reopened.observations.record({
-      level: 'info', source: 'plugin-host', event: 'capability.invoke', message: 'Capability invocation completed.',
-      plugin_id: 'com.example.paid', request_id: 'paid-call', operation: 'example.run',
-      trace_id: 'usage-credit-trace', span_id: 'usage-credit-span', phase: 'completed', duration_ms: 100,
+      level: 'info',
+      source: 'plugin-host',
+      event: 'capability.invoke',
+      message: 'Capability invocation completed.',
+      plugin_id: 'com.example.paid',
+      request_id: 'paid-call',
+      operation: 'example.run',
+      trace_id: 'usage-credit-trace',
+      span_id: 'usage-credit-span',
+      phase: 'completed',
+      duration_ms: 100,
       details: { credit_charged_amount: 9.25, plugin_name_en_us: 'Paid Plugin', plugin_name_zh_hans: '付费插件' },
-    })
+    });
     reopened.observations.record({
-      level: 'info', source: 'connector', event: 'local_api.request', message: 'Local plugin request started.',
-      plugin_id: 'com.example.local', request_id: 'local-call', operation: 'POST /session',
-      trace_id: 'usage-local-trace', span_id: 'usage-local-span', phase: 'started',
+      level: 'info',
+      source: 'connector',
+      event: 'local_api.request',
+      message: 'Local plugin request started.',
+      plugin_id: 'com.example.local',
+      request_id: 'local-call',
+      operation: 'POST /session',
+      trace_id: 'usage-local-trace',
+      span_id: 'usage-local-span',
+      phase: 'started',
       details: { plugin_name_en_us: 'Local Plugin', plugin_name_zh_hans: '本地插件' },
-    })
+    });
     reopened.observations.record({
-      level: 'info', source: 'connector', event: 'local_api.request', message: 'Local plugin request completed.',
-      plugin_id: 'com.example.local', request_id: 'local-call', operation: 'POST /session',
-      trace_id: 'usage-local-trace', span_id: 'usage-local-span', phase: 'completed', duration_ms: 50,
+      level: 'info',
+      source: 'connector',
+      event: 'local_api.request',
+      message: 'Local plugin request completed.',
+      plugin_id: 'com.example.local',
+      request_id: 'local-call',
+      operation: 'POST /session',
+      trace_id: 'usage-local-trace',
+      span_id: 'usage-local-span',
+      phase: 'completed',
+      duration_ms: 50,
       details: { plugin_name_en_us: 'Local Plugin', plugin_name_zh_hans: '本地插件' },
-    })
+    });
     reopened.observations.record({
-      level: 'info', source: 'main', event: 'credit.settled', message: 'Cloud relay credit settlement recorded.',
-      plugin_id: 'com.example.local', operation: 'credit.settled',
+      level: 'info',
+      source: 'main',
+      event: 'credit.settled',
+      message: 'Cloud relay credit settlement recorded.',
+      plugin_id: 'com.example.local',
+      operation: 'credit.settled',
       details: { credit_charged_amount: 3.01, plugin_name_en_us: 'Local Plugin', plugin_name_zh_hans: '本地插件' },
-    })
-    const usage = await reopened.queryUsage()
-    expect(usage.retentionDays).toBe(365)
-    expect(usage.days).toEqual([expect.objectContaining({
-      creditsCharged: 12.26,
-      paidCallCount: 2,
-    })])
+    });
+    const usage = await reopened.queryUsage();
+    expect(usage.retentionDays).toBe(365);
+    expect(usage.days).toEqual([
+      expect.objectContaining({
+        creditsCharged: 12.26,
+        paidCallCount: 2,
+      }),
+    ]);
     expect(usage.plugins).toEqual([
-      { pluginId: 'com.example.local', nameEnUs: 'Local Plugin', nameZhHans: '本地插件', callCount: 2, creditsCharged: 3.01 },
-      { pluginId: 'com.example.paid', nameEnUs: 'Paid Plugin', nameZhHans: '付费插件', callCount: 1, creditsCharged: 9.25 },
-    ])
-    await reopened.close()
-  })
+      {
+        pluginId: 'com.example.local',
+        nameEnUs: 'Local Plugin',
+        nameZhHans: '本地插件',
+        callCount: 2,
+        creditsCharged: 3.01,
+      },
+      {
+        pluginId: 'com.example.paid',
+        nameEnUs: 'Paid Plugin',
+        nameZhHans: '付费插件',
+        callCount: 1,
+        creditsCharged: 9.25,
+      },
+    ]);
+    await reopened.close();
+  });
 
   it('includes settled calls and every used plugin in usage statistics', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
     for (let index = 0; index < 11; index += 1) {
       store.observations.record({
-        level: 'info', source: 'connector', event: 'local_api.request', message: 'Local plugin request completed.',
-        plugin_id: `com.example.plugin-${index}`, operation: 'POST /run',
-        span_id: `usage-plugin-${index}`, phase: 'completed',
-      })
+        level: 'info',
+        source: 'connector',
+        event: 'local_api.request',
+        message: 'Local plugin request completed.',
+        plugin_id: `com.example.plugin-${index}`,
+        operation: 'POST /run',
+        span_id: `usage-plugin-${index}`,
+        phase: 'completed',
+      });
     }
     store.observations.record({
-      level: 'info', source: 'main', event: 'credit.settled', message: 'Cloud relay credit settlement recorded.',
-      plugin_id: 'com.example.settled-only', operation: 'credit.settled',
+      level: 'info',
+      source: 'main',
+      event: 'credit.settled',
+      message: 'Cloud relay credit settlement recorded.',
+      plugin_id: 'com.example.settled-only',
+      operation: 'credit.settled',
       details: { credit_charged_amount: 1.5 },
-    })
+    });
 
-    const usage = await store.queryUsage()
-    expect(usage.plugins).toHaveLength(12)
+    const usage = await store.queryUsage();
+    expect(usage.plugins).toHaveLength(12);
     expect(usage.plugins).toContainEqual({
-      pluginId: 'com.example.settled-only', callCount: 1, creditsCharged: 1.5,
-    })
-    await store.close()
-  })
+      pluginId: 'com.example.settled-only',
+      callCount: 1,
+      creditsCharged: 1.5,
+    });
+    await store.close();
+  });
 
   it('isolates encrypted plugin secrets and removes obsolete delegated capability grants', async () => {
-    const directory = await temporaryDirectory()
-    const store = new SeedStore(directory, 'MotusAI Seed')
-    await store.load()
-    await store.setPluginSecret('com.example.connector', 'session.token', 'secret-token')
-    expect(store.pluginSecret('com.example.connector', 'session.token')).toBe('secret-token')
-    expect(store.pluginSecret('com.example.other', 'session.token')).toBeUndefined()
-    await store.close()
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    await store.setPluginSecret('com.example.connector', 'session.token', 'secret-token');
+    expect(store.pluginSecret('com.example.connector', 'session.token')).toBe('secret-token');
+    expect(store.pluginSecret('com.example.other', 'session.token')).toBeUndefined();
+    await store.close();
 
-    const legacy = createKnex({ client: 'better-sqlite3', connection: { filename: store.databasePath }, useNullAsDefault: true })
+    const legacy = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: store.databasePath },
+      useNullAsDefault: true,
+    });
     await legacy.schema.createTable('plugin_capability_grants', (table) => {
-      table.text('id').primary()
-      table.text('consumer_plugin_id').notNullable()
-    })
-    await legacy('plugin_capability_grants').insert({ id: 'grant-1', consumer_plugin_id: 'com.example.connector' })
-    await legacy.destroy()
+      table.text('id').primary();
+      table.text('consumer_plugin_id').notNullable();
+    });
+    await legacy('plugin_capability_grants').insert({ id: 'grant-1', consumer_plugin_id: 'com.example.connector' });
+    await legacy.destroy();
 
-    const reopened = new SeedStore(directory, 'MotusAI Seed')
-    await reopened.load()
-    expect(reopened.pluginSecret('com.example.connector', 'session.token')).toBe('secret-token')
-    const migrated = createKnex({ client: 'better-sqlite3', connection: { filename: reopened.databasePath }, useNullAsDefault: true })
-    expect(await migrated.schema.hasTable('plugin_capability_grants')).toBe(false)
-    await migrated.destroy()
-    await reopened.close()
-  })
-})
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
+    expect(reopened.pluginSecret('com.example.connector', 'session.token')).toBe('secret-token');
+    const migrated = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: reopened.databasePath },
+      useNullAsDefault: true,
+    });
+    expect(await migrated.schema.hasTable('plugin_capability_grants')).toBe(false);
+    await migrated.destroy();
+    await reopened.close();
+  });
+});

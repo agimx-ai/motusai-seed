@@ -1,0 +1,8 @@
+{
+  "id": "com.example.generic",
+  "name": "Generic SDK fixture",
+  "version": "1.0.0",
+  "minAppVersion": "0.2.15",
+  "description": "Lifecycle, isolation and private service fixture.",
+  "author": "Example"
+}

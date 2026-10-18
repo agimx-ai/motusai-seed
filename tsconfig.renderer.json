@@ -8,6 +8,8 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -21,5 +23,5 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["src/renderer", "src/connector/caps.ts", "src/shared", "src/vendor", "src/preload/global.d.ts", "vite.config.mts"]
+  "include": ["src/renderer", "src/shared", "src/preload/global.d.ts", "vite.config.mts"]
 }
