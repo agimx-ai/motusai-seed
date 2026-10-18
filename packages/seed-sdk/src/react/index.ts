@@ -4,6 +4,7 @@ export {
   modelSelectionThinking,
 } from './components/ModelSelectControl';
 export { SelectControl, type SelectControlOption } from './components/SelectControl';
+export { AsyncCombobox, type AsyncComboboxOption, type AsyncComboboxProps } from './components/AsyncCombobox';
 export {
   SegmentedControl,
   type SegmentedControlOption,

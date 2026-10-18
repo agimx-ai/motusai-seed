@@ -39,6 +39,8 @@ import { ReactSettingTab, ModelSelect, SelectControl, SegmentedControl, Discrete
 
 `SegmentedControl` 复用产品壳原有的分段切换样式和键盘交互。插件直接传入 `value`、`options`、`onValueChange` 和 `label`，自己决定切换后的 JSX 内容；组件不读写配置，也不解释模型来源等业务概念。
 
+`AsyncCombobox` 复用原有可输入搜索下拉框：单个输入框支持自由输入、按选项名称／值过滤和键盘选择，选择后显示名称、通过 `onChange` 返回真实值。选项、加载状态、空态／失败文案和刷新回调由插件传入；组件不请求模型目录、不读取凭据或保存配置。
+
 `FileInputControl` 复用原有文件字段的选择、列表和删除样式，扩展名、数量限制、路径解析、文案和持久化由调用方传入。`StatusLine` 只展示状态圆点、内容和可选操作；不解释连接、任务或插件业务状态。两者都是直接导入的 React 组件，不是声明式页面解释器。
 
 官方可信插件前端直接挂载到客户端同一文档的 HTMLElement 容器；没有 iframe、独立 WebContentsView、坐标／高度同步或滚动转发。页面按浏览器原生文档流自动撑高，整页统一滚动；插件内部确有需要的滚动列表和模态弹窗保留原生滚动语义。插件 CSS 使用自己的类名前缀或根容器作用域，复用宿主主题变量，不覆盖产品壳全局样式。可信前端与壳共享 Renderer，不是逐插件安全沙箱；Renderer 关闭 Node，后端仍独立隔离。
