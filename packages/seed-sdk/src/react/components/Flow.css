@@ -1,0 +1,9 @@
+.seed-flow-connector {
+  display: none;
+}
+
+@media (min-width: 701px) {
+  .seed-flow-connector {
+    display: block;
+  }
+}

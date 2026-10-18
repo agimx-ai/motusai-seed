@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import './Flow.css';
 
 /** Pure layout components. Plugins compose JSX and can supply any icon or step content. */
 export function Flow({
@@ -14,7 +15,7 @@ export function Flow({
     <section className={`${className} rounded-[16px] border border-border bg-muted/15 px-5 py-5`}>
       <div className="relative flex items-stretch justify-between gap-8 max-[700px]:flex-col">
         <div
-          className="absolute left-[15%] right-[15%] top-1/2 hidden border-t-2 border-dashed border-border min-[701px]:block"
+          className="seed-flow-connector absolute left-[15%] right-[15%] top-1/2 border-t-2 border-dashed border-border"
           aria-hidden="true"
         />
         {children}
