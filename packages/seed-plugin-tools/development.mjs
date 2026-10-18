@@ -57,6 +57,7 @@ export async function publishDevelopmentPlugin({
     previous = join(directory, '.previous-' + randomUUID());
   const destination = join(directory, manifest.id);
   await mkdir(staging, { mode: 0o700 });
+  const ownership = await lstat(staging);
   let moved = false;
   try {
     for (const [path, body] of entries) {
@@ -81,10 +82,39 @@ export async function publishDevelopmentPlugin({
       throw error;
     }
     if (moved) await rm(previous, { recursive: true, force: true });
-    return { id: manifest.id, directory: destination };
+    return { id: manifest.id, directory: destination, ownership: { dev: ownership.dev, ino: ownership.ino } };
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
+}
+
+async function removeOwnedDevelopmentPlugin(deployed) {
+  const parent = dirname(deployed.directory);
+  const parentState = await lstat(parent).catch((error) => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+  if (!parentState) return;
+  if (!parentState.isDirectory() || parentState.isSymbolicLink())
+    throw new Error('Development directory must remain a regular directory.');
+  const current = await lstat(deployed.directory).catch((error) => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+  const owns = (state) => state?.isDirectory() && !state.isSymbolicLink()
+    && state.dev === deployed.ownership.dev && state.ino === deployed.ownership.ino;
+  if (!owns(current)) return;
+  const retiring = join(parent, '.cleanup-' + randomUUID());
+  try {
+    await rename(deployed.directory, retiring);
+  } catch (error) {
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+  // Recheck after the atomic rename: a concurrent deployment must never be deleted.
+  if (!owns(await lstat(retiring))) {
+    await rename(retiring, deployed.directory);
+    return;
+  }
+  await rm(retiring, { recursive: true, force: true });
 }
 
 /** Watch an independent source project; its own build.mjs remains the authoritative build. */
@@ -92,15 +122,18 @@ export async function developPlugin({
   root = process.cwd(),
   directory,
   log = (message) => process.stdout.write(message + '\n'),
+  signal,
 } = {}) {
   root = resolve(root);
   directory = resolve(directory ?? developmentPluginDirectory());
   const ignored = new Set(['node_modules', 'dist', 'artifacts', '.git']);
+  const deployed = new Map();
   let timer,
     child,
     stopped = false,
     pending = false,
-    running;
+    running,
+    stopWork;
   const compile = async () => {
     do {
       pending = false;
@@ -113,8 +146,11 @@ export async function developPlugin({
           );
         });
         child = undefined;
-        if (!stopped)
-          log('Synced development plugin: ' + (await publishDevelopmentPlugin({ root, directory })).directory);
+        if (!stopped) {
+          const published = await publishDevelopmentPlugin({ root, directory });
+          deployed.set(published.directory, published);
+          log('Synced development plugin: ' + published.directory);
+        }
       } catch (error) {
         if (!stopped) log(String(error));
       }
@@ -144,16 +180,27 @@ export async function developPlugin({
     timer = setTimeout(() => void rebuild(), 100);
   });
   watcher.on('error', (error) => log(String(error)));
-  await rebuild();
-  log('Watching source changes. Press Ctrl+C to stop. Seed loads the synced directory.');
-  return {
-    rebuild,
-    async stop() {
+  const stop = () => {
+    if (!stopWork) {
       stopped = true;
       clearTimeout(timer);
       watcher.close();
       child?.kill();
-      await running;
-    },
+      stopWork = (async () => {
+        await running;
+        signal?.removeEventListener('abort', onAbort);
+        for (const published of deployed.values()) await removeOwnedDevelopmentPlugin(published);
+      })();
+    }
+    return stopWork;
   };
+  const onAbort = () => void stop().catch((error) => {
+    process.exitCode = 1;
+    log(String(error));
+  });
+  signal?.addEventListener('abort', onAbort, { once: true });
+  if (signal?.aborted) await stop();
+  else await rebuild();
+  if (!stopped) log('Watching source changes. Press Ctrl+C to stop. Seed loads the synced directory.');
+  return { rebuild, stop };
 }

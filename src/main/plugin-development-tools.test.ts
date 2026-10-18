@@ -1,4 +1,5 @@
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -30,6 +31,111 @@ async function fixture() {
   return { root, project, directory };
 }
 describe('independent plugin development tools', () => {
+  it.skipIf(process.platform === 'win32').each(['SIGINT', 'SIGTERM'] as const)(
+    'cleans the synchronized directory when npm run dev receives %s', async (signal) => {
+      const h = await fixture();
+      await writeFile(join(h.project, 'package.json'), JSON.stringify({
+        private: true,
+        scripts: { dev: `${JSON.stringify(process.execPath)} ${JSON.stringify(resolve('packages/seed-plugin-tools/cli.mjs'))} dev --directory ${JSON.stringify(h.directory)}` },
+      }));
+      const child = spawn('npm', ['run', 'dev'], {
+        cwd: h.project, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let output = '';
+      child.stdout.on('data', (chunk) => { output += chunk.toString(); });
+      child.stderr.on('data', (chunk) => { output += chunk.toString(); });
+      const exited = new Promise<void>((resolve, reject) => {
+        child.once('close', () => resolve());
+        child.once('error', reject);
+      });
+      try {
+        await vi.waitFor(() => expect(output).toContain('Synced development plugin:'), { timeout: 8000 });
+        process.kill(-child.pid!, signal);
+        await exited;
+        expect(await readdir(h.directory)).toEqual([]);
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) process.kill(-child.pid!, 'SIGTERM');
+        await exited;
+      }
+    }, 15_000,
+  );
+
+  it.each(['SIGINT', 'SIGTERM'] as const)('cleans the synchronized directory when the CLI receives %s', async (signal) => {
+    const h = await fixture();
+    const child = spawn(process.execPath, [resolve('packages/seed-plugin-tools/cli.mjs'), 'dev', '--directory', h.directory], {
+      cwd: h.project, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.on('data', (chunk) => { output += chunk.toString(); });
+    child.stderr.on('data', (chunk) => { output += chunk.toString(); });
+    const exited = new Promise<number | null>((resolve, reject) => {
+      child.once('exit', (code) => resolve(code));
+      child.once('error', reject);
+    });
+    try {
+      await vi.waitFor(() => expect(output).toContain('Synced development plugin:'), { timeout: 8000 });
+      child.kill(signal);
+      await expect(exited).resolves.toBe(0);
+      expect(await readdir(h.directory)).toEqual([]);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+      await exited;
+    }
+  }, 15_000);
+
+  it('removes only its synchronized plugin on stop, preserving other plugins and user data', async () => {
+    const h = await fixture();
+    const installed = join(h.root, 'plugins/installed/com.example.generic');
+    const data = join(h.root, 'plugin-data/com.example.generic');
+    const other = join(h.directory, 'com.example.other');
+    for (const directory of [installed, data, other]) {
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'keep.txt'), 'preserved');
+    }
+    const watcher = await development.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
+    watchers.push(watcher);
+    await inspectPluginDirectory(join(h.directory, 'com.example.generic'));
+    await watcher.stop();
+    await watcher.stop();
+    expect(await readdir(h.directory)).toEqual(['com.example.other']);
+    for (const directory of [installed, data, other])
+      expect(await readFile(join(directory, 'keep.txt'), 'utf8')).toBe('preserved');
+  });
+
+  it('does not remove a replacement deployed by another development process', async () => {
+    const h = await fixture();
+    const watcher = await development.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
+    watchers.push(watcher);
+    const replacement = await development.publishDevelopmentPlugin({ root: h.project, directory: h.directory });
+    await watcher.stop();
+    expect((await inspectPluginDirectory(replacement.directory)).manifest.id).toBe('com.example.generic');
+  });
+
+  it('waits for an interrupted rebuild before removing its last synchronized directory', async () => {
+    const h = await fixture();
+    const watcher = await development.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
+    watchers.push(watcher);
+    await writeFile(join(h.project, 'build.mjs'), 'await new Promise((resolve) => setTimeout(resolve, 5000));');
+    const rebuilding = watcher.rebuild();
+    await watcher.stop();
+    await rebuilding;
+    expect(await readdir(h.directory)).toEqual([]);
+  });
+
+  it('accepts shutdown during the initial build without deleting an unsynchronized directory', async () => {
+    const h = await fixture();
+    const previous = join(h.directory, 'com.example.generic');
+    await mkdir(previous, { recursive: true });
+    await writeFile(join(previous, 'keep.txt'), 'not owned by this watcher');
+    const controller = new AbortController();
+    const starting = development.developPlugin({ root: h.project, directory: h.directory, signal: controller.signal, log: () => {} });
+    controller.abort();
+    const watcher = await starting;
+    watchers.push(watcher);
+    await watcher.stop();
+    expect(await readFile(join(previous, 'keep.txt'), 'utf8')).toBe('not owned by this watcher');
+  });
+
   it('builds plugin-only utilities, theme variants and custom CSS without scanning the desktop shell', async () => {
     const h = await fixture();
     const source = join(h.project, 'src/main.ts');

@@ -1,6 +1,6 @@
 {
   "name": "@motus-ai/seed-plugin-tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "UNLICENSED",
   "type": "module",
   "exports": "./index.mjs",
@@ -10,7 +10,8 @@
   "files": [
     "index.mjs",
     "cli.mjs",
-    "development.mjs"
+    "development.mjs",
+    "CHANGELOG.md"
   ],
   "dependencies": {
     "@tailwindcss/node": "4.3.3",

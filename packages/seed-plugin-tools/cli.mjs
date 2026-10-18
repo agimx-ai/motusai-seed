@@ -9,9 +9,12 @@ if (process.argv[2] === 'dev') {
   const args = process.argv.slice(3);
   if (args.length && (args.length !== 2 || args[0] !== '--directory'))
     throw new Error('Usage: seed-plugin-tools dev [--directory <development-root>]');
-  const watcher = await developPlugin({ directory: args[1] });
-  process.once('SIGINT', () => void watcher.stop());
-  process.once('SIGTERM', () => void watcher.stop());
+  const controller = new AbortController();
+  const interrupt = () => controller.abort();
+  // npm can forward a terminal signal again while asynchronous cleanup is still running.
+  process.on('SIGINT', interrupt);
+  process.on('SIGTERM', interrupt);
+  await developPlugin({ directory: args[1], signal: controller.signal });
 } else {
   if (process.argv[2] !== 'pack' || process.argv.length > 3)
     throw new Error('Usage: seed-plugin-tools pack (run inside a built plugin project)');
