@@ -62,6 +62,36 @@ function relayRuntime(creditBilling: Record<string, unknown>, permissions = ['cl
 }
 
 describe('Runtime Cloud relay', () => {
+  it.each(['seed.cloud.relay', 'seed.cloud.relay.stream.start'])(
+    'uses explicit billing identity without interpreting the %s payload',
+    async (service) => {
+      const prepare = vi.fn(async (_input: Record<string, unknown>) => ({
+        billable: true,
+        call_id: crypto.randomUUID(),
+      }));
+      const relay = vi.fn(async (_input: Record<string, unknown>) => ({ payload: {} }));
+      const startRelayStream = vi.fn(async (_input: Record<string, unknown>) => ({ stream_id: crypto.randomUUID() }));
+      const runtime = relayRuntime({ prepare, relay, startRelayStream, cancel: vi.fn() });
+      runtime.billedRelayStreams = new Map();
+      const invoke = (extra: Record<string, unknown>) =>
+        Reflect.get(runtime, 'invokePluginBroker').call(runtime, 'com.example.plugin', service, {
+          capability_id: 'hosted_models',
+          method: 'complete',
+          payload: { model: 'body-is-not-billing' },
+          ...extra,
+        });
+      await invoke({ model_id: 'explicit-price-model' });
+      expect(prepare.mock.calls[0][0]).toMatchObject({ model_id: 'explicit-price-model' });
+      await invoke({});
+      expect(prepare.mock.calls[1][0]).not.toHaveProperty('model_id');
+      expect((service === 'seed.cloud.relay' ? relay : startRelayStream).mock.calls[0][0].payload).toEqual({
+        model: 'body-is-not-billing',
+      });
+      await expect(invoke({ model_id: '' })).rejects.toThrow();
+      expect(prepare).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('rejects undeclared Cloud relay permissions before forwarding', async () => {
     const relay = vi.fn();
     const runtime = Object.assign(Object.create(SeedRuntime.prototype), {

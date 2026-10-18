@@ -2,7 +2,7 @@ import { BrainCircuit, Check, ChevronDown, LoaderCircle } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../utils';
-import { usePluginStyleScope } from '../i18n';
+import { usePluginStyleScope } from '../style-scope';
 import { DiscreteSlider } from './DiscreteSlider';
 import { ThemedIcon } from './ThemedIcon';
 
@@ -10,7 +10,7 @@ export type SelectControlOption<Value extends string> = {
   value: Value;
   label: string;
   disabled?: boolean;
-  group?: 'seed' | 'custom';
+  group?: string;
   iconDataUrl?: string;
   iconDarkDataUrl?: string;
 };
@@ -29,8 +29,7 @@ type SelectControlProps<Value extends string> = {
   variant?: 'compact' | 'form' | 'model';
   size?: 'default' | 'form';
   modelMenu?: {
-    seedLabel: string;
-    customLabel: string;
+    groups: readonly { value: string; label: string }[];
     thinking?: {
       label: string;
       value: string;
@@ -84,10 +83,15 @@ export function SelectControl<Value extends string>({
   const listboxId = useId();
   const selected = options.find((option) => option.value === value);
   const displayLabel = selected?.label || placeholder;
-  const modelGroups = {
-    seed: options.map((option, index) => ({ option, index })).filter(({ option }) => option.group === 'seed'),
-    custom: options.map((option, index) => ({ option, index })).filter(({ option }) => option.group !== 'seed'),
-  };
+  const indexedOptions = options.map((option, index) => ({ option, index }));
+  const modelGroups = (modelMenu?.groups ?? []).map((group) => ({
+    key: group.value,
+    label: group.label,
+    items: indexedOptions.filter(({ option }) => option.group === group.value),
+  }));
+  const ungroupedOptions = indexedOptions.filter(
+    ({ option }) => !modelMenu?.groups.some((group) => option.group === group.value),
+  );
   const thinkingLevels = modelMenu?.thinking?.levels ?? [];
   const thinkingDisplayLabel =
     variant === 'model' && selected && modelMenu?.thinking && thinkingLevels.length > 0
@@ -330,10 +334,7 @@ export function SelectControl<Value extends string>({
       >
         {variant === 'model' && modelMenu ? (
           <div className="grid gap-px" role="listbox" aria-label={label}>
-            {[
-              { key: 'seed', label: modelMenu.seedLabel, items: modelGroups.seed },
-              { key: 'custom', label: modelMenu.customLabel, items: modelGroups.custom },
-            ]
+            {modelGroups
               .filter((group) => group.items.length > 0)
               .map((group, groupIndex) => (
                 <div key={group.key} className="grid gap-px pt-1 first:pt-0" role="group" aria-label={group.label}>
@@ -349,6 +350,7 @@ export function SelectControl<Value extends string>({
                   {group.items.map(({ option, index }) => optionButton(option, index))}
                 </div>
               ))}
+            {ungroupedOptions.map(({ option, index }) => optionButton(option, index))}
           </div>
         ) : (
           options.map(optionButton)

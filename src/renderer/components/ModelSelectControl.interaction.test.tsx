@@ -6,6 +6,21 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SeedI18nProvider } from '../i18n';
 import { ModelSelectControl } from '@motus-ai/seed-sdk/react';
+
+const presentation = {
+  placeholder: 'Select model',
+  unavailable: 'Model unavailable',
+  loading: 'Loading options…',
+  groups: { seed: 'Seed built-in models', custom: 'Custom models' },
+  thinking: {
+    label: 'Thinking level',
+    unselected: 'No thinking level selected',
+    unsupported: 'This model does not support adjustable thinking levels.',
+    chooseModel: 'Select a model to set its thinking level.',
+    default: 'Default',
+    levels: { off: 'Off', low: 'Low', high: 'High' },
+  },
+};
 import { SelectControl } from '@motus-ai/seed-sdk/react';
 
 const options = [
@@ -83,6 +98,7 @@ function Picker({
     <>
       <button type="button">Outside</button>
       <ModelSelectControl
+        presentation={presentation}
         label="Model picker"
         value={model}
         options={levels}
@@ -115,6 +131,45 @@ function mountPicker(props: Partial<Parameters<typeof Picker>[0]> = {}) {
 }
 
 describe('shared model picker DOM interactions', () => {
+  it('renders caller-defined groups, order, thinking levels and text without built-in business categories', async () => {
+    const onChange = vi.fn();
+    render(
+      <ModelSelectControl
+        label="Caller picker"
+        value="local"
+        thinkingValue="adaptive"
+        onChange={onChange}
+        presentation={{
+          ...presentation,
+          groups: { local: 'On-device', team: 'Team pool' },
+          thinking: {
+            ...presentation.thinking,
+            label: 'Budget',
+            levels: { adaptive: 'Adaptive budget', deep: 'Deep budget' },
+          },
+        }}
+        options={[
+          { value: 'team', label: 'Team model', group: 'team' },
+          { value: 'local', label: 'Local model', group: 'local', thinkingLevels: ['adaptive', 'deep'] },
+          { value: 'other', label: 'Ungrouped model', group: 'new-category' },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Caller picker' }));
+    await screen.findByRole('dialog', { name: 'Caller picker' });
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Local model',
+      'Team model',
+      'Ungrouped model',
+    ]);
+    expect(screen.getByRole('group', { name: 'On-device' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Team pool' })).toBeTruthy();
+    expect(screen.queryByText('Seed built-in models')).toBeNull();
+    expect(screen.getByRole('slider', { name: 'Budget' }).getAttribute('aria-valuetext')).toBe('Adaptive budget');
+    fireEvent.change(screen.getByRole('slider', { name: 'Budget' }), { target: { value: '1' } });
+    expect(onChange).toHaveBeenLastCalledWith('local', 'deep');
+  });
+
   it('focuses a portalled option only after placement makes it visible', async () => {
     const originalFocus = HTMLElement.prototype.focus;
     const focus = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (this: HTMLElement, options) {
@@ -421,7 +476,13 @@ describe('shared model picker DOM interactions', () => {
   it('keeps model-only menus generic without adding a thinking footer', async () => {
     render(
       <SeedI18nProvider>
-        <ModelSelectControl label="Model only" value="one" options={options} onChange={vi.fn()} />
+        <ModelSelectControl
+          presentation={presentation}
+          label="Model only"
+          value="one"
+          options={options}
+          onChange={vi.fn()}
+        />
       </SeedI18nProvider>,
     );
     await userEvent.setup().click(screen.getByRole('button', { name: 'Model only' }));

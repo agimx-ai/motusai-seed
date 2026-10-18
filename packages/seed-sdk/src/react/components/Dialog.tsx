@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { IconButton } from './IconButton';
-import { usePluginStyleScope } from '../i18n';
+import { usePluginStyleScope } from '../style-scope';
 
 /** Native top-layer dialog; no document-global event handlers or plugin business state. */
 export function Dialog({

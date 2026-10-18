@@ -14,6 +14,7 @@ export type AudioStatus = {
   duration_ms: number;
   source: AudioCaptureSource;
   error?: string;
+  task_id?: string;
 };
 type PendingEvent = {
   resolve(value: Record<string, unknown>): void;
@@ -48,6 +49,7 @@ export class AudioService {
   private readyResolve: (() => void) | null = null;
   private sessionId = '';
   private ownerPackageId = '';
+  private stoppingTaskId: string | undefined;
   private source: AudioCaptureSource = 'microphone';
   private captureGeneration = 0;
   private systemCapture: SystemAudioCapture | null = null;
@@ -244,6 +246,7 @@ export class AudioService {
       source: this.source,
       duration_ms: this.durationMs(),
       ...(this.error ? { error: this.error } : {}),
+      ...(this.state === 'stopping' && this.stoppingTaskId ? { task_id: this.stoppingTaskId } : {}),
     };
   }
 
@@ -295,6 +298,7 @@ export class AudioService {
     this.failureResetTimer = null;
     this.sessionId = '';
     this.ownerPackageId = '';
+    this.stoppingTaskId = undefined;
     this.source = 'microphone';
     this.error = '';
     this.startedAt = 0;
@@ -505,9 +509,10 @@ export class AudioService {
     };
   }
 
-  private async stop() {
+  private async stop(taskId?: string) {
     if (!['recording', 'paused'].includes(this.state))
       throw codedError('当前没有可停止的录音。', 'audio_session_not_recording');
+    this.stoppingTaskId = taskId;
     this.setState('stopping');
     const durationMs = this.durationMs();
     await this.stopInputs();
@@ -590,7 +595,7 @@ export class AudioService {
     }
   }
 
-  async invoke(argumentsValue: Record<string, unknown>, packageId = '') {
+  async invoke(argumentsValue: Record<string, unknown>, packageId = '', taskId?: string) {
     const operation = String(argumentsValue.operation || '');
     if (
       operation.startsWith('capture.') &&
@@ -603,7 +608,7 @@ export class AudioService {
     if (operation === 'capture.pause') return await this.pause();
     if (operation === 'capture.resume') return await this.resume();
     if (operation === 'capture.segment') return await this.segment();
-    if (operation === 'capture.stop') return await this.stop();
+    if (operation === 'capture.stop') return await this.stop(taskId);
     if (operation === 'capture.cancel') return await this.cancel();
     if (operation === 'capture.interrupt') return await this.interrupt();
     if (operation === 'capture.status') return this.snapshot();

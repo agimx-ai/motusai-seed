@@ -1,7 +1,6 @@
 import i18next from 'i18next';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { I18nextProvider } from 'react-i18next';
-import { ComponentProvider } from '@motus-ai/seed-sdk/react';
 import { defaultSeedLocale, seedI18nResources, type SeedLanguagePreference, type SeedLocale } from './resources';
 
 type SeedI18nContextValue = {
@@ -63,9 +62,7 @@ export function SeedI18nProvider({ children }: { children: ReactNode }) {
   );
   return (
     <SeedI18nContext.Provider value={value}>
-      <I18nextProvider i18n={instance}>
-        <ComponentProvider locale={locale}>{children}</ComponentProvider>
-      </I18nextProvider>
+      <I18nextProvider i18n={instance}>{children}</I18nextProvider>
     </SeedI18nContext.Provider>
   );
 }

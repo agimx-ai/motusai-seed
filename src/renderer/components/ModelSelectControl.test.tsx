@@ -2,9 +2,25 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ModelSelectControl, modelSelectionThinking } from '@motus-ai/seed-sdk/react';
 
+const presentation = {
+  placeholder: 'Select model',
+  unavailable: 'Model unavailable',
+  loading: 'Loading options…',
+  groups: { seed: 'Seed built-in models', custom: 'Custom models' },
+  thinking: {
+    label: 'Thinking level',
+    unselected: 'No thinking level selected',
+    unsupported: 'This model does not support adjustable thinking levels.',
+    chooseModel: 'Select a model to set its thinking level.',
+    default: 'Default',
+    levels: { off: 'Off', low: 'Low', high: 'High' },
+  },
+};
+
 describe('ModelSelectControl', () => {
   it('keeps the default trigger unchanged and applies the complete form control appearance for the form size', () => {
     const props = {
+      presentation,
       label: 'Model',
       value: 'one',
       options: [{ value: 'one', label: 'Test model', thinkingLevels: ['off', 'high'] }],
@@ -35,6 +51,7 @@ describe('ModelSelectControl', () => {
   it('shows the selected model with the shared themed trigger', () => {
     const html = renderToStaticMarkup(
       <ModelSelectControl
+        presentation={presentation}
         label="Model"
         value="model-1"
         onChange={() => undefined}
@@ -67,6 +84,7 @@ describe('ModelSelectControl', () => {
     for (const value of ['', 'removed']) {
       const html = renderToStaticMarkup(
         <ModelSelectControl
+          presentation={presentation}
           label="Choose model"
           value={value}
           onChange={() => undefined}

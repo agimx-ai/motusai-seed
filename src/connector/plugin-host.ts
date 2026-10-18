@@ -781,6 +781,9 @@ export class SeedPluginHost {
         const result = await this.runtime.invoke_host(service, {
           ...argumentsValue,
           package_id: plugin.package_id,
+          ...(service === 'seed.audio'
+            ? { activity_task_id: this.invocationTasks.getStore()?.activity.taskId }
+            : {}),
           ...(['seed.plugin.audit', 'seed.plugin.diagnostic'].includes(service)
             ? { plugin_version: plugin.version, trace: this.activeDiagnosticTrace() }
             : {}),

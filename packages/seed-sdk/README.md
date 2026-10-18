@@ -101,7 +101,11 @@ UI 可调用 `app.reloadService()` 重新加载自己的后端；不能重载其
 
 使用 @motus-ai/seed-plugin-tools 的 buildPlugin() 分别编译 UI 与服务依赖图。宿主注入 SDK，浏览器依赖图禁止 Node 导入。最终只生成一个 main.js，内部两个入口分别加载，不共享对象或实例。
 
-构建选项 `view` 指定界面源码，默认 `src/main.ts`；`service` 指定可选后端源码。产物提供 `loadView` 和可选 `loadService`，由宿主分别加载。ReactSettingTab 自动使用 SDK 的 `ComponentProvider` 设置共享组件语言；自行挂载 React Root 时也可从 `@motus-ai/seed-sdk/react` 导入该组件。
+构建选项 `view` 指定界面源码，默认 `src/main.ts`；`service` 指定可选后端源码。产物提供 `loadView` 和可选 `loadService`，由宿主分别加载。ReactSettingTab 提供插件自己的 i18next 实例，以及 `ComponentProvider` 弹层样式作用域；自行挂载 React Root 时也可从 `@motus-ai/seed-sdk/react` 导入该组件。
+
+`ModelSelectControl` 的 `presentation: ModelSelectPresentation` 由插件自己的语言资源提供：包括占位／加载／不可用文案、任意模型分类及顺序，以及思考等级名称。模型和支持的等级仍通过 `options` 传入；SDK 只处理布局、选择和键盘交互，不内置模型来源或等级枚举。
+
+调用 `seed.cloud.relay` 或 `seed.cloud.relay.stream.start` 时，按模型计费的插件显式传入顶层 `model_id`。宿主校验并交给 Cloud，不从 `payload` 推断计费标识；不按模型计费的调用不传此字段。价格、权限与最终结算仍由 Cloud 决定。
 
 源码 `manifest.json` 只维护基本信息、兼容要求和图标／语言资源引用，所有字段位于顶层，不使用 `seed` 外层对象。`apiVersion`、`runtime`、`service` 和资源摘要由构建工具生成到同一顶层，不能在源码 Manifest 中重复填写；运行环境在 `buildPlugin({ runtime: 'native-host', ... })` 中选择，默认是 Node-free 的 `sandboxed-web`。源码 Manifest 不包含 `publisherId`、`labels` 或能力声明。
 

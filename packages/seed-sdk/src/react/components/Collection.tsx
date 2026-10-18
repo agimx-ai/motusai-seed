@@ -3,7 +3,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { IconButton } from './IconButton';
 import './Collection.css';
-import { usePluginStyleScope } from '../i18n';
+import { usePluginStyleScope } from '../style-scope';
 
 const dialogs: HTMLElement[] = [];
 

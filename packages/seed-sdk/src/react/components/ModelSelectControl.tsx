@@ -1,5 +1,19 @@
-import { useTranslation } from '../i18n';
 import { SelectControl, type SelectControlOption } from './SelectControl';
+
+export type ModelSelectPresentation = {
+  placeholder: string;
+  unavailable: string;
+  loading: string;
+  groups?: Record<string, string>;
+  thinking: {
+    label: string;
+    unselected: string;
+    unsupported: string;
+    chooseModel: string;
+    default: string;
+    levels: Record<string, string>;
+  };
+};
 
 type ModelSelectControlProps = {
   label: string;
@@ -11,6 +25,7 @@ type ModelSelectControlProps = {
   loading?: boolean;
   thinkingValue?: string;
   size?: 'default' | 'form';
+  presentation: ModelSelectPresentation;
 };
 
 export function modelSelectionThinking(levels: readonly string[] | undefined, thinking: string) {
@@ -28,14 +43,17 @@ export function ModelSelectControl({
   loading = false,
   thinkingValue,
   size = 'default',
+  presentation,
 }: ModelSelectControlProps) {
-  const { t } = useTranslation();
   const selected = options.find((option) => option.value === value);
   const thinkingLevels = selected?.thinkingLevels || [];
-  const groupedOptions = [
-    ...options.filter((option) => option.group === 'seed'),
-    ...options.filter((option) => option.group !== 'seed'),
-  ];
+  const groups = Object.entries(presentation.groups ?? {}).map(([value, label]) => ({ value, label }));
+  const groupedOptions = groups.length
+    ? [
+        ...groups.flatMap((group) => options.filter((option) => option.group === group.value)),
+        ...options.filter((option) => !groups.some((group) => group.value === option.group)),
+      ]
+    : options;
   return (
     <SelectControl
       portal
@@ -44,13 +62,7 @@ export function ModelSelectControl({
       size={size}
       className={className}
       label={label}
-      placeholder={t(
-        loading
-          ? 'plugins.optionListLoading'
-          : value
-            ? 'plugins.managementModelUnavailable'
-            : 'plugins.managementModelSelect',
-      )}
+      placeholder={loading ? presentation.loading : value ? presentation.unavailable : presentation.placeholder}
       value={value}
       options={groupedOptions}
       onValueChange={(model) =>
@@ -62,25 +74,17 @@ export function ModelSelectControl({
       disabled={disabled}
       loading={loading}
       modelMenu={{
-        seedLabel: t('plugins.managementModelSeed'),
-        customLabel: t('plugins.managementModelCustom'),
+        groups,
         thinking:
           thinkingValue !== undefined
             ? {
-                label: t('plugins.managementThinkingLevel'),
+                label: presentation.thinking.label,
                 value: modelSelectionThinking(thinkingLevels, thinkingValue),
                 levels: [...thinkingLevels],
-                unselectedLabel: t('plugins.managementThinkingUnselected'),
+                unselectedLabel: presentation.thinking.unselected,
                 onChange: (thinking) => onChange(value, thinking),
-                emptyLabel: t(
-                  selected ? 'plugins.managementThinkingUnsupported' : 'plugins.managementThinkingChooseModel',
-                ),
-                labels: Object.fromEntries(
-                  ['', 'off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map((level) => [
-                    level,
-                    t(`plugins.managementThinking.${level || 'default'}`),
-                  ]),
-                ),
+                emptyLabel: selected ? presentation.thinking.unsupported : presentation.thinking.chooseModel,
+                labels: { ...presentation.thinking.levels, default: presentation.thinking.default },
               }
             : undefined,
       }}

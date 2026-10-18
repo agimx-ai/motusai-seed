@@ -2,6 +2,7 @@ export {
   ModelSelectControl,
   ModelSelectControl as ModelSelect,
   modelSelectionThinking,
+  type ModelSelectPresentation,
 } from './components/ModelSelectControl';
 export { SelectControl, type SelectControlOption } from './components/SelectControl';
 export { AsyncCombobox, type AsyncComboboxOption, type AsyncComboboxProps } from './components/AsyncCombobox';
@@ -13,7 +14,7 @@ export {
 export { DiscreteSlider } from './components/DiscreteSlider';
 export { ThemedIcon, isCurrentColorIcon } from './components/ThemedIcon';
 export { cx } from './utils';
-export { ComponentProvider, usePluginStyleScope } from './i18n';
+export { ComponentProvider, usePluginStyleScope } from './style-scope';
 export { ReactSettingTab } from './react-setting-tab';
 export { Flow, FlowStep } from './components/Flow';
 export { MarkdownContent } from './components/MarkdownContent';

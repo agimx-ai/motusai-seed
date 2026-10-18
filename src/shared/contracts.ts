@@ -218,6 +218,8 @@ export type SeedSnapshot = {
     sessionId?: string;
     state: 'idle' | 'starting' | 'recording' | 'paused' | 'stopping' | 'failed';
     durationMs: number;
+    /** Distinct active tasks explicitly associated with this capture operation. */
+    relatedTaskCount?: number;
     error?: string;
   };
   mascot: {

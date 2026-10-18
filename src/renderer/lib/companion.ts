@@ -44,7 +44,7 @@ export function companionPresentation(snapshot: CompanionSnapshot): CompanionPre
       ? { state: 'paused', copyKey: 'recordingPausedWithTasks', count: activeCount }
       : { state: 'paused', copyKey: 'recordingPaused' }
     case 'stopping': {
-      const otherTaskCount = Math.max(0, activeCount - 1)
+      const otherTaskCount = Math.max(0, activeCount - (snapshot.audio.relatedTaskCount ?? 0))
       return otherTaskCount > 0
         ? { state: 'processing', copyKey: 'processingRecordingWithTasks', count: otherTaskCount }
         : { state: 'processing', copyKey: 'processingRecording' }

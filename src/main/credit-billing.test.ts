@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CreditBillingClient, relayBillingModelId } from './credit-billing'
+import { CreditBillingClient } from './credit-billing'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -154,13 +154,6 @@ describe('generic Cloud relay client', () => {
     })))
     const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')
     await expect(client.status(callId)).resolves.toMatchObject({ charged_amount: 0.01 })
-  })
-
-  it('uses payload.model for provider-cost billing only', () => {
-    const payload = { model: 'mimo-v2.5-asr' }
-    expect(relayBillingModelId('audio.transcribe', payload)).toBeUndefined()
-    expect(relayBillingModelId('model.generate', payload)).toBe('mimo-v2.5-asr')
-    expect(relayBillingModelId('model.generate', {})).toBeUndefined()
   })
 
   it.each([undefined, null, 'data:image/svg+xml;base64,PHN2Zy8+'])('passes through model metadata and optional dark icon %s without a plugin-specific rule', async (darkIcon) => {

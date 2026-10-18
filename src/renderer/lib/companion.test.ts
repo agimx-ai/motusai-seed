@@ -6,9 +6,10 @@ function snapshot(
   audioState: SeedSnapshot['audio']['state'],
   mascotState: SeedSnapshot['mascot']['state'] = 'running',
   activeTaskCount = 0,
+  relatedTaskCount = 0,
 ) {
   return {
-    audio: { state: audioState, durationMs: 0 },
+    audio: { state: audioState, durationMs: 0, relatedTaskCount },
     mascot: { state: mascotState, changedAt: '2026-08-27T00:00:00.000Z', activeTaskCount },
   } satisfies Pick<SeedSnapshot, 'audio' | 'mascot'>
 }
@@ -44,13 +45,20 @@ describe('companion presentation', () => {
   })
 
   it('does not count the stop invocation itself as another task', () => {
-    expect(companionPresentation(snapshot('stopping', 'running', 1)))
+    expect(companionPresentation(snapshot('stopping', 'running', 1, 1)))
       .toEqual({ state: 'processing', copyKey: 'processingRecording' })
   })
 
   it('reports unrelated work while a recording is stopping', () => {
-    expect(companionPresentation(snapshot('stopping', 'running', 3)))
+    expect(companionPresentation(snapshot('stopping', 'running', 3, 1)))
       .toEqual({ state: 'processing', copyKey: 'processingRecordingWithTasks', count: 2 })
+  })
+})
+
+describe('unassociated capture activity', () => {
+  it('does not hide an unrelated task while capture is stopping', () => {
+    expect(companionPresentation(snapshot('stopping', 'running', 1)))
+      .toEqual({ state: 'processing', copyKey: 'processingRecordingWithTasks', count: 1 })
   })
 })
 

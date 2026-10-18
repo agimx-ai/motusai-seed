@@ -30,6 +30,23 @@ type AudioServiceInternals = {
 describe('AudioService segmented capture', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('exposes only the current stop task and clears its association when capture resets', async () => {
+    const status: ReturnType<AudioService['snapshot']>[] = []
+    const service = new AudioService((value) => status.push(value))
+    Object.assign(service, { state: 'recording', pcmBytes: 640, sessionId: 'capture', ownerPackageId: 'plugin-a' })
+    const internal = service as any
+    vi.spyOn(internal, 'stopInputs').mockResolvedValue(undefined)
+    vi.spyOn(internal, 'captureSegment').mockResolvedValue({ audio_session_id: 'segment' })
+    await service.invoke({ operation: 'capture.stop' }, 'plugin-a', 'actual-task')
+    expect(status.find((value) => value.state === 'stopping')).toMatchObject({ task_id: 'actual-task' })
+    expect(service.snapshot()).not.toHaveProperty('task_id')
+    Object.assign(service, { state: 'recording', pcmBytes: 640, sessionId: 'other-capture', ownerPackageId: 'plugin-a' })
+    status.length = 0
+    await service.invoke({ operation: 'capture.stop' }, 'plugin-a')
+    expect(status.find((value) => value.state === 'stopping')).not.toHaveProperty('task_id')
+    await service.destroy()
+  })
+
   it('preserves samples arriving while a durable segment is being encoded', async () => {
     const service = new AudioService()
     const internal = service as unknown as AudioServiceInternals & {

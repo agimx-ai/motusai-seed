@@ -59,7 +59,7 @@ import { SeedPluginInstaller } from './seed-plugin-installer';
 import { mascotTiming, remainingMascotRunningMs } from './mascot-timing';
 import { SeedUpdater } from './updater';
 import { CloudDiagnosticUploader } from './cloud-diagnostic-uploader';
-import { CreditBillingClient, relayBillingModelId } from './credit-billing';
+import { CreditBillingClient } from './credit-billing';
 import { invokeLocalCreditRelay } from './local-credit-relay';
 import { ObservationStore, errorDetails } from './observation-store';
 import { validateLocalClientCapabilityApproval } from './local-client-capability-approval';
@@ -1085,6 +1085,7 @@ export class SeedRuntime {
   snapshot(): SeedSnapshot {
     const loginSettings = app.getLoginItemSettings();
     const audio = this.audioService.snapshot();
+    const activeTaskIds = new Set(this.activeTaskIds.values());
     return {
       appName: buildConfig.appName,
       appVersion: app.getVersion(),
@@ -1117,12 +1118,13 @@ export class SeedRuntime {
         ...(audio.session_id ? { sessionId: audio.session_id } : {}),
         state: audio.state,
         durationMs: audio.duration_ms,
+        relatedTaskCount: audio.task_id && activeTaskIds.has(audio.task_id) ? 1 : 0,
         ...(audio.error ? { error: audio.error } : {}),
       },
       mascot: {
         state: this.mascotState,
         changedAt: this.mascotChangedAt,
-        activeTaskCount: new Set(this.activeTaskIds.values()).size,
+        activeTaskCount: activeTaskIds.size,
       },
     };
   }
@@ -2305,6 +2307,7 @@ export class SeedRuntime {
           ...(service === 'seed.cloud.relay' || service === 'seed.cloud.relay.stream.start'
             ? {
                 call_id: z.string().uuid().optional(),
+                model_id: z.string().trim().min(1).max(200).optional(),
                 payload: z.record(z.string(), z.unknown()),
               }
             : {}),
@@ -2327,8 +2330,9 @@ export class SeedRuntime {
           capability_id: input.capability_id,
           method: input.method,
         });
-      const { call_id: callId, payload } = input as typeof input & {
+      const { call_id: callId, payload, model_id: modelId } = input as typeof input & {
         call_id?: string;
+        model_id?: string;
         payload: Record<string, unknown>;
       };
       const body = JSON.stringify(payload);
@@ -2344,14 +2348,13 @@ export class SeedRuntime {
           method: input.method,
           payload,
         });
-      const billingModelId = relayBillingModelId(declared.annotations?.['billing.product'], payload);
       const preparation = await this.creditBilling.prepare({
         invocation_id: randomUUID(),
         plugin_id: packageId,
         plugin_version: plugin.version,
         capability_id: input.capability_id,
         method: input.method,
-        ...(billingModelId ? { model_id: billingModelId } : {}),
+        ...(modelId ? { model_id: modelId } : {}),
         arguments_sha256: createHash('sha256').update(body).digest('hex'),
       });
       if (!preparation.billable) {
@@ -2520,7 +2523,13 @@ export class SeedRuntime {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId);
       if (!plugin?.permissions.includes('device.audio.capture'))
         throw Object.assign(new Error('插件未声明音频采集权限。'), { code: 'broker_permission_denied' });
-      return await this.audioService.invoke(argumentsValue, packageId);
+      return await this.audioService.invoke(
+        argumentsValue,
+        packageId,
+        plugin.runtime_kind === 'native-host' && typeof argumentsValue.activity_task_id === 'string'
+          ? argumentsValue.activity_task_id
+          : undefined,
+      );
     }
     throw new Error(`Seed 不支持 Broker 服务：${service}`);
   }

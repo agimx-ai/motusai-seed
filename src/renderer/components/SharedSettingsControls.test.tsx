@@ -14,7 +14,7 @@ afterEach(cleanup);
 describe('shared settings presentation', () => {
   it('carries the plugin style scope into portals without marking platform content', async () => {
     render(
-      <ComponentProvider locale="en-US" pluginId="com.example.scoped">
+      <ComponentProvider pluginId="com.example.scoped">
         <FieldLabel description="Scoped help">Field</FieldLabel>
       </ComponentProvider>,
     );

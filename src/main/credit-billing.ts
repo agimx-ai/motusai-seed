@@ -44,11 +44,6 @@ export type BillingRequest = {
 
 type AccessTokenProvider = (rejectedToken?: string) => Promise<string>;
 
-export function relayBillingModelId(billingProduct: unknown, payload: Record<string, unknown>) {
-  if (billingProduct !== 'model.generate') return undefined;
-  return typeof payload.model === 'string' && payload.model.trim() ? payload.model : undefined;
-}
-
 const relaySchema = z.object({ payload: z.unknown() });
 // Match Cloud's /credits/relay and /credits/relay/stream HTTP envelope limit.
 const RELAY_REQUEST_MAX_BYTES = 64 * 1024 * 1024;

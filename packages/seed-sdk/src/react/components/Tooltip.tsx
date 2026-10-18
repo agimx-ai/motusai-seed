@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { usePluginStyleScope } from '../i18n';
+import { usePluginStyleScope } from '../style-scope';
 
 type TooltipPlacement = 'top' | 'bottom';
 

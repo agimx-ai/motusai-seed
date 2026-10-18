@@ -97,6 +97,20 @@ function runtime(
 const request = (value: unknown = 'ok') => ({ request_id: crypto.randomUUID(), arguments: { value } });
 
 describe('class-only service lifecycle', () => {
+  it('correlates capture with the actual invocation task and ignores plugin-authored activity IDs', async () => {
+    const plugin = await fixture('capture', `
+      const capture = () => this.app.invokeHost('seed.audio', { operation: 'capture.stop', activity_task_id: 'spoofed' });
+      this.addCapability(definitions[0], { invoke: async (_method, request) => { await capture(); return request.arguments; } });
+      this.registerMethod('capture', capture);
+    `);
+    const { host, invoke } = runtime();
+    await host.start([plugin]);
+    await host.invoke('capture', 'echo', { ...request(), context: { task_id: 'actual-task' } });
+    expect(invoke).toHaveBeenCalledWith('seed.audio', expect.objectContaining({ activity_task_id: 'actual-task' }));
+    await host.callService(plugin.package_id, 'capture', {});
+    expect(invoke).toHaveBeenLastCalledWith('seed.audio', expect.objectContaining({ activity_task_id: undefined }));
+  });
+
   it('does not falsely mark sandbox downstream billing as complete when async attribution is unavailable', async () => {
     const browser = await fixture('browser', '', [], {
       runtime_kind: 'sandboxed-web',

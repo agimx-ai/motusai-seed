@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('electron', () => ({
-  app: {},
+  app: {
+    getLoginItemSettings: () => ({ openAtLogin: false }),
+    getVersion: () => '0.2.15',
+    getPreferredSystemLanguages: () => ['en-US'],
+    getLocale: () => 'en-US',
+  },
   BrowserWindow: class {},
   powerSaveBlocker: {},
   shell: {},
@@ -31,6 +36,43 @@ function fixture(kind = 'sandboxed-web') {
   return { runtime, call };
 }
 describe('generic plugin SDK brokers', () => {
+  it('counts only a real active capture task, deduplicating repeated requests for the same task', () => {
+    const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
+      store: {
+        audit: () => [],
+        preventSystemSleep: () => false,
+        languagePreference: () => 'en-US',
+        themePreference: () => 'light',
+      },
+      audioService: { snapshot: () => ({ state: 'stopping', duration_ms: 0, task_id: 'capture-task' }) },
+      activeTaskIds: new Map([
+        ['first', 'capture-task'],
+        ['second', 'capture-task'],
+        ['other', 'unrelated-task'],
+      ]),
+      installedPlugins: [],
+      updater: { snapshot: () => ({}) },
+    });
+    expect(runtime.snapshot().audio.relatedTaskCount).toBe(1);
+    expect(runtime.snapshot().mascot.activeTaskCount).toBe(2);
+    runtime.activeTaskIds.delete('first');
+    runtime.activeTaskIds.delete('second');
+    expect(runtime.snapshot().audio.relatedTaskCount).toBe(0);
+    expect(runtime.snapshot().mascot.activeTaskCount).toBe(1);
+  });
+
+  it.each(['native-host', 'sandboxed-web'])('accepts only host-attributed audio activity for %s', async (kind) => {
+    const { runtime, call } = fixture(kind);
+    runtime.runtimePlugins[0].permissions = ['device.audio.capture'];
+    runtime.audioService = { invoke: vi.fn() };
+    await call('one', 'seed.audio', { operation: 'capture.stop', activity_task_id: 'actual-task' });
+    expect(runtime.audioService.invoke).toHaveBeenCalledWith(
+      { operation: 'capture.stop', activity_task_id: 'actual-task' },
+      'com.example.one',
+      kind === 'native-host' ? 'actual-task' : undefined,
+    );
+  });
+
   it('refreshes sandbox code registrations and withdrawals without requiring an app restart', async () => {
     const { runtime, call } = fixture();
     await call('one', 'seed.plugin-capabilities', { definitions: [] });
