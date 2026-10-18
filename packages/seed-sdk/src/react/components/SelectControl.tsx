@@ -5,10 +5,13 @@ import { cx } from '../utils';
 import { usePluginStyleScope } from '../style-scope';
 import { DiscreteSlider } from './DiscreteSlider';
 import { ThemedIcon } from './ThemedIcon';
+import { CascadingSelectOptions } from './CascadingSelectOptions';
 
 export type SelectControlOption<Value extends string> = {
   value: Value;
   label: string;
+  description?: string;
+  children?: Array<SelectControlOption<Value>>;
   disabled?: boolean;
   group?: string;
   iconDataUrl?: string;
@@ -68,10 +71,11 @@ export function SelectControl<Value extends string>({
     maxHeight: number;
   }>();
   const [modelWidth, setModelWidth] = useState<number>();
-  const selectedIndex = Math.max(
-    0,
-    options.findIndex((option) => option.value === value),
-  );
+  const [columnCount, setColumnCount] = useState(1);
+  const hierarchical = options.some((option) => option.children !== undefined);
+  const containsValue = (option: SelectControlOption<Value>): boolean =>
+    option.children ? option.children.some(containsValue) : option.value === value;
+  const selectedIndex = Math.max(0, options.findIndex(containsValue));
   const [activeIndex, setActiveIndex] = useState(selectedIndex);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -81,7 +85,10 @@ export function SelectControl<Value extends string>({
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const listboxId = useId();
-  const selected = options.find((option) => option.value === value);
+  const leaves = options.flatMap(function flatten(option): Array<SelectControlOption<Value>> {
+    return option.children ? option.children.flatMap(flatten) : [option];
+  });
+  const selected = leaves.find((option) => option.value === value);
   const displayLabel = selected?.label || placeholder;
   const indexedOptions = options.map((option, index) => ({ option, index }));
   const modelGroups = (modelMenu?.groups ?? []).map((group) => ({
@@ -137,10 +144,20 @@ export function SelectControl<Value extends string>({
       }, 0);
       // Measure the full list plus its fixed siblings, not the clipped scroll viewport.
       const menuHeight =
-        viewport.scrollHeight +
+        (hierarchical
+          ? Math.max(
+              0,
+              ...Array.from(
+                viewport.querySelectorAll<HTMLElement>('[data-select-column]'),
+                (column) => column.scrollHeight,
+              ),
+            )
+          : viewport.scrollHeight) +
         fixedHeight +
         inset(style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth);
-      const menuWidth = viewport.scrollWidth + inset(style.paddingLeft, style.paddingRight);
+      const menuWidth =
+        (hierarchical ? columnCount * 220 + (columnCount - 1) * 4 : viewport.scrollWidth) +
+        inset(style.paddingLeft, style.paddingRight);
       const gap = 5;
       const viewportPadding = 8;
       const topInset = variant === 'model' ? 56 : viewportPadding;
@@ -149,14 +166,20 @@ export function SelectControl<Value extends string>({
       const nextPlacement = menuHeight <= spaceBelow || spaceBelow >= spaceAbove ? 'bottom' : 'top';
       setPlacement(nextPlacement);
       setAvailableHeight(Math.floor(nextPlacement === 'bottom' ? spaceBelow : spaceAbove));
-      if (portal) {
+      if (portal || hierarchical) {
         const maxHeight = Math.floor(nextPlacement === 'bottom' ? spaceBelow : spaceAbove);
-        const width = Math.min(Math.max(triggerRect.width, listbox.scrollWidth, menuWidth), window.innerWidth - 16);
+        const width = Math.min(
+          Math.max(triggerRect.width, hierarchical ? menuWidth : Math.max(listbox.scrollWidth, menuWidth)),
+          window.innerWidth - 16,
+        );
         if (variant === 'model') setModelWidth(width);
-        const left = Math.max(8, Math.min(triggerRect.left, window.innerWidth - width - 8));
+        const left = Math.max(
+          8,
+          Math.min(hierarchical ? triggerRect.right - width : triggerRect.left, window.innerWidth - width - 8),
+        );
         const top =
           nextPlacement === 'top' ? triggerRect.top - gap - Math.min(menuHeight, maxHeight) : triggerRect.bottom + gap;
-        setPortalPosition({ left, top, width, maxHeight });
+        setPortalPosition({ left: portal ? left : left - triggerRect.left, top, width, maxHeight });
       }
     };
 
@@ -167,7 +190,7 @@ export function SelectControl<Value extends string>({
       window.removeEventListener('resize', updatePlacement);
       window.removeEventListener('scroll', updatePlacement, true);
     };
-  }, [open, options.length, thinkingLevels.length, modelMenu?.thinking?.emptyLabel, portal, variant]);
+  }, [open, options, columnCount, thinkingLevels.length, modelMenu?.thinking?.emptyLabel, portal, variant]);
 
   useEffect(() => {
     if (!open) return;
@@ -192,8 +215,8 @@ export function SelectControl<Value extends string>({
 
   const menuVisible = open && (!portal || Boolean(portalPosition));
   useEffect(() => {
-    if (menuVisible) optionRefs.current[activeIndex]?.focus();
-  }, [activeIndex, menuVisible]);
+    if (menuVisible && !hierarchical) optionRefs.current[activeIndex]?.focus();
+  }, [activeIndex, menuVisible, hierarchical]);
 
   useEffect(() => {
     if (disabled || loading) setOpen(false);
@@ -210,20 +233,21 @@ export function SelectControl<Value extends string>({
     }
   };
 
-  const choose = (index: number) => {
-    const option = options[index];
+  const selectOption = (option: SelectControlOption<Value> | undefined) => {
     if (!option || option.disabled) return;
     onValueChange(option.value);
     if (closeOnSelect) {
       setOpen(false);
       requestAnimationFrame(() => triggerRef.current?.focus());
     } else {
-      setActiveIndex(index);
+      setActiveIndex(options.indexOf(option));
     }
   };
+  const choose = (index: number) => selectOption(options[index]);
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (!open) return;
+    if (hierarchical) return;
     if (event.target === triggerRef.current && ['Enter', ' '].includes(event.key)) return;
     if (event.target instanceof HTMLInputElement) {
       if (event.key === 'Escape') {
@@ -270,7 +294,9 @@ export function SelectControl<Value extends string>({
       type="button"
       className={cx(
         'flex w-full items-center justify-between gap-3 whitespace-nowrap rounded-[7px] text-left outline-none transition-colors disabled:cursor-default disabled:opacity-45',
-        variant === 'model' ? 'min-h-8 scroll-mt-8 px-3 text-[13px]' : 'h-7 px-2 text-[13px]',
+        variant === 'model'
+          ? 'min-h-8 scroll-mt-8 px-3 text-[13px]'
+          : cx(option.description ? 'min-h-7 py-1.5' : 'h-7', 'px-2 text-[13px]'),
         index === activeIndex
           ? 'bg-muted text-foreground'
           : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -289,7 +315,12 @@ export function SelectControl<Value extends string>({
           ) : (
             <BrainCircuit className="shrink-0 text-muted-foreground" size={16} strokeWidth={1.8} aria-hidden="true" />
           ))}
-        <span className="truncate">{option.label}</span>
+        <span className="min-w-0">
+          <span className="block truncate">{option.label}</span>
+          {option.description && (
+            <span className="block truncate text-xs text-muted-foreground">{option.description}</span>
+          )}
+        </span>
       </span>
       {option.value === value && (
         <Check className="shrink-0" size={variant === 'model' ? 16 : 13} strokeWidth={1.9} aria-hidden="true" />
@@ -312,15 +343,19 @@ export function SelectControl<Value extends string>({
               open ? 'seed-model-menu--enter' : 'seed-model-menu--exit pointer-events-none',
             )
           : 'rounded-[10px] p-1',
+        hierarchical && 'w-max max-w-[calc(100vw-16px)]',
         portal ? 'fixed' : 'absolute right-0 min-w-full',
         !portal && (placement === 'top' ? 'bottom-[calc(100%+5px)] origin-bottom' : 'top-[calc(100%+5px)] origin-top'),
       )}
       style={
         portal
           ? { ...portalPosition, visibility: portalPosition ? 'visible' : 'hidden' }
-          : { maxHeight: availableHeight }
+          : {
+              maxHeight: availableHeight,
+              ...(hierarchical ? { left: portalPosition?.left, width: portalPosition?.width } : {}),
+            }
       }
-      role={variant === 'model' ? 'dialog' : 'listbox'}
+      role={hierarchical ? 'menu' : variant === 'model' ? 'dialog' : 'listbox'}
       aria-label={label}
       aria-hidden={variant === 'model' && !open ? true : undefined}
       inert={variant === 'model' && !open}
@@ -330,9 +365,28 @@ export function SelectControl<Value extends string>({
     >
       <div
         ref={scrollViewportRef}
-        className={cx('min-h-0 min-w-0 overflow-x-hidden overflow-y-auto', variant === 'model' && 'pr-1')}
+        className={cx(
+          'min-h-0 min-w-0',
+          hierarchical ? 'flex overflow-x-auto overflow-y-hidden' : 'overflow-x-hidden overflow-y-auto',
+          variant === 'model' && 'pr-1',
+        )}
       >
-        {variant === 'model' && modelMenu ? (
+        {hierarchical ? (
+          <CascadingSelectOptions
+            options={options}
+            value={value}
+            label={label}
+            menuId={listboxId}
+            visible={menuVisible}
+            initialIndex={activeIndex}
+            onColumnsChange={setColumnCount}
+            onSelect={selectOption}
+            onClose={() => {
+              setOpen(false);
+              triggerRef.current?.focus();
+            }}
+          />
+        ) : variant === 'model' && modelMenu ? (
           <div className="grid gap-px" role="listbox" aria-label={label}>
             {modelGroups
               .filter((group) => group.items.length > 0)
@@ -415,13 +469,14 @@ export function SelectControl<Value extends string>({
                 : 'h-[30px] w-fit border-border bg-card px-2.5 text-[13px] hover:bg-muted',
         )}
         aria-label={label}
-        aria-haspopup={variant === 'model' ? 'dialog' : 'listbox'}
+        aria-haspopup={hierarchical ? 'menu' : variant === 'model' ? 'dialog' : 'listbox'}
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
         aria-busy={loading || undefined}
         disabled={disabled || loading}
         onClick={() => {
           setActiveIndex(selectedIndex);
+          if (!open) setColumnCount(1);
           if (!open) setPortalPosition(undefined);
           setOpen((current) => !current);
         }}

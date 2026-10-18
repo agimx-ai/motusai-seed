@@ -105,6 +105,25 @@ UI 可调用 `app.reloadService()` 重新加载自己的后端；不能重载其
 
 `ModelSelectControl` 的 `presentation: ModelSelectPresentation` 由插件自己的语言资源提供：包括占位／加载／不可用文案、任意模型分类及顺序，以及思考等级名称。模型和支持的等级仍通过 `options` 传入；SDK 只处理布局、选择和键盘交互，不内置模型来源或等级枚举。
 
+`SelectControl` 的选项可通过递归 `children` 声明多级菜单，不限两级。父项负责展开，只有叶子项触发 `onValueChange`；选中后显示叶子名称。每项支持 `disabled`、`description` 及图标；空的子菜单不可选择。上下键在当前列移动，左右键进入／返回层级，Enter 选择，Escape 关闭并返回焦点。`portal`、`loading`、`closeOnSelect` 等行为与单级下拉共用，普通单级及模型分组用法保持不变。
+
+```tsx
+<SelectControl
+  label="Destination"
+  value={destination}
+  onValueChange={setDestination}
+  options={[
+    { value: 'team', label: 'Team', children: [
+      { value: 'engineering', label: 'Engineering', children: [
+        { value: 'room-1', label: 'Project room', description: 'Available' },
+      ] },
+    ] },
+  ]}
+/>
+```
+
+节点 `value` 在整棵选项树中保持唯一。分组、具体业务状态和文案由插件提供，SDK 不解释业务数据。
+
 调用 `seed.cloud.relay` 或 `seed.cloud.relay.stream.start` 时，按模型计费的插件显式传入顶层 `model_id`。宿主校验并交给 Cloud，不从 `payload` 推断计费标识；不按模型计费的调用不传此字段。价格、权限与最终结算仍由 Cloud 决定。
 
 源码 `manifest.json` 只维护基本信息、兼容要求和图标／语言资源引用，所有字段位于顶层，不使用 `seed` 外层对象。`apiVersion`、`runtime`、`service` 和资源摘要由构建工具生成到同一顶层，不能在源码 Manifest 中重复填写；运行环境在 `buildPlugin({ runtime: 'native-host', ... })` 中选择，默认是 Node-free 的 `sandboxed-web`。源码 Manifest 不包含 `publisherId`、`labels` 或能力声明。
