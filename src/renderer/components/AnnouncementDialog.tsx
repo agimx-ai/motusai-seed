@@ -211,13 +211,13 @@ function AnnouncementDeck({ announcements, locale }: { announcements: SeedAnnoun
         >
           <h1
             id={titleId}
-            className={`break-words leading-[1.25] tracking-normal ${imageAbove ? 'mx-auto max-w-[700px] text-[40px] font-semibold' : 'max-w-[580px] text-[48px] font-normal'}`}
+            className={`break-words tracking-normal ${imageAbove ? 'mx-auto max-w-[680px] text-[clamp(28px,3.9cqw,32px)] font-semibold leading-[1.3]' : 'max-w-[580px] text-[clamp(34px,4.2cqw,42px)] font-medium leading-[1.25]'}`}
           >
             {announcement.title[locale]}
           </h1>
           <p
             id={descriptionId}
-            className={`whitespace-pre-line break-words leading-[1.5] text-[#717175] ${imageAbove ? 'mx-auto mt-3 max-w-[700px] text-[18px]' : 'mt-[17px] max-w-[580px] text-[24px]'}`}
+            className={`whitespace-pre-line break-words text-[#717175] ${imageAbove ? 'mx-auto mt-3 max-w-[660px] text-[clamp(16px,2.1cqw,17px)] leading-[1.6]' : 'mt-4 max-w-[560px] text-[clamp(18px,2cqw,20px)] leading-[1.55]'}`}
           >
             {announcement.description[locale]}
           </p>
@@ -227,7 +227,7 @@ function AnnouncementDeck({ announcements, locale }: { announcements: SeedAnnoun
                 type="button"
                 tone="primary"
                 disabled={busy}
-                className="h-9! px-3! text-[15px]!"
+                className="h-9! border-transparent! bg-[#202022]! px-3! text-[15px]! text-white! hover:bg-[#353537]! disabled:opacity-50!"
                 onClick={() => void finish(true)}
               >
                 {announcement.button_label[locale]}
@@ -236,7 +236,7 @@ function AnnouncementDeck({ announcements, locale }: { announcements: SeedAnnoun
             <ActionButton
               type="button"
               disabled={busy}
-              className="h-9! px-3! text-[15px]!"
+              className="h-9! border-transparent! bg-[#ecebe6]! px-3! text-[15px]! text-[#262629]! hover:bg-[#e2e1dc]! disabled:opacity-50!"
               onClick={() => void finish(false)}
             >
               {announcement.dismiss_label[locale]}

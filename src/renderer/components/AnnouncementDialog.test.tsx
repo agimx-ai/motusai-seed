@@ -39,8 +39,14 @@ describe('fixed announcement template', () => {
     render(<AnnouncementDialog announcements={[{ ...announcement, template }]} locale="zh-CN" />);
     await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
     expect(document.querySelector('dialog')?.dataset.template).toBe(template);
-    expect(screen.getByRole('button', { name: '了解更多' }).className).toContain('seed-action-button');
-    expect(screen.getByRole('button', { name: '知道了' }).className).toContain('seed-action-button');
+    const action = screen.getByRole('button', { name: '了解更多' });
+    const dismiss = screen.getByRole('button', { name: '知道了' });
+    expect(action.className).toContain('seed-action-button');
+    expect(action.className).toContain('bg-[#202022]!');
+    expect(action.className).toContain('text-white!');
+    expect(dismiss.className).toContain('seed-action-button');
+    expect(dismiss.className).toContain('bg-[#ecebe6]!');
+    expect(dismiss.className).toContain('text-[#262629]!');
     const brand = screen.getByText('MotusAI Seed');
     expect(brand.closest('header')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '知道了' }));
@@ -54,6 +60,22 @@ describe('fixed announcement template', () => {
     fireEvent.click(screen.getByText('了解更多'));
     await waitFor(() => expect(window.motusSeed.activateAnnouncement).toHaveBeenCalledWith(id));
     expect(window.motusSeed.dismissAnnouncement).not.toHaveBeenCalled();
+  });
+  it('uses a restrained responsive heading hierarchy for both templates', async () => {
+    const view = render(<AnnouncementDialog announcements={[announcement]} locale="zh-CN" />);
+    await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
+    const immersiveTitle = screen.getByRole('heading', { level: 1 });
+    const immersiveDescription = screen.getByText('录音结束，直接获得转写结果。');
+    expect(immersiveTitle.className).toContain('text-[clamp(34px,4.2cqw,42px)]');
+    expect(immersiveDescription.className).toContain('text-[clamp(18px,2cqw,20px)]');
+
+    view.rerender(
+      <AnnouncementDialog announcements={[{ ...announcement, template: 'image-above' }]} locale="zh-CN" />,
+    );
+    const imageAboveTitle = screen.getByRole('heading', { level: 1 });
+    const imageAboveDescription = screen.getByText('录音结束，直接获得转写结果。');
+    expect(imageAboveTitle.className).toContain('text-[clamp(28px,3.9cqw,32px)]');
+    expect(imageAboveDescription.className).toContain('text-[clamp(16px,2.1cqw,17px)]');
   });
   it('marks read on Escape and close, without accepting native automatic closure before persistence', async () => {
     render(<AnnouncementDialog announcements={[announcement]} locale="en-US" />);
