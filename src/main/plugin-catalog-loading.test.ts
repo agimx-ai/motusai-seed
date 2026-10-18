@@ -17,6 +17,65 @@ function setup() {
 }
 
 describe('Runtime plugin catalog loading', () => {
+  it.each([
+    { formalVersion: '1.1.0', developmentVersion: '0.2.0', runtimeVersion: '1.1.0', authorized: true, error: undefined },
+    { formalVersion: '1.1.0', developmentVersion: '2.0.0', runtimeVersion: '2.0.0', authorized: true, error: undefined },
+    { formalVersion: '1.0.0', developmentVersion: '2.0.0', runtimeVersion: '2.0.0', authorized: true, error: '插件安装状态' },
+    { formalVersion: '1.1.0', developmentVersion: '2.0.0', runtimeVersion: '0.1.0', authorized: true, error: '运行时未能载入' },
+    { formalVersion: '1.1.0', developmentVersion: '2.0.0', runtimeVersion: '2.0.0', authorized: false, error: '未获得运行权限' },
+  ])('validates the installed release independently of the selected runtime ($developmentVersion/$runtimeVersion/$authorized)', async ({ formalVersion, developmentVersion, runtimeVersion, authorized, error }) => {
+    const runtime = setup()
+    const id = 'com.example.test'
+    const installed = { id, version: formalVersion, enabled: true, status: 'ready', name: { en_US: 'Test', zh_Hans: 'Test' } }
+    const active = { ...installed, source: 'development', version: developmentVersion }
+    const auditSystem = vi.fn(async () => {})
+    const reloadPlugins = vi.fn(async () => {
+      Reflect.set(runtime, 'installedPlugins', [developmentVersion === '0.2.0' ? { ...installed, source: 'installed' } : active])
+    })
+    Object.assign(runtime, {
+      pluginInstallOperations: new Map(),
+      installedPlugins: [active],
+      runtimePlugins: [{ package_id: id, version: runtimeVersion }],
+      authorizedInstalledPluginIds: new Set(authorized ? [id] : []),
+      entitlementExpiresAt: Date.now() + 60_000,
+      verifiedCatalogPlugins: new Map([[id, {
+        compatible: true, publisherType: 'official', labels: [], visibility: 'public',
+        versions: [{ version: '1.1.0', runtimeKind: 'native-host' }],
+      }]]),
+      pluginInstaller: {
+        downloadAndVerify: vi.fn(async () => ({ manifest: { id, version: '1.1.0' } })),
+        install: vi.fn(async () => {}),
+        listInstalled: vi.fn(async () => [installed]),
+      },
+      store: { auditSystem },
+      emit: vi.fn(),
+      reloadPlugins,
+      configureWorker: vi.fn(),
+    })
+    if (error) {
+      await expect(runtime.installPlugin(id, '1.1.0')).rejects.toThrow(error)
+    } else {
+      await expect(runtime.installPlugin(id, '1.1.0')).resolves.toBe(true)
+      if (developmentVersion === '0.2.0') expect(reloadPlugins).toHaveBeenCalledOnce()
+      expect(auditSystem).toHaveBeenCalledWith('plugin.install', 'allowed', '已安装 Test（1.1.0）。', undefined,
+        expect.objectContaining({ plugin_version: '1.1.0' }))
+      expect(Reflect.get(runtime, 'installedPlugins')[0].version).toBe(developmentVersion === '0.2.0' ? formalVersion : developmentVersion)
+    }
+  })
+
+  it('does not let a lower development directory bypass authorization for the selected installed release', () => {
+    const runtime = setup()
+    Object.assign(runtime, {
+      installedPlugins: [{ id: 'com.example.test', source: 'installed', version: '1.1.0' }],
+      developmentPlugins: { has: () => true },
+      authorizedInstalledPluginIds: new Set(),
+      entitlementExpiresAt: Date.now() + 60_000,
+    })
+    expect(Reflect.get(runtime, 'pluginIsAuthorized').call(runtime, 'com.example.test')).toBe(false)
+    Reflect.set(runtime, 'installedPlugins', [{ id: 'com.example.test', source: 'development', version: '2.0.0' }])
+    expect(Reflect.get(runtime, 'pluginIsAuthorized').call(runtime, 'com.example.test')).toBe(true)
+  })
+
   it('blocks data reset during installation and blocks installation/uninstallation during reset', async () => {
     const runtime = setup()
     Reflect.set(runtime, 'pluginInstallOperations', new Map([['example', {}]]))

@@ -1,4 +1,5 @@
 import type { SeedCatalogPlugin, SeedInstalledPlugin } from '../../../shared/contracts';
+import { compareSeedVersions } from '../../../shared/seed-version';
 
 export function isCatalogPluginInstallable(plugin: SeedCatalogPlugin) {
   const latestRelease = plugin.versions.find((candidate) => candidate.version === plugin.latestVersion);
@@ -18,9 +19,8 @@ export function getAvailablePluginUpdates(
     const installed = installedById.get(plugin.id);
     return Boolean(
       installed &&
-        installed.source !== 'development' &&
         installed.status !== 'incompatible' &&
-        installed.version !== plugin.latestVersion &&
+        compareSeedVersions(installed.version, plugin.latestVersion) < 0 &&
         isCatalogPluginInstallable(plugin),
     );
   });

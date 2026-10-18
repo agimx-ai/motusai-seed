@@ -69,6 +69,7 @@ import { SeedDistributionEvents } from './distribution-events';
 import { AnnouncementInbox } from './announcements';
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization';
 import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh';
+import { selectDevelopmentOverrides } from './plugin-source-selection';
 import { DevelopmentPluginSource } from './development-plugin-source';
 import { PluginDataCleaner } from './plugin-data-cleaner';
 import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error';
@@ -1632,7 +1633,7 @@ export class SeedRuntime {
 
   private pluginIsAuthorized(pluginId: string): boolean {
     return (
-      this.developmentPlugins?.has(pluginId) === true ||
+      this.installedPlugins.some((plugin) => plugin.id === pluginId && plugin.source === 'development') ||
       (Date.now() < this.entitlementExpiresAt && this.authorizedInstalledPluginIds.has(pluginId))
     );
   }
@@ -1940,15 +1941,20 @@ export class SeedRuntime {
           await this.reloadPlugins();
           this.configureWorker();
         }
-        const installed = this.installedPlugins.find((candidate) => candidate.id === verified.manifest.id);
+        const installed = (await this.pluginInstaller.listInstalled()).find(
+          (candidate) => candidate.id === verified.manifest.id,
+        );
+        const active = this.installedPlugins.find((candidate) => candidate.id === verified.manifest.id);
         const runtime = this.runtimePlugins.find((candidate) => candidate.package_id === verified.manifest.id);
         if (!installed) throw new Error('插件安装后未通过本地文件完整性校验。');
         if (installed.status === 'incompatible')
           throw new Error(installed.incompatibilityReason || '插件格式与当前客户端不兼容。');
         if (installed.version !== verified.manifest.version || !installed.enabled)
           throw new Error('插件安装状态与所选版本不一致。');
-        if (!this.pluginIsAuthorized(installed.id)) throw new Error('插件已安装，但当前账号未获得运行权限。');
-        if (runtime?.version !== verified.manifest.version) throw new Error('插件已安装，但对应版本的运行时未能载入。');
+        if (Date.now() >= this.entitlementExpiresAt || !this.authorizedInstalledPluginIds.has(installed.id))
+          throw new Error('插件已安装，但当前账号未获得运行权限。');
+        const activeVersion = active?.source === 'development' ? active.version : verified.manifest.version;
+        if (runtime?.version !== activeVersion) throw new Error('插件已安装，但对应版本的运行时未能载入。');
         installedSummary = `已安装 ${installed.name.zh_Hans}（${installed.version}）。`;
         installedMetadata = {
           plugin_id: installed.id,
@@ -2099,9 +2105,10 @@ export class SeedRuntime {
 
   private async reloadPluginSources() {
     if (this.stopping || this.resettingPluginData) return;
-    const development = (await this.developmentPlugins?.refresh()) ?? [];
+    const developmentCandidates = (await this.developmentPlugins?.refresh()) ?? [];
     await this.pluginInstaller.pruneInactiveVersions();
     const installed = await this.pluginInstaller.listInstalled();
+    const development = selectDevelopmentOverrides(developmentCandidates, installed);
     const downloadedRuntime = await this.pluginInstaller.listRuntimePlugins();
     if (this.stopping) return;
     const developmentIds = new Set(development.map((entry) => entry.installed.id));

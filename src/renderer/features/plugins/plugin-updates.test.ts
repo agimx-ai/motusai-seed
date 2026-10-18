@@ -18,6 +18,14 @@ function catalog(id: string, latestVersion: string, options: { compatible?: bool
 }
 
 describe('countAvailablePluginUpdates', () => {
+  it('only offers versions newer than the selected local source, including development plugins', () => {
+    const development = { ...installed('dev', '0.2.0'), source: 'development' as const }
+    expect(countAvailablePluginUpdates([development], [catalog('dev', '1.1.0')])).toBe(1)
+    expect(countAvailablePluginUpdates([{ ...development, version: '1.1.0' }], [catalog('dev', '1.1.0')])).toBe(0)
+    expect(countAvailablePluginUpdates([{ ...development, version: '1.2.0' }], [catalog('dev', '1.1.0')])).toBe(0)
+    expect(countAvailablePluginUpdates([installed('formal', '1.2.0')], [catalog('formal', '1.1.0')])).toBe(0)
+  })
+
   it('counts installed plugins with an actionable newer catalog version', () => {
     expect(countAvailablePluginUpdates(
       [installed('current', '1.0.0'), installed('outdated', '1.0.0')],

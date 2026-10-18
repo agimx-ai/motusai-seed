@@ -21,6 +21,7 @@ import { PluginDetailActions } from '../features/plugins/PluginDetailActions';
 import { PluginListSkeleton } from '../features/plugins/PluginListSkeleton';
 import { pluginMcpTools } from '../features/plugins/mcp-tools';
 import { isCatalogPluginInstallable } from '../features/plugins/plugin-updates';
+import { compareSeedVersions } from '../../shared/seed-version';
 import { PluginViewSurface } from '../features/plugins/PluginViewSurface';
 import { useSeedI18n } from '../i18n';
 
@@ -126,7 +127,7 @@ export function PluginsPage({
   const selectedUpdateAvailable = Boolean(
     selectedInstalledPlugin &&
     selectedCatalogPlugin &&
-    selectedInstalledPlugin.version !== selectedCatalogPlugin.latestVersion &&
+    compareSeedVersions(selectedInstalledPlugin.version, selectedCatalogPlugin.latestVersion) < 0 &&
     selectedCatalogInstallable,
   );
   const confirmationDialog = confirmation && (

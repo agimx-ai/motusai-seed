@@ -36,5 +36,5 @@ export function pluginHostContentSecurityPolicy(
     [role === 'product' ? 'seed-plugin:' : '', development ? `${development.origin} ${websocket!.origin}` : '']
       .filter(Boolean)
       .join(' ') || "'none'";
-  return `default-src 'none'; script-src ${script}; style-src ${style}; img-src 'self' data:${role === 'product' ? ' seed-plugin: https:' : ''}; ${role === 'product' ? "font-src 'self' seed-plugin:; " : ''}connect-src ${connect}; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'`;
+  return `default-src 'none'; script-src ${script}; style-src ${style}; img-src 'self' data:${role === 'product' ? ' seed-plugin: http: https:' : ''}; ${role === 'product' ? "font-src 'self' seed-plugin:; " : ''}connect-src ${connect}; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'`;
 }

@@ -1,14 +1,19 @@
+import { compareSeedVersions } from '../shared/seed-version'
+
 type InstalledPlugin = { id: string; visibility: 'public' | 'organization' }
 type Entitlement = { plugin_id: string; visibility: 'public' | 'organization'; authorized: boolean }
 
 export function pluginInstallNeedsReload(
   pluginId: string,
   version: string,
-  installed: readonly { id: string; version: string }[],
+  installed: readonly { id: string; version: string; source?: string }[],
   runtime: readonly { package_id: string; version: string }[],
 ): boolean {
-  return installed.find((plugin) => plugin.id === pluginId)?.version !== version
-    || runtime.find((plugin) => plugin.package_id === pluginId)?.version !== version
+  const active = installed.find((plugin) => plugin.id === pluginId)
+  const developmentWins = active?.source === 'development' && compareSeedVersions(active.version, version) >= 0
+  const activeVersion = developmentWins ? active.version : version
+  return (!developmentWins && active?.version !== version)
+    || runtime.find((plugin) => plugin.package_id === pluginId)?.version !== activeVersion
 }
 
 export function entitlementRefreshChangesRuntime(

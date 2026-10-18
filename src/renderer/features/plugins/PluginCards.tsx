@@ -10,6 +10,7 @@ import mcpIconUrl from '../../assets/mcp.svg';
 import { cx } from '../../lib/display';
 import { useSeedI18n } from '../../i18n';
 import { isCatalogPluginInstallable } from './plugin-updates';
+import { compareSeedVersions } from '../../../shared/seed-version';
 import { pluginMcpTools } from './mcp-tools';
 import { PluginActionButton } from './PluginActionButton';
 
@@ -127,7 +128,9 @@ export function CatalogPluginCard({
 }: CatalogPluginCardProps) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
-  const current = installedPlugin?.version === plugin.latestVersion;
+  const current = Boolean(
+    installedPlugin && compareSeedVersions(installedPlugin.version, plugin.latestVersion) >= 0,
+  );
   const incompatible = installedPlugin?.status === 'incompatible';
   const updating = Boolean(installedPlugin && !current);
   const installable = isCatalogPluginInstallable(plugin);
