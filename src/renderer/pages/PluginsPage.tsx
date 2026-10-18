@@ -272,14 +272,6 @@ export function PluginsPage({
               <MarkdownContent>{resolveSeedLocalizedText(selectedCatalogPlugin.readme, locale)}</MarkdownContent>
             </section>
           )}
-          {selectedInstalledPlugin && pluginMcpTools(selectedInstalledPlugin).length > 0 && (
-            <section className="mt-2 rounded-[14px] border border-border px-4 py-3">
-              <h3 className="m-0 text-[14px] font-medium">{t('plugins.mcpTools')}</h3>
-              <p className="mb-0 mt-1 text-[12px] text-muted-foreground">
-                {pluginMcpTools(selectedInstalledPlugin).join(' · ')}
-              </p>
-            </section>
-          )}
           {selectedInstalledPlugin?.status === 'ready' && (
             <PluginViewSurface
               revision={selectedInstalledPlugin.manifestDigest}
