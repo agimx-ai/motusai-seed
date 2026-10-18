@@ -329,7 +329,7 @@ export function PluginsPage({
                 {t('plugins.loadFailed')}
               </p>
             ) : (
-              <div className="flex min-h-[52px] flex-wrap items-center gap-3 px-2 py-2">
+              <div className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-2 gap-y-3 px-2 py-2">
                 {installedPlugins.map((plugin) => {
                   const name = resolveSeedLocalizedText(plugin.name, locale);
                   return (
