@@ -113,6 +113,10 @@ function assertPathAllowed(relativePath: string) {
   if (error) throw error
 }
 
+export function isFilePathVisible(relativePath: string) {
+  return !pathPolicyError(relativePath)
+}
+
 function isInside(root: string, target: string) {
   const value = relative(root, target)
   return value === '' || (!value.startsWith(`..${sep}`) && value !== '..' && !isAbsolute(value))
@@ -159,6 +163,14 @@ export class LocalFileService {
     const metadata = await stat(location.target)
     if (!metadata.isDirectory()) throw new LocalFileError('directory_required', '进程工作目录必须是文件系统根目录内的文件夹。')
     return location.target
+  }
+
+  async resolveWatchDirectory(rootId: string, pathValue: unknown) {
+    const root = this.root(rootId, 'read')
+    const location = await this.target(root, pathValue, { existing: true, allowRoot: true })
+    const metadata = await stat(location.target)
+    if (!metadata.isDirectory()) throw new LocalFileError('directory_required', 'watch 只能用于目录。')
+    return { target: location.target, relativePath: location.relativePath }
   }
 
   private root(id: string, permission: 'read' | 'write') {

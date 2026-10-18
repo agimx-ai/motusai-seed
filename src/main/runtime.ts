@@ -2625,6 +2625,7 @@ export class SeedRuntime {
     await this.connector.stop();
     await this.sidecarProcessService.stop();
     await this.audioService.destroy();
+    this.fileBroker.dispose();
     this.sandboxHost.destroy();
     await this.store.close();
   }

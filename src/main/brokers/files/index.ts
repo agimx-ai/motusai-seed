@@ -1,10 +1,32 @@
-import { existsSync } from 'node:fs'
+import { existsSync, watch, type FSWatcher } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { SeedInvocation } from '@motus-ai/seed-sdk'
 import type { FilesystemRoot } from '../../../shared/contracts'
-import { LocalFileError, LocalFileService, type LocalFileMethod, type TrashItem } from './file-service'
+import {
+  isFilePathVisible,
+  LocalFileError,
+  LocalFileService,
+  type LocalFileMethod,
+  type TrashItem,
+} from './file-service'
 
 const fileMethods = ['list', 'stat', 'search', 'find', 'grep', 'read', 'read_binary', 'mkdir', 'write', 'write_binary', 'edit', 'move', 'delete'] as const
+
+type FileWatchEvent = {
+  cursor: number
+  kind: 'change' | 'rename' | 'resync'
+  path: string
+  observed_at: string
+}
+
+type FileWatchSession = {
+  watcher: FSWatcher
+  cursor: number
+  events: FileWatchEvent[]
+  error: Error | null
+  waiters: Set<() => void>
+  expires?: ReturnType<typeof setTimeout>
+}
 
 export type FileBrokerConfiguration = {
   backup_root: string
@@ -76,6 +98,7 @@ function withDisplayPaths(
 export class FileBroker {
   private service: LocalFileService | null = null
   private backupRoot = ''
+  private readonly watches = new Map<string, FileWatchSession>()
 
   constructor(
     private readonly configuration: () => FileBrokerConfiguration,
@@ -117,11 +140,103 @@ export class FileBroker {
       if (root) args = { ...args, root_id: root.id, path: relative(root.rootPath, path) }
     }
     const rootId = String(args.root_id || '')
-    if (!rootId || !fileMethods.includes(method as typeof fileMethods[number])) {
+    if (!rootId || (method !== 'watch' && !fileMethods.includes(method as typeof fileMethods[number]))) {
       throw new LocalFileError('invalid_arguments', '文件能力请求缺少有效的 root_id 或方法。')
     }
+    if (method === 'watch') return await this.watchChanges(value, rootId, args)
     const result = await this.fileService(value).execute(method as LocalFileMethod, rootId, args)
     return withDisplayPaths(value.roots, method, rootId, args, result)
+  }
+
+  private async watchChanges(
+    value: FileBrokerConfiguration & { roots: FilesystemRoot[] },
+    rootId: string,
+    args: Record<string, unknown>,
+  ) {
+    const directory = await this.fileService(value).resolveWatchDirectory(rootId, args.path)
+    const key = JSON.stringify([rootId, directory.target])
+    let session = this.watches.get(key)
+    if (!session) {
+      let created!: FileWatchSession
+      const watcher = watch(directory.target, { recursive: true }, (kind, filename) => {
+        const raw = filename?.toString().replaceAll('\\', '/') || ''
+        const segments = raw.split('/').filter(Boolean)
+        const safe = raw && !raw.startsWith('/') && !segments.some((segment) => segment === '.' || segment === '..' || segment.includes('\0'))
+        const path = safe ? [directory.relativePath, ...segments].filter(Boolean).join('/') : ''
+        const event: FileWatchEvent = {
+          cursor: ++created.cursor,
+          kind: path ? kind : 'resync',
+          path: path && isFilePathVisible(path) ? path : '',
+          observed_at: new Date().toISOString(),
+        }
+        if (!event.path) event.kind = 'resync'
+        created.events.push(event)
+        if (created.events.length > 2_000) created.events.splice(0, created.events.length - 2_000)
+        for (const wake of created.waiters) wake()
+        created.waiters.clear()
+      })
+      created = { watcher, cursor: 0, events: [], error: null, waiters: new Set() }
+      session = created
+      this.watches.set(key, session)
+      watcher.on('error', (error) => {
+        created.error = error
+        if (this.watches.get(key) === created) this.watches.delete(key)
+        if (created.expires) clearTimeout(created.expires)
+        created.watcher.close()
+        for (const wake of created.waiters) wake()
+        created.waiters.clear()
+      })
+    }
+
+    this.keepWatchAlive(key, session)
+    const after = Math.max(0, Math.floor(Number(args.after) || 0))
+    const waitMs = Math.min(10_000, Math.max(0, Math.floor(Number(args.wait_ms) || 0)))
+    if (!session.error && !session.events.some((event) => event.cursor > after) && waitMs > 0) {
+      await new Promise<void>((resolveWait) => {
+        const done = () => {
+          clearTimeout(timer)
+          session!.waiters.delete(done)
+          resolveWait()
+        }
+        const timer = setTimeout(done, waitMs)
+        session!.waiters.add(done)
+      })
+    }
+    if (session.error) throw new LocalFileError('watch_failed', session.error.message)
+
+    const oldest = session.events[0]?.cursor ?? session.cursor + 1
+    if (after < oldest - 1) {
+      return {
+        events: [{ cursor: session.cursor, kind: 'resync', path: '', observed_at: new Date().toISOString() }],
+        next: session.cursor,
+      }
+    }
+    return {
+      events: session.events.filter((event) => event.cursor > after),
+      next: Math.max(after, session.cursor),
+    }
+  }
+
+  private keepWatchAlive(key: string, session: FileWatchSession) {
+    if (session.expires) clearTimeout(session.expires)
+    session.expires = setTimeout(() => {
+      if (this.watches.get(key) !== session) return
+      this.watches.delete(key)
+      session.watcher.close()
+      for (const wake of session.waiters) wake()
+      session.waiters.clear()
+    }, 30_000)
+    session.expires.unref?.()
+  }
+
+  dispose() {
+    for (const session of this.watches.values()) {
+      if (session.expires) clearTimeout(session.expires)
+      session.watcher.close()
+      for (const wake of session.waiters) wake()
+      session.waiters.clear()
+    }
+    this.watches.clear()
   }
 
   async resolveProcessDirectory(rootId: string, relativePath: unknown, permission: 'read' | 'write') {

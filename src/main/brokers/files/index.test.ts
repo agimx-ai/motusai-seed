@@ -20,6 +20,7 @@ describe('FileBroker', () => {
   })
 
   afterEach(async () => {
+    broker.dispose()
     await Promise.all([
       rm(root, { recursive: true, force: true }),
       rm(backupRoot, { recursive: true, force: true }),
@@ -41,6 +42,7 @@ describe('FileBroker', () => {
     const path = join(root, 'capture.png')
     const request = { request_id: 'binary', arguments: { path, content_base64: 'AP/+', create_only: true } }
     expect(fileBrokerPermissions('write_binary')).toEqual(['resources.directory.write'])
+    expect(fileBrokerPermissions('watch')).toEqual(['resources.directory.read'])
     expect(fileBrokerPermissions('unknown')).toBeNull()
     const saved = await broker.invoke('write_binary', request) as { display_path: string }
     expect(saved.display_path).toBe(path)
@@ -98,5 +100,23 @@ describe('FileBroker', () => {
     expect(result.matches).toEqual([expect.objectContaining({
       path: canonicalPath,
     })])
+  })
+
+  it('watches an authorized directory and returns root-relative change events', async () => {
+    const pending = broker.invoke('watch', {
+      ...invocation(''),
+      arguments: { ...invocation('').arguments, after: 0, wait_ms: 2_000 },
+    }) as Promise<{ events: Array<{ kind: string; path: string }>; next: number }>
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50))
+    await writeFile(join(root, 'changed.md'), 'hello')
+
+    const result = await pending
+
+    expect(result.next).toBeGreaterThan(0)
+    expect(result.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: relative(filesystemRoots()[0]!.rootPath, join(root, 'changed.md')).split(sep).join('/'),
+      }),
+    ]))
   })
 })

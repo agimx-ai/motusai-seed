@@ -75,6 +75,7 @@ function runtime(
   invoke = vi.fn(async (_service: string, _args: Record<string, unknown>): Promise<unknown> => null),
   observer?: GlobalTaskActivityObserver,
   billing = false,
+  diagnostic?: (event: import('../shared/diagnostic-trace').HostDiagnosticEvent) => void,
 ) {
   const configuration: Extract<WorkerCommand, { type: 'configure' }> = {
     type: 'configure',
@@ -90,6 +91,7 @@ function runtime(
     'local',
     undefined,
     billing,
+    diagnostic,
   );
   hosts.push(host);
   return { host, invoke };
@@ -316,6 +318,47 @@ describe('class-only service lifecycle', () => {
     expect(events.mock.calls.map(([event]) => event.phase)).toEqual(['started']);
     await host.stop();
     expect(events.mock.calls.map(([event]) => event.phase)).toEqual(['started', 'failed']);
+  });
+  it('keeps plugin background reads in diagnostics without adding user activity', async () => {
+    const provider = await fixture('provider'),
+      consumer = await fixture('consumer', '', [], { consumes: [{ capability: 'provider', methods: ['echo'] }] });
+    const activities = vi.fn(),
+      diagnostics = vi.fn(),
+      { host } = runtime(undefined, new GlobalTaskActivityObserver(activities), false, diagnostics);
+    await host.start([provider, consumer]);
+
+    await expect(
+      host.invokeConsumedByPackage(
+        consumer.package_id,
+        { capability: 'provider', method: 'echo', arguments: { value: 'quiet' }, activity: 'background' },
+        [],
+      ),
+    ).resolves.toEqual({ value: 'quiet' });
+
+    expect(activities).not.toHaveBeenCalled();
+    expect(
+      diagnostics.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event.operation === 'provider.echo')
+        .map((event) => event.details?.activity_visibility),
+    ).toEqual(['technical', 'technical']);
+  });
+  it('does not let a background hint hide plugin write activity', async () => {
+    const provider = await fixture('provider', undefined, [capability('provider', 'write')]),
+      consumer = await fixture('consumer', '', [], { consumes: [{ capability: 'provider', methods: ['echo'] }] });
+    const activities = vi.fn(),
+      { host } = runtime(undefined, new GlobalTaskActivityObserver(activities));
+    await host.start([provider, consumer]);
+
+    await expect(
+      host.invokeConsumedByPackage(
+        consumer.package_id,
+        { capability: 'provider', method: 'echo', arguments: { value: 'visible' }, activity: 'background' },
+        [],
+      ),
+    ).resolves.toEqual({ value: 'visible' });
+
+    expect(activities.mock.calls.map(([event]) => event.phase)).toEqual(['started', 'completed']);
   });
 });
 

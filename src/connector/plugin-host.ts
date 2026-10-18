@@ -1450,6 +1450,9 @@ export class SeedPluginHost {
           request_id: requestId,
           provider_plugin_id: providerId,
           session_id: consumer.package_id,
+          ...(invocation.activity === 'background' && declared.method.risk === 'read'
+            ? { activity_visibility: 'technical' as const }
+            : {}),
           arguments: invocation.arguments,
           context: { source: 'plugin', caller_plugin_id: consumer.package_id, value: invocation.context },
           principal: { kind: 'plugin', plugin_id: consumer.package_id },
@@ -1515,11 +1518,13 @@ export class SeedPluginHost {
 
   async invoke(capability: string, method: string, context: PluginInvokeContext) {
     const parent = this.activeDiagnosticTrace();
+    const technicalActivity =
+      context.activity_visibility === 'technical' || parent?.activity_visibility === 'technical';
     const trace: DiagnosticTraceContext = {
       trace_id: parent?.trace_id || randomUUID(),
       span_id: randomUUID(),
       ...(parent ? { parent_span_id: parent.span_id } : {}),
-      ...(parent?.activity_visibility ? { activity_visibility: parent.activity_visibility } : {}),
+      ...(technicalActivity ? { activity_visibility: 'technical' as const } : {}),
     };
     const started = performance.now();
     const plugin =
@@ -1530,8 +1535,6 @@ export class SeedPluginHost {
     const description = (plugin ? this.capabilitiesFor(plugin) : [])
       .find((item) => item.id === capability)
       ?.methods.find((item) => item.name === method)?.description;
-    const technicalActivity = parent?.activity_visibility === 'technical';
-    if (technicalActivity) trace.activity_visibility = 'technical';
     const details = {
       ...(plugin?.name ? { plugin_name_en_us: plugin.name.en_US, plugin_name_zh_hans: plugin.name.zh_Hans } : {}),
       ...(callerId ? { caller_plugin_id: callerId } : {}),

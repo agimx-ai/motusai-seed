@@ -191,6 +191,11 @@ export function canonicalSeedCapabilityApprovalPayload(input: {
 export type SeedPluginCapabilityInvocation = {
   /** Return a host-owned result envelope with confirmed charges, including nested calls. */
   include_billing?: boolean;
+  /**
+   * Background read calls remain available to diagnostics without appearing in the user activity feed
+   * or contributing to Seed's global busy state. Write and control calls always remain foreground activity.
+   */
+  activity?: 'foreground' | 'background';
   /** Required when multiple installed providers expose the requested capability method. */
   provider_plugin_id?: string;
   capability: string;
