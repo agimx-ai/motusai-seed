@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { IconButton } from './IconButton';
 import './Collection.css';
 import { usePluginStyleScope } from '../i18n';
 
@@ -118,9 +119,7 @@ export function PreviewDialog({
             <h2>{title}</h2>
             {description && <p>{description}</p>}
           </div>
-          <button aria-label={closeLabel} onClick={onClose}>
-            <X size={18} />
-          </button>
+          <IconButton label={closeLabel} icon={<X size={17} />} onClick={onClose} />
         </header>
         <div className="seed-preview-content">{children}</div>
         {actions && <footer>{actions}</footer>}
