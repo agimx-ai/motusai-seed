@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Replace the previous declarative plugin runtime with Plugin API v2 classes, code-registered capabilities and plugin-owned DOM/React views.
+- Provide shared controls, including recursive SelectControl options, model/thinking pickers, workflow cards and collection lists.
+- Expose controlled file-change watching and background-read visibility through the host API.
+- Requires Seed 0.3.0. Existing v1 plugin implementations must migrate before using this SDK.
+
+中文：切换到 Plugin API v2，采用类式生命周期、代码注册能力和插件自有界面；提供多级下拉、模型与思考等级、流程卡片和列表组件，以及受控文件变更监听。需要 Seed 0.3.0；旧版插件需先迁移。
+
 ## 0.2.6
 
 - Add shared model-picker metadata to dynamic configuration options: Seed/custom grouping, per-model thinking levels, and optional dark-theme icons.

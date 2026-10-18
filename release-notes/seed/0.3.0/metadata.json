@@ -1,0 +1,11 @@
+{
+  "version": "0.3.0",
+  "documentation": {
+    "pages": [
+      "/docs/plugins",
+      "/docs/plugins/configuration",
+      "/docs/plugins/reference"
+    ],
+    "screenshots": true
+  }
+}
