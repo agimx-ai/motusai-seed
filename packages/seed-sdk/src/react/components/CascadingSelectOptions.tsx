@@ -105,7 +105,7 @@ export function CascadingSelectOptions<Value extends string>({
   }
 
   return (
-    <div className="flex min-h-0 min-w-full flex-1 items-stretch" onKeyDown={keyDown}>
+    <div className="flex min-h-0 min-w-0 flex-1 items-stretch" onKeyDown={keyDown}>
       {columns.map((column, columnIndex) => (
         <div
           key={columnIndex}
@@ -114,7 +114,7 @@ export function CascadingSelectOptions<Value extends string>({
           aria-label={column.label}
           data-select-column
           className={cx(
-            'min-h-0 min-w-[220px] flex-1 overflow-y-auto',
+            'flex min-h-0 min-w-0 flex-1 flex-col gap-px overflow-x-hidden overflow-y-auto',
             columnIndex > 0 && 'ml-1 border-l border-border pl-1',
           )}
         >
@@ -141,7 +141,7 @@ export function CascadingSelectOptions<Value extends string>({
                 disabled={unavailable(option)}
                 tabIndex={focused ? 0 : -1}
                 className={cx(
-                  'flex w-full min-w-0 items-center justify-between gap-3 rounded-[7px] px-2 py-1.5 text-left text-[13px] text-foreground outline-none hover:bg-muted focus:bg-muted disabled:cursor-default disabled:opacity-45',
+                  'flex w-full min-w-0 shrink-0 items-center justify-between gap-3 rounded-[7px] px-2 py-1.5 text-left text-[13px] text-foreground outline-none hover:bg-muted focus:bg-muted disabled:cursor-default disabled:opacity-45',
                   expandedHere && 'bg-muted',
                 )}
                 onFocus={() =>

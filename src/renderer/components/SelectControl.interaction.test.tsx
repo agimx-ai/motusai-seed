@@ -159,5 +159,27 @@ describe('SDK recursive select', () => {
     const menu = screen.getByRole('menu', { name: 'Destination' });
     expect(Number.parseFloat(menu.style.width)).toBeLessThanOrEqual(304);
     expect(Number.parseFloat(menu.style.left) + (portal ? 0 : 300)).toBeGreaterThanOrEqual(8);
+    expect(menu.firstElementChild?.classList.contains('overflow-hidden')).toBe(true);
+    for (const column of menu.querySelectorAll('[data-select-column]')) {
+      expect(column.classList.contains('min-w-0')).toBe(true);
+      expect(column.classList.contains('overflow-x-hidden')).toBe(true);
+      expect(column.classList.contains('gap-px')).toBe(true);
+    }
+  });
+
+  it.each([true, false])('keeps the trigger width before, during and after expanding columns (portal %s)', async (portal) => {
+    render(<style>{'[role="menu"] { padding: 4px; border: 1px solid; }'}</style>);
+    const h = mount({ portal });
+    await h.user.click(h.trigger);
+    const menu = screen.getByRole('menu', { name: 'Destination' });
+    expect(menu.style.width).toBe('320px');
+    expect(menu.classList.contains('min-w-full')).toBe(false);
+    await h.user.click(screen.getByRole('menuitem', { name: 'First category' }));
+    expect(menu.style.width).toBe('320px');
+    expect(Number.parseFloat(menu.style.left) + (portal ? 0 : 300)).toBe(300);
+    await h.user.click(screen.getByRole('menuitem', { name: 'Nested category' }));
+    expect(menu.style.width).toBe('320px');
+    await h.user.keyboard('{ArrowLeft}{ArrowLeft}');
+    expect(menu.style.width).toBe('320px');
   });
 });

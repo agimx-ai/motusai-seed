@@ -155,9 +155,7 @@ export function SelectControl<Value extends string>({
           : viewport.scrollHeight) +
         fixedHeight +
         inset(style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth);
-      const menuWidth =
-        (hierarchical ? columnCount * 220 + (columnCount - 1) * 4 : viewport.scrollWidth) +
-        inset(style.paddingLeft, style.paddingRight);
+      const menuWidth = viewport.scrollWidth + inset(style.paddingLeft, style.paddingRight);
       const gap = 5;
       const viewportPadding = 8;
       const topInset = variant === 'model' ? 56 : viewportPadding;
@@ -169,7 +167,9 @@ export function SelectControl<Value extends string>({
       if (portal || hierarchical) {
         const maxHeight = Math.floor(nextPlacement === 'bottom' ? spaceBelow : spaceAbove);
         const width = Math.min(
-          Math.max(triggerRect.width, hierarchical ? menuWidth : Math.max(listbox.scrollWidth, menuWidth)),
+          hierarchical
+            ? triggerRect.width
+            : Math.max(triggerRect.width, listbox.scrollWidth, menuWidth),
           window.innerWidth - 16,
         );
         if (variant === 'model') setModelWidth(width);
@@ -344,7 +344,7 @@ export function SelectControl<Value extends string>({
             )
           : 'rounded-[10px] p-1',
         hierarchical && 'w-max max-w-[calc(100vw-16px)]',
-        portal ? 'fixed' : 'absolute right-0 min-w-full',
+        portal ? 'fixed' : cx('absolute right-0', !hierarchical && 'min-w-full'),
         !portal && (placement === 'top' ? 'bottom-[calc(100%+5px)] origin-bottom' : 'top-[calc(100%+5px)] origin-top'),
       )}
       style={
@@ -367,7 +367,7 @@ export function SelectControl<Value extends string>({
         ref={scrollViewportRef}
         className={cx(
           'min-h-0 min-w-0',
-          hierarchical ? 'flex overflow-x-auto overflow-y-hidden' : 'overflow-x-hidden overflow-y-auto',
+          hierarchical ? 'flex overflow-hidden' : 'overflow-x-hidden overflow-y-auto',
           variant === 'model' && 'pr-1',
         )}
       >
