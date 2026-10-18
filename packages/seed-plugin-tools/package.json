@@ -5,7 +5,7 @@
   "type": "module",
   "exports": "./index.mjs",
   "bin": {
-    "seed-plugin-tools": "./cli.mjs"
+    "seed-plugin-tools": "cli.mjs"
   },
   "files": [
     "index.mjs",
