@@ -84,6 +84,43 @@ const configuration: Extract<WorkerCommand, { type: 'configure' }> = {
 };
 
 describe('NativePluginManager', () => {
+  it('passes the native host call trace into the broker as one correlated child span', async () => {
+    state.children.length = 0;
+    const broker = vi.fn(async () => null);
+    const manager = new NativePluginManager(
+      'Seed',
+      broker,
+      () => undefined,
+      () => undefined,
+      () => undefined,
+      () => undefined,
+    );
+    try {
+      await manager.start(plugin('trace'), configuration);
+      state.children[0]!.emit('message', {
+        type: 'host.invoke',
+        requestId: 'nested-call',
+        service: 'seed.capabilities.invoke',
+        arguments: {},
+        trace: {
+          trace_id: 'request-trace',
+          span_id: 'caller-span',
+          activity_visibility: 'technical',
+        },
+      } satisfies NativePluginEvent);
+
+      await vi.waitFor(() => expect(broker).toHaveBeenCalledOnce());
+      expect(broker.mock.calls[0]![4]).toMatchObject({
+        trace_id: 'request-trace',
+        parent_span_id: 'caller-span',
+        activity_visibility: 'technical',
+      });
+      expect(broker.mock.calls[0]![4]?.span_id).not.toBe('caller-span');
+    } finally {
+      await manager.stopAll();
+    }
+  });
+
   it('fences delayed broker writes after the owning process exits', async () => {
     state.children.length = 0;
     let assertActive: (() => void) | undefined;

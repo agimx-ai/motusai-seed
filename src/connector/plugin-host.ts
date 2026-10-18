@@ -1518,13 +1518,15 @@ export class SeedPluginHost {
 
   async invoke(capability: string, method: string, context: PluginInvokeContext) {
     const parent = this.activeDiagnosticTrace();
-    const technicalActivity =
+    const inheritedTechnicalActivity =
       context.activity_visibility === 'technical' || parent?.activity_visibility === 'technical';
+    const technicalSpan =
+      inheritedTechnicalActivity || (this.nativeExecution === 'local' && Boolean(parent));
     const trace: DiagnosticTraceContext = {
       trace_id: parent?.trace_id || randomUUID(),
       span_id: randomUUID(),
       ...(parent ? { parent_span_id: parent.span_id } : {}),
-      ...(technicalActivity ? { activity_visibility: 'technical' as const } : {}),
+      ...(inheritedTechnicalActivity ? { activity_visibility: 'technical' as const } : {}),
     };
     const started = performance.now();
     const plugin =
@@ -1542,7 +1544,7 @@ export class SeedPluginHost {
       ...(description
         ? { method_description_en_us: description.en_US, method_description_zh_hans: description.zh_Hans }
         : {}),
-      ...(technicalActivity ? { activity_visibility: 'technical' } : {}),
+      ...(technicalSpan ? { activity_visibility: 'technical' } : {}),
     };
     const event = this.nativeExecution === 'local' ? 'capability.execute' : 'capability.invoke';
     const base = {
@@ -1555,7 +1557,9 @@ export class SeedPluginHost {
     };
     this.emitHostDiagnostic({ ...base, phase: 'started', event, message: 'Capability invocation started.' });
     try {
-      const result = await this.diagnosticTrace.run(trace, () => this.invokeUntraced(capability, method, context));
+      const result = await this.diagnosticTrace.run(trace, () =>
+        this.invokeUntraced(capability, method, context, !technicalSpan),
+      );
       this.emitHostDiagnostic({
         ...base,
         phase: 'completed',
@@ -1584,7 +1588,12 @@ export class SeedPluginHost {
     }
   }
 
-  private async invokeUntraced(capability: string, method: string, context: PluginInvokeContext) {
+  private async invokeUntraced(
+    capability: string,
+    method: string,
+    context: PluginInvokeContext,
+    observesActivity: boolean,
+  ) {
     const declared = this.resolveMethodDescriptor(capability, method, context.provider_plugin_id);
     const validators = this.validators.get(`${declared.plugin.package_id}\0${capability}\0${method}`);
     if (validators?.input && !validators.input(context.arguments)) {
@@ -1600,8 +1609,7 @@ export class SeedPluginHost {
       operation: `${capability}.${method}`,
     };
     const observedLocally =
-      this.activeDiagnosticTrace()?.activity_visibility !== 'technical' &&
-      !(this.nativeExecution === 'remote' && declared.plugin.runtime_kind === 'native-host');
+      observesActivity && !(this.nativeExecution === 'remote' && declared.plugin.runtime_kind === 'native-host');
     if (observedLocally) this.taskActivityObserver?.observe(activity, 'started');
     const scope: InvocationTaskScope = {
       activity,

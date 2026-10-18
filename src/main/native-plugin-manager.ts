@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { utilityProcess, type UtilityProcess } from 'electron';
 import type { NativePluginRuntimeSnapshot, SeedPluginRuntimeDefinition, WorkerCommand } from '../shared/contracts';
 import type { NativePluginCommand, NativePluginEvent, NativePluginOperation } from '../shared/native-plugin-process';
-import type { HostDiagnosticEvent } from '../shared/diagnostic-trace';
+import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace';
 import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error';
 
 type Configuration = Extract<WorkerCommand, { type: 'configure' }>;
@@ -51,6 +51,7 @@ export class NativePluginManager {
       service: string,
       args: Record<string, unknown>,
       assertActive?: () => void,
+      trace?: DiagnosticTraceContext,
     ) => Promise<unknown>,
     private readonly onSnapshot: (packageId: string, snapshot: NativePluginRuntimeSnapshot | null) => void,
     private readonly onFailure: (packageId: string, event: string, error: Error) => void,
@@ -204,10 +205,13 @@ export class NativePluginManager {
           throw remoteError('Plugin runtime generation changed.', 'plugin_runtime_stopped');
       };
       const started = performance.now();
-      const trace = {
+      const trace: DiagnosticTraceContext = {
         trace_id: event.trace?.trace_id || randomUUID(),
         span_id: randomUUID(),
         ...(event.trace ? { parent_span_id: event.trace.span_id } : {}),
+        ...(event.trace?.activity_visibility
+          ? { activity_visibility: event.trace.activity_visibility }
+          : {}),
       };
       const base = {
         ...trace,
@@ -219,7 +223,7 @@ export class NativePluginManager {
       };
       this.onDiagnostic?.({ ...base, phase: 'started', message: 'Host service started.' });
       try {
-        const result = await this.invokeBroker(packageId, event.service, event.arguments, assertActive);
+        const result = await this.invokeBroker(packageId, event.service, event.arguments, assertActive, trace);
         this.onDiagnostic?.({
           ...base,
           phase: 'completed',

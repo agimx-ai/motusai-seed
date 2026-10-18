@@ -1,6 +1,7 @@
 import type { SeedBillingReceipt, SeedNavigationTarget } from '@motus-ai/seed-sdk';
 import type { SeedConsumedCapability, SeedPluginLabel } from './plugin-manifest';
 import type { SeedLocalizedText } from './plugin-manifest';
+import type { DiagnosticTraceContext } from './diagnostic-trace';
 
 export type AuthStatus = 'signed_out' | 'authorizing' | 'signed_in' | 'error';
 export type MascotState = 'idle' | 'running' | 'working' | 'waiting' | 'review' | 'failed';
@@ -541,6 +542,7 @@ export type WorkerCommand =
       packageId: string;
       invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation;
       chain: string[];
+      trace?: DiagnosticTraceContext;
     }
   | { type: 'local-gateway.event'; event: import('@motus-ai/seed-sdk').SeedLocalGatewayEvent }
   | { type: 'shutdown' };

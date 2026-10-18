@@ -105,6 +105,28 @@ describe('generic plugin SDK brokers', () => {
     await expect(pending).rejects.toMatchObject({ code: 'provider_cancelled' });
     expect(runtime.capabilityCalls.size).toBe(0);
   });
+  it('keeps the originating trace when the native broker routes a consumed capability', async () => {
+    const { runtime } = fixture('native-host');
+    const trace = { trace_id: 'request-trace', span_id: 'broker-span' };
+    await Reflect.get(runtime, 'invokePluginBroker').call(
+      runtime,
+      'com.example.one',
+      'seed.capabilities.invoke',
+      {
+        call_id: crypto.randomUUID(),
+        invocation: { capability: 'probe', method: 'read', arguments: {} },
+      },
+      undefined,
+      trace,
+    );
+    expect(runtime.connector.invokePluginCapability).toHaveBeenCalledWith(
+      'com.example.one',
+      { capability: 'probe', method: 'read', arguments: {} },
+      [],
+      expect.any(AbortSignal),
+      trace,
+    );
+  });
   it('reports owned tasks once and cleans only that plugin on reload or process loss', async () => {
     const { runtime, call } = fixture();
     await call('one', 'seed.plugin-task', { id: 'task', phase: 'started', label: 'Work' });

@@ -137,10 +137,12 @@ async function handleCommand(command: WorkerCommand) {
       const result =
         command.type === 'plugin.capability.list'
           ? pluginHost.consumedCapabilitiesByPackage(command.packageId)
-          : await pluginHost.invokeConsumedByPackage(
-              command.packageId,
-              { ...command.invocation, signal: controller.signal },
-              command.chain,
+          : await pluginHost.withDiagnosticTrace(command.trace, () =>
+              pluginHost.invokeConsumedByPackage(
+                command.packageId,
+                { ...command.invocation, signal: controller.signal },
+                command.chain,
+              ),
             );
       emit({ type: 'plugin.capability.result', requestId: command.requestId, ok: true, result });
     } catch (error) {

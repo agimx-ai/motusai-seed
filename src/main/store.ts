@@ -888,8 +888,23 @@ export class SeedStore {
       }
       return builder;
     };
+    const withoutVisibleAncestor = (builder: Knex.QueryBuilder<AuditRow, AuditRow[]>) =>
+      builder.whereRaw(`NOT EXISTS (
+        WITH RECURSIVE ancestors(span_id) AS (
+          SELECT observation_records.parent_span_id
+          UNION
+          SELECT parent.parent_span_id
+          FROM observation_records AS parent
+          JOIN ancestors ON parent.span_id = ancestors.span_id
+          WHERE ancestors.span_id IS NOT NULL
+        )
+        SELECT 1
+        FROM ancestors
+        JOIN observation_records AS ancestor ON ancestor.span_id = ancestors.span_id
+        WHERE ancestor.visibility = 'activity'
+      )`);
     const countQuery = applyFilters(
-      database<AuditRow>('observation_records').where({ visibility: 'activity' }).whereNull('parent_span_id'),
+      withoutVisibleAncestor(database<AuditRow>('observation_records').where({ visibility: 'activity' })),
     );
     const [{ total: totalValue }] = await countQuery
       .clone()
@@ -897,10 +912,11 @@ export class SeedStore {
       .clearOrder()
       .count<{ total: number | string }>({ total: '*' });
     const rowsQuery = applyFilters(
-      database<AuditRow>('observation_records')
-        .select('*')
-        .where({ visibility: 'activity' })
-        .whereNull('parent_span_id'),
+      withoutVisibleAncestor(
+        database<AuditRow>('observation_records')
+          .select('*')
+          .where({ visibility: 'activity' }),
+      ),
     );
     if (cursor)
       rowsQuery.andWhere((scope) => {

@@ -47,6 +47,31 @@ vi.mock('electron', async () => {
 import { ConnectorManager } from './connector-manager';
 
 describe('ConnectorManager', () => {
+  it('forwards the caller trace with a plugin capability request', async () => {
+    const manager = new ConnectorManager('Seed', (event) => {
+      if (event.type === 'host.invoke') manager.send({ type: 'host.result', requestId: event.requestId, ok: true });
+    });
+    const trace = { trace_id: 'request-trace', span_id: 'broker-span' };
+    const pending = manager.invokePluginCapability(
+      'com.example.consumer',
+      { capability: 'probe', method: 'echo', arguments: {} },
+      [],
+      undefined,
+      trace,
+    );
+    const child = state.children[0]!;
+    const command = child.messages.find((item) => item.type === 'plugin.capability.invoke')!;
+    expect(command).toMatchObject({ trace });
+    child.emit('message', {
+      type: 'plugin.capability.result',
+      requestId: command.requestId,
+      ok: true,
+      result: null,
+    } satisfies WorkerEvent);
+    await expect(pending).resolves.toBeNull();
+    await manager.stop();
+  });
+
   it('forwards cancellation to the capability router and waits for the provider terminal result', async () => {
     const manager = new ConnectorManager('Seed', (event) => {
       if (event.type === 'host.invoke') manager.send({ type: 'host.result', requestId: event.requestId, ok: true });

@@ -343,6 +343,32 @@ describe('class-only service lifecycle', () => {
         .map((event) => event.details?.activity_visibility),
     ).toEqual(['technical', 'technical']);
   });
+  it('keeps a nested native execution in the same trace as a technical implementation span', async () => {
+    const provider = await fixture('provider');
+    const diagnostics = vi.fn();
+    const { host } = runtime(undefined, undefined, false, diagnostics);
+    await host.start([provider]);
+
+    await host.withDiagnosticTrace(
+      { trace_id: 'request-trace', span_id: 'outer-invocation' },
+      () => host.invoke('provider', 'echo', request('nested')),
+    );
+
+    const spans = diagnostics.mock.calls.map(([event]) => event);
+    expect(spans).toHaveLength(2);
+    expect(spans[0]).toMatchObject({
+      event: 'capability.execute',
+      trace_id: 'request-trace',
+      parent_span_id: 'outer-invocation',
+      details: { activity_visibility: 'technical' },
+    });
+    expect(spans[0]!.activity_visibility).toBeUndefined();
+    expect(spans[1]).toMatchObject({
+      span_id: spans[0]!.span_id,
+      phase: 'completed',
+      details: { activity_visibility: 'technical' },
+    });
+  });
   it('does not let a background hint hide plugin write activity', async () => {
     const provider = await fixture('provider', undefined, [capability('provider', 'write')]),
       consumer = await fixture('consumer', '', [], { consumes: [{ capability: 'provider', methods: ['echo'] }] });

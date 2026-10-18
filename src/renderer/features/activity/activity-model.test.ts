@@ -107,4 +107,26 @@ describe('activity model', () => {
     expect(hierarchy.roots.map((item) => item.id)).toEqual(['root'])
     expect(visibleActivityChildren('root', hierarchy.childrenByParent).map((item) => item.id)).toEqual(['provider'])
   })
+
+  it('shows one request card with nested plugin calls across technical process boundaries', () => {
+    const records = [
+      entry({ id: 'request', operation: 'iq.generate', traceId: 'trace', spanId: 'request', recordKind: 'span' }),
+      entry({ id: 'iq-execute', operation: 'iq.generate', traceId: 'trace', spanId: 'iq-execute',
+        parentSpanId: 'request', recordKind: 'span', visibility: 'technical' }),
+      entry({ id: 'agent-broker', operation: 'seed.capabilities.invoke', traceId: 'trace', spanId: 'agent-broker',
+        parentSpanId: 'iq-execute', recordKind: 'span', visibility: 'technical' }),
+      entry({ id: 'agent', operation: 'agent_sessions.messages.submit', traceId: 'trace', spanId: 'agent',
+        parentSpanId: 'agent-broker', recordKind: 'span', visibility: 'activity' }),
+      entry({ id: 'agent-execute', operation: 'agent_sessions.messages.submit', traceId: 'trace',
+        spanId: 'agent-execute', parentSpanId: 'agent', recordKind: 'span', visibility: 'technical' }),
+      entry({ id: 'files-broker', operation: 'seed.capabilities.invoke', traceId: 'trace', spanId: 'files-broker',
+        parentSpanId: 'agent-execute', recordKind: 'span', visibility: 'technical' }),
+      entry({ id: 'files', operation: 'files.list_directory', traceId: 'trace', spanId: 'files',
+        parentSpanId: 'files-broker', recordKind: 'span', visibility: 'activity' }),
+    ]
+    const hierarchy = activityHierarchy(records)
+    expect(hierarchy.roots.map((item) => item.id)).toEqual(['request'])
+    expect(visibleActivityChildren('request', hierarchy.childrenByParent).map((item) => item.id)).toEqual(['agent'])
+    expect(visibleActivityChildren('agent', hierarchy.childrenByParent).map((item) => item.id)).toEqual(['files'])
+  })
 })

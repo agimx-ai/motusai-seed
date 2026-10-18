@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { utilityProcess, type UtilityProcess } from 'electron';
 import type { WorkerCommand, WorkerEvent } from '../shared/contracts';
+import type { DiagnosticTraceContext } from '../shared/diagnostic-trace';
 import { pluginErrorBilling } from '../shared/plugin-error';
 
 export class ConnectorManager {
@@ -74,8 +75,9 @@ export class ConnectorManager {
     invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation,
     chain: string[],
     signal?: AbortSignal,
+    trace?: DiagnosticTraceContext,
   ) {
-    return this.requestPluginCapability({ type: 'plugin.capability.invoke', packageId, invocation, chain }, signal);
+    return this.requestPluginCapability({ type: 'plugin.capability.invoke', packageId, invocation, chain, trace }, signal);
   }
 
   private requestPluginCapability(
@@ -86,6 +88,7 @@ export class ConnectorManager {
           packageId: string;
           invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation;
           chain: string[];
+          trace?: DiagnosticTraceContext;
         },
     signal?: AbortSignal,
   ) {

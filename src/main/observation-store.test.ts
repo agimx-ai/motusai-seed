@@ -62,6 +62,41 @@ describe('ObservationStore', () => {
     }
   })
 
+  it('promotes the first visible call below a technical trace root without splitting its descendants', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'seed-observations-'))
+    const observations = new ObservationStore(directory, 'MotusAI Seed')
+    const store = new SeedStore(directory, 'MotusAI Seed', observations)
+    try {
+      await store.load()
+      const base = { level: 'info' as const, source: 'plugin-host' as const,
+        message: 'Started.', trace_id: 'trace-promoted', phase: 'started' as const }
+      observations.record({ ...base, event: 'host.invoke', span_id: 'broker-root',
+        operation: 'seed.capabilities.invoke', plugin_id: 'com.example.caller' })
+      observations.record({ ...base, event: 'capability.invoke', span_id: 'agent', parent_span_id: 'broker-root',
+        operation: 'agent.messages.submit', plugin_id: 'com.example.agent' })
+      observations.record({ ...base, event: 'capability.execute', span_id: 'agent-execute', parent_span_id: 'agent',
+        operation: 'agent.messages.submit', plugin_id: 'com.example.agent',
+        details: { activity_visibility: 'technical' } })
+      observations.record({ ...base, event: 'host.invoke', span_id: 'files-broker', parent_span_id: 'agent-execute',
+        operation: 'seed.capabilities.invoke', plugin_id: 'com.example.agent' })
+      observations.record({ ...base, event: 'capability.invoke', span_id: 'files', parent_span_id: 'files-broker',
+        operation: 'files.list_directory', plugin_id: 'com.example.files' })
+
+      const page = await store.queryAudit()
+      expect(page.total).toBe(1)
+      expect(page.items.map((entry) => entry.spanId)).toEqual([
+        'agent',
+        'agent-execute',
+        'files-broker',
+        'files',
+      ])
+    } finally {
+      await store.close()
+      await observations.close()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('does not leak a sibling root\'s children into a paginated call tree', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'seed-observations-'))
     const observations = new ObservationStore(directory, 'MotusAI Seed')

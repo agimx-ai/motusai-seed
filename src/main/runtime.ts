@@ -73,6 +73,7 @@ import { selectDevelopmentOverrides } from './plugin-source-selection';
 import { DevelopmentPluginSource } from './development-plugin-source';
 import { PluginDataCleaner } from './plugin-data-cleaner';
 import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error';
+import type { DiagnosticTraceContext } from '../shared/diagnostic-trace';
 
 const entitlementResponseSchema = z
   .object({
@@ -757,7 +758,8 @@ export class SeedRuntime {
     );
     this.nativeHost = new NativePluginManager(
       buildConfig.appName,
-      (packageId, service, args, assertActive) => this.invokePluginBroker(packageId, service, args, assertActive),
+      (packageId, service, args, assertActive, trace) =>
+        this.invokePluginBroker(packageId, service, args, assertActive, trace),
       (packageId, snapshot) => {
         if (!snapshot) this.pluginCapabilityCatalog.remove(packageId);
         this.connector.send({ type: 'native.runtime.updated', packageId, snapshot });
@@ -2285,6 +2287,7 @@ export class SeedRuntime {
     service: string,
     argumentsValue: Record<string, unknown>,
     assertActive?: () => void,
+    trace?: DiagnosticTraceContext,
   ): Promise<unknown> {
     assertActive?.();
     if (service === 'seed.plugin-event') {
@@ -2448,6 +2451,7 @@ export class SeedRuntime {
             ? argumentsValue.chain.filter((x): x is string => typeof x === 'string')
             : [],
           controller.signal,
+          trace,
         );
       } finally {
         this.capabilityCalls.delete(key);

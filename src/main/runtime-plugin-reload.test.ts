@@ -39,8 +39,8 @@ function fixture() {
     pluginInstaller: {
       pruneInactiveVersions: vi.fn(),
       listInstalled: vi.fn(async () => [
-        { id: one.package_id, source: 'installed' },
-        { id: two.package_id, source: 'installed' },
+        { id: one.package_id, version: one.version, source: 'installed' },
+        { id: two.package_id, version: two.version, source: 'installed' },
       ]),
       listRuntimePlugins: vi.fn(async () => [one, two]),
     },
@@ -92,7 +92,9 @@ describe('one runtime with distinct plugin sources', () => {
   it('overlays a development bundle without overwriting marketplace records or stopping unrelated plugins', async () => {
     const h = fixture(),
       next = { ...h.one, source: 'development', configuration_revision: 'new-build' };
-    h.setDevelopment([{ installed: { id: h.one.package_id, source: 'development' }, runtime: next }]);
+    h.setDevelopment([
+      { installed: { id: h.one.package_id, version: next.version, source: 'development' }, runtime: next },
+    ]);
     await h.runtime.reloadPlugins();
     expect(h.runtime.runtimePlugins).toEqual([h.two, next]);
     expect(h.stop).toHaveBeenCalledExactlyOnceWith(h.one.package_id);
@@ -109,7 +111,9 @@ describe('one runtime with distinct plugin sources', () => {
     const h = fixture();
     h.runtime.entitlementExpiresAt = 0;
     const next = { ...h.one, source: 'development' };
-    h.setDevelopment([{ installed: { id: h.one.package_id, source: 'development' }, runtime: next }]);
+    h.setDevelopment([
+      { installed: { id: h.one.package_id, version: next.version, source: 'development' }, runtime: next },
+    ]);
     await h.runtime.reloadPlugins();
     expect(h.runtime.runtimePlugins).toEqual([next]);
     expect(h.runtime.pluginIsAuthorized(h.one.package_id)).toBe(true);
@@ -136,7 +140,7 @@ describe('one runtime with distinct plugin sources', () => {
     ]);
     h.setDevelopment([
       {
-        installed: { id: h.one.package_id, source: 'development' },
+        installed: { id: h.one.package_id, version: h.one.version, source: 'development' },
         runtime: { ...h.one, source: 'development', configuration_revision: 'new-code' },
       },
     ]);
