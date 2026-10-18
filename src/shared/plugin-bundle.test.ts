@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -211,6 +211,46 @@ describe('single-file isolated plugin bundle', () => {
     expect([...verified.files.keys()]).not.toContain('META-INF/files.sha256');
     await writeFile(join(output, 'main.js'), 'tampered output');
     await expect(tools.packPlugin({ root: project.root })).rejects.toThrow('Built resource changed');
+  });
+
+  it('normalizes author text resources without modifying binary resources', async () => {
+    const project = await fixture();
+    const sourceManifest = JSON.parse(await readFile(join(project.root, 'manifest.json'), 'utf8'));
+    await writeFile(
+      join(project.root, 'manifest.json'),
+      JSON.stringify({
+        ...sourceManifest,
+        i18n: {
+          defaultLocale: 'en-US',
+          resources: { 'en-US': 'locales/en-US.json' },
+        },
+      }),
+    );
+    await mkdir(join(project.root, 'locales'));
+    await writeFile(join(project.root, 'locales/en-US.json'), '{\r\n  "plugin.name": "Example"\r\n}\r\n');
+    await writeFile(join(project.root, 'README.md'), '# Example\r\n\r\nText\r\n');
+    await writeFile(join(project.root, 'assets.svg'), '<svg>\r\n</svg>\r\n');
+    const binary = Buffer.from([0, 13, 10, 255]);
+    await writeFile(join(project.root, 'asset.bin'), binary);
+    const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
+    const { output, manifest } = await tools.buildPlugin({
+      root: project.root,
+      runtime: 'native-host',
+      service: 'src/service.ts',
+      resources: [
+        { source: 'README.md', path: 'README.md' },
+        { source: 'assets.svg', path: 'assets/icon.svg' },
+        { source: 'asset.bin', path: 'assets/asset.bin' },
+      ],
+    });
+    for (const path of ['locales/en-US.json', 'README.md', 'assets/icon.svg']) {
+      const body = await readFile(join(output, path));
+      expect(body.includes(13)).toBe(false);
+      expect(manifest.resources.find((resource: { path: string }) => resource.path === path)?.sha256).toBe(
+        createHash('sha256').update(body).digest('hex'),
+      );
+    }
+    expect(await readFile(join(output, 'assets/asset.bin'))).toEqual(binary);
   });
 
   it('uses the same generic packer for native target resources without changing the loading contract', async () => {

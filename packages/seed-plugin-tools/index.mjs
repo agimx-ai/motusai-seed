@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
+import { isUtf8 } from 'node:buffer';
 import { createWriteStream } from 'node:fs';
 import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { compile } from '@tailwindcss/node';
 import { Scanner } from '@tailwindcss/oxide';
@@ -19,6 +20,28 @@ const sdkPackages = [
   'react-dom/client',
 ];
 const coreFiles = new Set(['manifest.json', 'main.js', 'styles.css', 'metadata.json']);
+const textResourceExtensions = new Set([
+  '.css',
+  '.csv',
+  '.htm',
+  '.html',
+  '.json',
+  '.md',
+  '.markdown',
+  '.svg',
+  '.tsv',
+  '.txt',
+  '.xml',
+  '.yaml',
+  '.yml',
+]);
+
+/** Author text must hash identically when the same source checkout is packaged on Windows, macOS or Linux. */
+function normalizeResource(path, body) {
+  if (!textResourceExtensions.has(extname(path).toLowerCase())) return body;
+  if (!isUtf8(body)) throw new Error('Text resources must be UTF-8: ' + path);
+  return Buffer.from(body.toString('utf8').replace(/\r\n?/g, '\n'));
+}
 
 /** Trusted author-time metadata entry, never loaded by the installed client or a manifest reader. */
 export async function readPluginCapabilities({ root = process.cwd(), entry = 'src/capabilities.ts' } = {}) {
@@ -189,7 +212,7 @@ export async function buildPlugin({
           metadata = await lstat(source);
         if (!metadata.isFile() || metadata.isSymbolicLink())
           throw new Error('Translations must be regular JSON files.');
-        const body = await readFile(source);
+        const body = normalizeResource(path, await readFile(source));
         files.set(path, body);
         translations.resources[locale] = JSON.parse(body.toString('utf8'));
       }
@@ -230,7 +253,7 @@ export async function buildPlugin({
       const metadata = await lstat(source);
       if (!metadata.isFile() || metadata.isSymbolicLink())
         throw new Error('Resources must be regular files: ' + resource.source);
-      files.set(resource.path, await readFile(source));
+      files.set(resource.path, normalizeResource(resource.path, await readFile(source)));
     }
     const manifest = {
       ...sourceManifest,

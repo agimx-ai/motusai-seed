@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Normalize author-declared UTF-8 text resources to LF so public plugin assets remain byte-identical across platform packages.
+- Preserve binary resources and platform-specific sidecars without rewriting their contents.
+
 ## 0.1.1
 
 - Remove this development session's synchronized plugin when `npm run dev` stops normally, including repeated termination signals forwarded by npm.
