@@ -5,6 +5,7 @@ import type { SeedCatalogPage } from '../shared/contracts';
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest';
 import { AppHeader } from './layouts/AppHeader';
 import { ProfileEditDialog } from './components/ProfileEditDialog';
+import { AnnouncementDialog } from './components/AnnouncementDialog';
 import { Sidebar } from './layouts/Sidebar';
 import { AppLogo } from './components/AppBrand';
 import { ShimmerIcon } from './components/Shimmer';
@@ -75,7 +76,7 @@ export default function App() {
     if (request.destination === 'plugins') {
       setView('plugins');
       setSelectedPluginId(request.pluginId || '');
-      setPluginQuery(request.pluginId ? '' : request.query || '');
+      setPluginQuery(request.query || '');
       if (!request.pluginId) window.setTimeout(() => pluginSearchRef.current?.focus(), 0);
     }
   }, [snapshot?.navigationRequest]);
@@ -442,6 +443,9 @@ export default function App() {
       </div>
       {globalToaster}
       {profileEditing && <ProfileEditDialog user={snapshot.user} onClose={() => setProfileEditing(false)} />}
+      {!!snapshot.announcements?.length && !profileEditing && (
+        <AnnouncementDialog announcements={snapshot.announcements} locale={locale} />
+      )}
     </>
   );
 }

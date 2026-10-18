@@ -24,6 +24,7 @@ export type SeedDistribution = {
 };
 
 export type SeedDistributionEvent =
+  | { ver: 1; type: 'announcement.changed'; dist_id: string; revision: string; occurred_at: string }
   | { ver: 1; type: 'plugin.catalog.changed'; dist_id: string; revision: string; occurred_at: string }
   | {
       ver: 1;
@@ -187,6 +188,7 @@ export type AuditPage = {
 };
 
 export type SeedSnapshot = {
+  announcements?: import('./announcements').SeedAnnouncement[];
   appName: string;
   appVersion: string;
   platform: NodeJS.Platform;
@@ -343,6 +345,9 @@ export type PluginDataResetResult = {
 };
 
 export type SeedApi = {
+  dismissAnnouncement(id: string): Promise<void>;
+  activateAnnouncement(id: string): Promise<void>;
+  announcementBackground(id: string): Promise<string>;
   mountPluginView(input: {
     pluginId: string;
     token: string;
@@ -396,6 +401,9 @@ export type SeedWindowApi = {
 };
 
 export const ipcChannels = {
+  dismissAnnouncement: 'seed:announcements:dismiss',
+  activateAnnouncement: 'seed:announcements:activate',
+  announcementBackground: 'seed:announcements:background',
   mountPluginView: 'seed:plugins:mount-view',
   pluginViewMessage: 'seed:plugins:view-message',
   pluginViewEvent: 'seed:plugins:view-event',

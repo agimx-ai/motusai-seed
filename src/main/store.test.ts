@@ -28,6 +28,22 @@ async function temporaryDirectory() {
 }
 
 describe('SeedStore SQLite persistence', () => {
+  it('retains local announcement read IDs across restart, isolated by account', async () => {
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    await store.markAnnouncementRead('alice', 'notice-1');
+    await store.markAnnouncementRead('alice', 'notice-1');
+    await store.close();
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
+    try {
+      expect(await reopened.readAnnouncementIds('alice')).toEqual(['notice-1']);
+      expect(await reopened.readAnnouncementIds('bob')).toEqual([]);
+    } finally {
+      await reopened.close();
+    }
+  });
   it('roundtrips arbitrary plugin JSON across SQLite restart without adding form fields', async () => {
     const directory = await temporaryDirectory(),
       store = new SeedStore(directory, 'MotusAI Seed');

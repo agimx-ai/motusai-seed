@@ -10,6 +10,9 @@ import type {
 } from '../shared/contracts';
 
 const ipcChannels = {
+  dismissAnnouncement: 'seed:announcements:dismiss',
+  activateAnnouncement: 'seed:announcements:activate',
+  announcementBackground: 'seed:announcements:background',
   mountPluginView: 'seed:plugins:mount-view',
   pluginViewMessage: 'seed:plugins:view-message',
   pluginViewEvent: 'seed:plugins:view-event',
@@ -54,6 +57,9 @@ const ipcChannels = {
 } as const;
 
 const api: SeedApi = {
+  dismissAnnouncement: (id) => ipcRenderer.invoke(ipcChannels.dismissAnnouncement, id),
+  activateAnnouncement: (id) => ipcRenderer.invoke(ipcChannels.activateAnnouncement, id),
+  announcementBackground: (id) => ipcRenderer.invoke(ipcChannels.announcementBackground, id),
   mountPluginView: (input) => ipcRenderer.invoke(ipcChannels.mountPluginView, input),
   sendPluginViewMessage: (token, message) => ipcRenderer.invoke(ipcChannels.pluginViewMessage, token, message),
   onPluginViewEvent: (listener) => {

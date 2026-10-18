@@ -66,6 +66,7 @@ import { validateLocalClientCapabilityApproval } from './local-client-capability
 import { SidecarProcessService } from './sidecar-process-service';
 import { discoverDistribution } from './distribution-discovery';
 import { SeedDistributionEvents } from './distribution-events';
+import { AnnouncementInbox } from './announcements';
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization';
 import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh';
 import { DevelopmentPluginSource } from './development-plugin-source';
@@ -174,6 +175,7 @@ export class SeedRuntime {
   private readonly systemAppearanceChanged = () => this.updatePluginViewAppearance();
   private readonly updater: SeedUpdater;
   private readonly distributionEvents: SeedDistributionEvents;
+  private readonly announcements: AnnouncementInbox;
   private readonly logUploader = new CloudDiagnosticUploader();
   private readonly creditBilling = new CreditBillingClient(this.seedCloudUrl, (rejectedToken) =>
     this.cloudAccessToken(rejectedToken),
@@ -722,6 +724,15 @@ export class SeedRuntime {
       (event) => void this.handleDistributionEvent(event).catch(() => undefined),
       () => void this.reconcileDistributionState().catch(() => undefined),
     );
+    this.announcements = new AnnouncementInbox({
+      userId: () => this.user?.id,
+      eventsUrl: async () => (await this.currentDistribution()).events_url,
+      readIds: (userId) => this.store.readAnnouncementIds(userId),
+      markRead: (userId, id) => this.store.markAnnouncementRead(userId, id),
+      changed: () => {
+        void this.publishSnapshot();
+      },
+    });
     this.connector = new ConnectorManager(
       buildConfig.appName,
       (event) => void this.handleWorkerEvent(event),
@@ -885,6 +896,7 @@ export class SeedRuntime {
     if (this.store.cloudSession()?.refreshToken !== storedCloudSession.refreshToken) return;
     try {
       await this.cloudAccessToken(storedCloudSession.accessToken);
+      void this.announcements.refresh();
       await this.refreshPluginCatalog().catch(() => undefined);
     } catch (error) {
       // Keep the current session, but do not report a failed initial load as an empty catalog.
@@ -1094,6 +1106,7 @@ export class SeedRuntime {
       startup: { status: this.startupStatus },
       auth: this.authStatus,
       ...(this.user ? { user: this.user } : {}),
+      announcements: this.user ? this.announcements.snapshot() : [],
       plugins: this.installedPlugins
         .filter((plugin) => this.pluginIsAuthorized(plugin.id))
         .map((plugin) => {
@@ -1138,6 +1151,21 @@ export class SeedRuntime {
     await this.publishSnapshot();
   }
 
+  dismissAnnouncement(id: string) {
+    return this.announcements.dismiss(id);
+  }
+  announcementBackground(id: string) {
+    return this.announcements.background(id);
+  }
+  async activateAnnouncement(id: string) {
+    const item = this.announcements.snapshot().find((entry) => entry.id === id);
+    if (!this.user || !item) return;
+    if (item.action?.kind === 'plugin')
+      await this.requestNavigation({ destination: 'plugins', pluginId: item.action.plugin_id, query: item.action.plugin_id });
+    else if (item.action?.kind === 'url') await shell.openExternal(item.action.url);
+    await this.announcements.dismiss(id);
+  }
+
   audioSnapshot() {
     return this.audioService.snapshot();
   }
@@ -1173,6 +1201,7 @@ export class SeedRuntime {
       const credential = await exchangeCloudAuthorizationCode(distribution, code, authorization.verifier);
       await this.store.setCloudSession(credential);
       this.user = credential.user;
+      void this.announcements.refresh();
       this.authStatus = { status: 'signed_in' };
       try {
         await this.refreshInstalledEntitlements();
@@ -1251,6 +1280,7 @@ export class SeedRuntime {
     this.connector.send({ type: 'unconfigure' });
     await this.store.clearCloudSession();
     this.user = undefined;
+    this.announcements.clear();
     this.authorizedInstalledPluginIds.clear();
     this.entitlementExpiresAt = 0;
     this.remotePluginCatalog = [];
@@ -1573,6 +1603,7 @@ export class SeedRuntime {
       if (cloudSessionWasRejected(error) && this.store.cloudSession()?.refreshToken === session.refreshToken) {
         await this.store.clearCloudSession();
         this.user = undefined;
+        this.announcements.clear();
         this.authStatus = { status: 'signed_out' };
         this.entitlementExpiresAt = 0;
         await this.applyExpiredEntitlements();
@@ -1665,6 +1696,10 @@ export class SeedRuntime {
 
   private async handleDistributionEvent(event: SeedDistributionEvent) {
     if (event.dist_id !== buildConfig.distributionId) return;
+    if (event.type === 'announcement.changed') {
+      await this.announcements.refresh();
+      return;
+    }
     if (event.type === 'plugin.catalog.changed') {
       this.pluginCatalogRefreshQueue = this.pluginCatalogRefreshQueue
         .catch(() => undefined)
@@ -1691,7 +1726,8 @@ export class SeedRuntime {
 
   private async reconcileDistributionState() {
     await this.currentDistribution(true);
-    if (this.user) await this.refreshPluginCatalog();
+    if (this.user)
+      await Promise.all([this.refreshPluginCatalog().catch(() => undefined), this.announcements.refresh()]);
     await this.updater.check().catch(() => false);
   }
 

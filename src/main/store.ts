@@ -411,6 +411,16 @@ export class SeedStore {
     return rows.map(fromAuditRow);
   }
 
+  async readAnnouncementIds(userId: string): Promise<string[]> {
+    const prefix = `announcement_read:${userId}:`;
+    const rows = await this.getDatabase()<SettingRow>('app_settings').where('key', 'like', `${prefix}%`).select('key');
+    return rows.map((row) => row.key.slice(prefix.length));
+  }
+
+  async markAnnouncementRead(userId: string, id: string) {
+    await this.setSetting(`announcement_read:${userId}:${id}`, new Date().toISOString());
+  }
+
   cloudSession(): CloudSessionCredential | undefined {
     if (!this.value.encryptedCloudSession || !safeStorage.isEncryptionAvailable()) return undefined;
     try {

@@ -1,4 +1,13 @@
 {
+  "announcements": {
+    "close": "Close announcement",
+    "navigation": "Browse announcements",
+    "previous": "Previous announcement",
+    "next": "Next announcement",
+    "position": "Announcement {{current}} of {{total}}",
+    "failed": "Could not complete this action. Please try again.",
+    "retryImage": "Background could not load. Retry"
+  },
   "common": {
     "enabled": "Enabled",
     "installed": "Installed",

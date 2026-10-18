@@ -49,6 +49,9 @@ export function registerIpc(runtime: SeedRuntime) {
     runtime.personalCreditGrants(z.string().regex(/^\d+$/).optional().parse(cursor)),
   );
   handle(ipcChannels.signIn, () => runtime.signIn());
+  handle(ipcChannels.dismissAnnouncement, (_event, id) => runtime.dismissAnnouncement(z.uuid().parse(id)));
+  handle(ipcChannels.activateAnnouncement, (_event, id) => runtime.activateAnnouncement(z.uuid().parse(id)));
+  handle(ipcChannels.announcementBackground, (_event, id) => runtime.announcementBackground(z.uuid().parse(id)));
   handle(ipcChannels.cancelSignIn, () => runtime.cancelSignIn());
   handle(ipcChannels.logout, () => runtime.logout());
   handle(ipcChannels.openWebsite, () => runtime.openWebsite());

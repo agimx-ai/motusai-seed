@@ -1,4 +1,13 @@
 {
+  "announcements": {
+    "close": "关闭介绍",
+    "navigation": "切换功能介绍",
+    "previous": "上一条介绍",
+    "next": "下一条介绍",
+    "position": "第 {{current}} 条，共 {{total}} 条",
+    "failed": "操作未完成，请重试。",
+    "retryImage": "背景加载失败，点击重试"
+  },
   "common": {
     "enabled": "已启用",
     "installed": "已安装",
