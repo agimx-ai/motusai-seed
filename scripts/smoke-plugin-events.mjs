@@ -78,6 +78,7 @@ app.whenReady().then(async () => {
       runtimePlugins: [], stopping: false, pluginCapabilityCatalog: catalog,
       pluginIsAuthorized: () => true, configureWorker: () => Promise.resolve(),
       pluginViewHosts: new Map(), capabilityCalls: new Map(), sandboxCalls: new Map(), sandboxTasks: new Map(),
+      systemNotifications: {clear: () => {}},
       hostServices: new Map([['seed.plugin.diagnostic', args => {diagnostics.push(args);return null}]]),
     });
     runtime.pluginEvents = new PluginEventBroker(() => runtime.runtimePlugins, catalog);

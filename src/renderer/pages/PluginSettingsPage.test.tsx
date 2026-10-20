@@ -54,7 +54,7 @@ describe('Plugin settings placement', () => {
       appName: 'MotusAI Seed', appVersion: '0.2.6', platform: 'darwin', architecture: 'arm64',
       launchAtLogin: false, preventSystemSleep: false, update: { status: 'disabled' },
     } as SeedSnapshot
-    const html = renderToStaticMarkup(<SeedI18nProvider><SettingsPage snapshot={snapshot} themePreference="system" resolvedTheme="dark" onThemeChange={() => {}} onPreventSystemSleepChange={() => {}} onLaunchAtLoginChange={() => {}} onCheckForUpdates={() => {}} onDownloadUpdate={() => {}} onInstallUpdate={() => {}} /></SeedI18nProvider>)
+    const html = renderToStaticMarkup(<SeedI18nProvider><SettingsPage snapshot={snapshot} themePreference="system" resolvedTheme="dark" onThemeChange={() => {}} onPreventSystemSleepChange={() => {}} onLaunchAtLoginChange={() => {}} onSystemNotificationsChange={() => {}} onCheckForUpdates={() => {}} onDownloadUpdate={() => {}} onInstallUpdate={() => {}} /></SeedI18nProvider>)
     expect(html).toContain('界面主题')
     expect(html).toContain('语言')
     expect(html).toContain('版本')

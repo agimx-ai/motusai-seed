@@ -14,6 +14,7 @@ import { ObservationStore, errorDetails } from './observation-store'
 
 process.title = buildConfig.appName
 app.setName(buildConfig.appName)
+if (process.platform === 'win32') app.setAppUserModelId(buildConfig.appId)
 crashReporter.start({ uploadToServer: false, productName: buildConfig.appName })
 protocol.registerSchemesAsPrivileged([{
   scheme: 'seed-plugin',

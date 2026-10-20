@@ -309,6 +309,8 @@
   },
   "settings": {
     "connectionAndPermissions": "Connection & permissions",
+    "systemNotifications": "System notifications",
+    "systemNotificationsDescription": "Receive system notifications, subject to your system notification settings.",
     "preventSleep": "Prevent system sleep while running",
     "preventSleepDescription": "Keep your computer awake while {{appName}} runs tasks",
     "theme": "Interface theme",

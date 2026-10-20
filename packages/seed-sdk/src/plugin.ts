@@ -22,6 +22,7 @@ import { SeedPluginError } from './error.js';
 import { PluginSettingsStore } from './settings.js';
 import { createPluginEventClient, type PluginEventService } from './plugin-events.js';
 import type { PluginResources, PluginFilePicker } from './resources.js';
+import { createSystemNotificationClient, type SystemNotificationService } from './notifications.js';
 
 export type PluginManifest = {
   id: string;
@@ -79,7 +80,11 @@ export type PluginServices = {
   registerCapability?: CapabilityRegistration;
 };
 
-export type ServiceApp = PluginServices & { settings: PluginSettingsStore; events: PluginEventService };
+export type ServiceApp = PluginServices & {
+  settings: PluginSettingsStore;
+  events: PluginEventService;
+  notifications: SystemNotificationService;
+};
 
 export class Plugin extends Component {
   settings?: unknown;
@@ -167,6 +172,13 @@ export class PluginService extends Component {
           : {}),
       },
       settings: new PluginSettingsStore((service, args) => app.invokeHost(service, args), this.signal),
+      notifications: createSystemNotificationClient(
+        (service, args) => app.invokeHost(service, args),
+        this.signal,
+        (error) => {
+          void app.diagnostics.error('plugin.notification.failed', error).catch(() => undefined);
+        },
+      ),
       events: createPluginEventClient(
         (service, args) => app.invokeHost(service, args),
         this.signal,

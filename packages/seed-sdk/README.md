@@ -10,6 +10,7 @@ MotusAI Seed 插件开发 SDK —— 提供设置页、前后端通信、数据�
 - 🔐 **数据存储** — 按插件保存加密数据、后端配置和凭据
 - 🔌 **公开能力** — 注册公开方法，支持参数、结果校验和跨插件调用
 - 📡 **事件订阅** — 支持前后端通知，以及跨插件后台事件
+- 🔔 **系统通知** — 发送桌面通知，监听显示、点击和关闭事件
 - 🔄 **开发热更新** — 监听源码变化，自动构建并同步到 Seed 开发客户端
 - 📦 **插件打包** — 生成 `.seedpkg` 安装包及 SHA-256 摘要
 
@@ -175,6 +176,7 @@ await buildPlugin({
 | `secrets` | `get(key): Promise<string \| undefined>`、`set(key, value)`、`delete(key)` | 凭据存储；写入 / 删除返回 `Promise<void>` |
 | `capabilities` | `list()`、`invoke(input)`、可选 `stream(input)` | 调用已声明消费的公开能力 |
 | `events` | `list()`、`publish(input)`、`subscribe(options, handler)` | 跨插件后台事件 |
+| `notifications` | `show(options, handlers?): Promise<SystemNotification>` | 发送系统通知 |
 | `tasks` | `start(input)`、`run(input, work)` | 后台任务的状态与取消 |
 | `connections` | `register(descriptor)` | 插件连接的生命周期与状态 |
 | `authorization` | `authorize(request, signal?)` | 浏览器 OAuth / OIDC 授权 |
@@ -296,6 +298,50 @@ export default class GreetingService extends PluginService {
 | `transaction<T>(ids, mutate)` | 多个 ID；回调返回要更新的 ID 与值 | `Promise<Record<string, PluginSettingsSnapshot<T>>>` |
 
 返回结构为 `PluginSettingsSnapshot<T>`；保存冲突时返回 `plugin_settings_conflict`。
+
+### `notifications`
+
+发送系统通知，通过 `this.app.notifications` 使用。需在 `manifest.json` 中声明 `system.notifications` 权限。
+
+| 方法 | 说明 | 返回值 |
+| --- | --- | --- |
+| `isSupported()` | 检查当前系统是否支持通知 | `Promise<boolean>` |
+| `create(options)` | `SystemNotificationOptions`，创建通知，暂不发送 | `SystemNotification` |
+| `show(options, handlers?)` | `SystemNotificationOptions`、可选 `SystemNotificationHandlers`，创建并发送通知 | `Promise<SystemNotification>` |
+
+#### `SystemNotificationOptions`
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `title` | `string` | 否 | 通知标题，最多 16,384 字符 |
+| `body` | `string` | 否 | 通知正文，最多 65,536 字符；系统可能截断展示 |
+| `silent` | `boolean` | 否 | 是否静音 |
+| `icon` | `string` | 否 | PNG / JPEG 图片，使用已声明的包内资源相对路径或 Base64 data URL；最多 2 MiB、2048 × 2048 像素 |
+| `clickTarget` | `SeedNavigationTarget` | 否 | 点击后打开的客户端目标；省略时不自动跳转 |
+
+#### `SystemNotification`
+
+| 属性 / 方法 | 说明 | 类型或返回值 |
+| --- | --- | --- |
+| `id` | 通知句柄 ID | `string` |
+| `result` | 最近一次发送结果；未发送时为 `undefined` | `SystemNotificationResult \| undefined` |
+| `on(event, listener)` | 监听事件，返回取消监听函数 | `() => void` |
+| `show(options?)` | 发送通知；传参替换全部配置，省略时沿用上次配置 | `Promise<SystemNotificationResult>` |
+| `close()` | 关闭通知并释放句柄 | `Promise<void>` |
+| `closed` | 句柄释放时完成；事件接收失败时拒绝 | `Promise<void>` |
+
+每个插件最多同时保留 64 个已发送通知句柄。不再使用时调用 `close()`，插件卸载时自动清理。
+
+#### `SystemNotificationResult`
+
+| 返回值 | 说明 |
+| --- | --- |
+| `sent` | 系统报告已发送，不代表用户已阅读 |
+| `disabled` | 用户关闭客户端通知开关，或客户端正在退出 |
+| `unsupported` | 当前系统不支持通知 |
+| `failed` | 发送失败或超时 |
+
+非 `sent` 结果会关闭句柄，重试时需重新创建通知。参数或权限错误会拒绝调用。
 
 ### `secrets`
 
@@ -522,6 +568,20 @@ toast.error('保存失败', { description: '请检查连接后重试。' });
 ---
 
 ## 📡 事件列表
+
+### 系统通知事件
+
+通过 `notification.on(event, listener)` 监听，或在 `app.notifications.show(options, handlers)` 中传入回调。
+
+| 事件 | 回调参数 | 说明 |
+| --- | --- | --- |
+| `show` | `notification: SystemNotification` | 系统报告通知已显示 |
+| `click` | `notification: SystemNotification` | 用户点击通知 |
+| `close` | `notification: SystemNotification` | 系统报告通知已关闭，不代表句柄已释放 |
+
+回调返回 `void` 或 `Promise<void>`。使用 `create()` 时，先注册监听，再调用通知的 `show()`。
+
+事件是否触发取决于系统通知服务和用户设置。
 
 ### 前端事件
 
@@ -770,6 +830,45 @@ export default class CredentialService extends PluginService {
     this.registerMethod('deleteToken', async () => {
       await this.app.secrets.delete('api-token');
       return { configured: false };
+    });
+  }
+}
+```
+
+### 发送和关闭系统通知
+
+`manifest.json`：
+
+```json
+{ "permissions": ["system.notifications"] }
+```
+
+`src/service.ts`：
+
+```ts
+import { PluginService, type SystemNotification } from '@motus-ai/seed-sdk';
+
+export default class NotificationService extends PluginService {
+  private notification?: SystemNotification;
+
+  onload() {
+    this.registerMethod('notify', async () => {
+      await this.notification?.close();
+      this.notification = await this.app.notifications.show({
+        title: '任务完成',
+        body: '结果已准备好，点击查看。',
+        silent: true,
+        clickTarget: { destination: 'plugins', pluginId: this.manifest.id },
+      }, {
+        click: async (notification) => {
+          await notification.close();
+        },
+      });
+      return { result: this.notification.result };
+    });
+
+    this.registerMethod('closeNotification', async () => {
+      await this.notification?.close();
     });
   }
 }

@@ -58,6 +58,7 @@ import { currentNativePluginRuntimeDefinition } from './native-plugin-runtime-de
 import { SeedStore } from './store';
 import { SeedPluginInstaller } from './seed-plugin-installer';
 import { PluginUpdates } from './plugin-updates';
+import { SystemNotifications } from './system-notifications';
 import { mascotTiming, remainingMascotRunningMs } from './mascot-timing';
 import { SeedUpdater } from './updater';
 import { CloudDiagnosticUploader } from './cloud-diagnostic-uploader';
@@ -148,6 +149,7 @@ export class SeedRuntime {
   private readonly consumedLocalClientApprovalIds = new Map<string, number>();
   private readonly pluginInstaller: SeedPluginInstaller;
   private readonly pluginUpdates: PluginUpdates;
+  private readonly systemNotifications: SystemNotifications;
   private readonly fileBroker: FileBroker;
   private readonly screenCaptureService = new ScreenCaptureService();
   private readonly audioService: AudioService;
@@ -388,6 +390,11 @@ export class SeedRuntime {
       'seed.screen',
       async (argumentsValue) =>
         await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.screen', argumentsValue),
+    ],
+    [
+      'seed.notifications',
+      async (argumentsValue) =>
+        await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.notifications', argumentsValue),
     ],
     [
       'seed.plugin-settings',
@@ -666,6 +673,9 @@ export class SeedRuntime {
     readonly diagnostics = new ObservationStore(app.getPath('userData'), buildConfig.appName),
   ) {
     this.store = new SeedStore(app.getPath('userData'), buildConfig.appName, diagnostics);
+    this.systemNotifications = new SystemNotifications(
+      (owner, message) => this.diagnostics.record({ level: 'warn', source: 'main', event: 'notification.failed', plugin_id: owner, message }),
+    );
     this.pluginInstaller = new SeedPluginInstaller(
       app.getPath('userData'),
       () => this.distribution?.market_url || '',
@@ -1156,6 +1166,7 @@ export class SeedRuntime {
       launchAtLogin: loginSettings.openAtLogin,
       preventSystemSleep: this.store.preventSystemSleep(),
       autoUpdatePlugins: this.store.autoUpdatePlugins(),
+      systemNotificationsEnabled: this.store.systemNotificationsEnabled(),
       languagePreference: this.store.languagePreference(),
       locale: resolveSeedLocale(this.store.languagePreference()),
       themePreference: this.store.themePreference(),
@@ -1399,6 +1410,13 @@ export class SeedRuntime {
     await this.publishSnapshot();
     if (enabled && this.pluginCatalogStatus === 'ready') this.updatePluginsAfterStartup();
     return this.store.autoUpdatePlugins();
+  }
+
+  async setSystemNotificationsEnabled(enabled: boolean) {
+    await this.store.setSystemNotificationsEnabled(enabled);
+    if (!enabled) this.systemNotifications.clear();
+    await this.publishSnapshot();
+    return enabled;
   }
 
   async setLanguagePreference(preference: SeedLanguagePreference) {
@@ -2361,6 +2379,7 @@ export class SeedRuntime {
 
   private async releasePluginWork(packageId: string, failed = false) {
     this.pluginEvents.closePlugin(packageId);
+    this.systemNotifications.clear(packageId);
     for (const calls of [this.sandboxCalls, this.capabilityCalls])
       for (const [key, call] of calls) if (key.startsWith(packageId + ':')) call.abort();
     for (const [key, activity] of this.sandboxTasks)
@@ -2636,6 +2655,39 @@ export class SeedRuntime {
       const { package_id: _packageId, ...request } = argumentsValue;
       return await this.screenCaptureService.invoke(request, plugin?.permissions ?? []);
     }
+    if (service === 'seed.notifications') {
+      const plugin = this.runtimePlugins.find(
+        (candidate) => candidate.package_id === packageId && candidate.api_version === 2 && candidate.has_service,
+      );
+      if (!plugin?.permissions.includes('system.notifications') || !this.pluginIsAuthorized(packageId))
+        throw Object.assign(new Error('Plugin system notification permission is unavailable.'), {
+          code: 'broker_permission_denied',
+        });
+      const { package_id: _packageId, ...request } = argumentsValue;
+      return await this.systemNotifications.invoke(packageId, request, {
+        plugin,
+        enabled: () => !this.stopping && this.store.systemNotificationsEnabled(),
+        assertActive: () => {
+          assertActive?.();
+          if (!this.runtimePlugins.includes(plugin) || !this.pluginIsAuthorized(packageId))
+            throw new Error('System notification owner is no longer running.');
+        },
+        activate: (target) => {
+          const window = this.window();
+          if (window && !window.isDestroyed()) {
+            if (window.isMinimized()) window.restore();
+            window.show();
+            window.focus();
+          }
+          void this.requestNavigation(target).catch((error: unknown) => {
+            this.diagnostics.record({
+              level: 'warn', source: 'main', event: 'notification.activation.failed', plugin_id: packageId,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          });
+        },
+      });
+    }
     if (service === 'seed.shell.open-path') {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId);
       if (!plugin?.permissions.includes('shell.open-path'))
@@ -2690,6 +2742,7 @@ export class SeedRuntime {
 
   async stop() {
     this.stopping = true;
+    this.systemNotifications.clear();
     await this.pluginUpdates.stop();
     this.pluginEvents.clear();
     for (const calls of [this.capabilityCalls, this.sandboxCalls]) {

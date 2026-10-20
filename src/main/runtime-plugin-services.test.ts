@@ -22,6 +22,7 @@ function fixture(kind = 'sandboxed-web') {
       api_version: 2,
       runtime_kind: kind,
       has_service: true,
+      permissions: [],
     })),
     capabilityCalls: new Map(),
     sandboxCalls: new Map(),
@@ -30,6 +31,12 @@ function fixture(kind = 'sandboxed-web') {
     handleWorkerEvent: vi.fn(async () => undefined),
     pluginCapabilityCatalog: { publish: vi.fn() },
     pluginEvents: { reconcile: vi.fn(), closePlugin: vi.fn() },
+    systemNotifications: { invoke: vi.fn(async () => 'sent'), clear: vi.fn() },
+    pluginIsAuthorized: vi.fn(() => true),
+    store: { systemNotificationsEnabled: vi.fn(() => true) },
+    window: vi.fn(() => null),
+    requestNavigation: vi.fn(async () => undefined),
+    diagnostics: { record: vi.fn() },
     configureWorker: vi.fn(),
   });
   const call = (owner: string, service: string, args: Record<string, unknown>) =>
@@ -37,12 +44,51 @@ function fixture(kind = 'sandboxed-web') {
   return { runtime, call };
 }
 describe('generic plugin SDK brokers', () => {
+  it.each(['native-host', 'sandboxed-web'])('routes notification identity, permission and optional navigation for %s', async (kind) => {
+    const { runtime, call } = fixture(kind);
+    runtime.runtimePlugins[0].permissions = ['system.notifications'];
+    const window = { isDestroyed: () => false, isMinimized: () => true, restore: vi.fn(), show: vi.fn(), focus: vi.fn() };
+    runtime.window.mockReturnValue(window);
+    const request = { version: 1, operation: 'show', id: crypto.randomUUID(), notification: { title: 'Complete' } };
+    expect(await call('one', 'seed.notifications', { ...request, package_id: 'com.example.two' })).toBe('sent');
+    const [owner, input, context] = runtime.systemNotifications.invoke.mock.calls[0];
+    expect(owner).toBe('com.example.one'); expect(input).toEqual(request);
+    expect(context.plugin).toBe(runtime.runtimePlugins[0]); expect(context.enabled()).toBe(true);
+    expect(runtime.requestNavigation).not.toHaveBeenCalled();
+    const target = { destination: 'plugins', pluginId: 'com.example.target', query: 'details' };
+    context.activate(target);
+    expect(window.restore).toHaveBeenCalledOnce(); expect(window.show).toHaveBeenCalledOnce(); expect(window.focus).toHaveBeenCalledOnce();
+    expect(runtime.requestNavigation).toHaveBeenCalledExactlyOnceWith(target);
+    runtime.store.systemNotificationsEnabled.mockReturnValue(false); expect(context.enabled()).toBe(false);
+    await runtime.releasePluginWork('com.example.one');
+    expect(runtime.systemNotifications.clear).toHaveBeenCalledExactlyOnceWith('com.example.one');
+    runtime.runtimePlugins = [runtime.runtimePlugins[1]];
+    expect(() => context.assertActive()).toThrow('no longer running');
+  });
+  it('checks plugin notification permission before touching the notification service', async () => {
+    const { runtime, call } = fixture();
+    for (const owner of ['one', 'missing'])
+      await expect(call(owner, 'seed.notifications', { version: 1, operation: 'is-supported' }))
+        .rejects.toMatchObject({ code: 'broker_permission_denied' });
+    runtime.runtimePlugins[0].permissions = ['system.notifications']; runtime.pluginIsAuthorized.mockReturnValue(false);
+    await expect(call('one', 'seed.notifications', { version: 1, operation: 'is-supported' }))
+      .rejects.toMatchObject({ code: 'broker_permission_denied' });
+    expect(runtime.systemNotifications.invoke).not.toHaveBeenCalled();
+  });
+  it('persists notification disable and clears pending handles', async () => {
+    const { runtime } = fixture();
+    runtime.store.setSystemNotificationsEnabled = vi.fn(); runtime.publishSnapshot = vi.fn();
+    expect(await runtime.setSystemNotificationsEnabled(false)).toBe(false);
+    expect(runtime.store.setSystemNotificationsEnabled).toHaveBeenCalledWith(false);
+    expect(runtime.systemNotifications.clear).toHaveBeenCalledExactlyOnceWith(); expect(runtime.publishSnapshot).toHaveBeenCalledOnce();
+  });
   it('counts only a real active capture task, deduplicating repeated requests for the same task', () => {
     const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
       store: {
         audit: () => [],
         preventSystemSleep: () => false,
         autoUpdatePlugins: () => true,
+        systemNotificationsEnabled: () => true,
         languagePreference: () => 'en-US',
         themePreference: () => 'light',
       },

@@ -7,10 +7,10 @@ import { SettingsPage } from './SettingsPage'
 function render(status: AppUpdateStatus = 'disabled', platform: NodeJS.Platform = 'darwin') {
   const snapshot = {
     appName: 'MotusAI Seed', appVersion: '0.2.8', platform, architecture: 'arm64',
-    launchAtLogin: false, preventSystemSleep: false,
+    launchAtLogin: false, preventSystemSleep: false, systemNotificationsEnabled: true,
     update: { status, currentVersion: '0.2.8', availableVersion: '0.2.9', percent: 25 },
   } as SeedSnapshot
-  return renderToStaticMarkup(<SeedI18nProvider><SettingsPage snapshot={snapshot} themePreference="system" resolvedTheme="light" onThemeChange={() => {}} onPreventSystemSleepChange={() => {}} onLaunchAtLoginChange={() => {}} onCheckForUpdates={() => {}} onDownloadUpdate={() => {}} onInstallUpdate={() => {}} /></SeedI18nProvider>)
+  return renderToStaticMarkup(<SeedI18nProvider><SettingsPage snapshot={snapshot} themePreference="system" resolvedTheme="light" onThemeChange={() => {}} onPreventSystemSleepChange={() => {}} onLaunchAtLoginChange={() => {}} onSystemNotificationsChange={() => {}} onCheckForUpdates={() => {}} onDownloadUpdate={() => {}} onInstallUpdate={() => {}} /></SeedI18nProvider>)
 }
 
 describe('Settings version row', () => {

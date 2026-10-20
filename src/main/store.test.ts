@@ -28,18 +28,21 @@ async function temporaryDirectory() {
 }
 
 describe('SeedStore SQLite persistence', () => {
-  it('defaults automatic plugin updates on and preserves both preferences across restart', async () => {
+  it('defaults automatic plugin updates and notifications on and preserves preferences across restart', async () => {
     const directory = await temporaryDirectory();
     let store = new SeedStore(directory, 'MotusAI Seed');
     await store.load();
     try {
       expect(store.autoUpdatePlugins()).toBe(true);
+      expect(store.systemNotificationsEnabled()).toBe(true);
       for (const enabled of [false, true]) {
         await store.setAutoUpdatePlugins(enabled);
+        await store.setSystemNotificationsEnabled(enabled);
         await store.close();
         store = new SeedStore(directory, 'MotusAI Seed');
         await store.load();
         expect(store.autoUpdatePlugins()).toBe(enabled);
+        expect(store.systemNotificationsEnabled()).toBe(enabled);
       }
     } finally {
       await store.close();

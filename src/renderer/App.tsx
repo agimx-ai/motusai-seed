@@ -377,6 +377,12 @@ export default function App() {
                 snapshot={snapshot}
                 themePreference={themePreference}
                 resolvedTheme={resolvedTheme}
+                notificationsBusy={busy === 'system-notifications'}
+                onSystemNotificationsChange={() =>
+                  void run('system-notifications', (api) =>
+                    api.setSystemNotificationsEnabled(!snapshot.systemNotificationsEnabled),
+                  )
+                }
                 onThemeChange={(preference) =>
                   void run(
                     'theme-preference',

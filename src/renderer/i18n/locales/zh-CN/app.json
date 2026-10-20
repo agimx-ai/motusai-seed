@@ -309,6 +309,8 @@
   },
   "settings": {
     "connectionAndPermissions": "连接与权限",
+    "systemNotifications": "系统通知",
+    "systemNotificationsDescription": "通过系统通知提醒你，是否显示取决于系统通知设置。",
     "preventSleep": "运行时防止系统休眠",
     "preventSleepDescription": "在 {{appName}} 运行任务时，让电脑保持唤醒状态",
     "theme": "界面主题",

@@ -29,6 +29,7 @@ type StoredConfig = {
   encryptedPluginData?: string;
   preventSystemSleep: boolean;
   autoUpdatePlugins: boolean;
+  systemNotificationsEnabled: boolean;
   languagePreference: SeedLanguagePreference;
   themePreference: SeedThemePreference;
 };
@@ -88,6 +89,7 @@ type AuditRow = {
 const defaults = (): StoredConfig => ({
   preventSystemSleep: false,
   autoUpdatePlugins: true,
+  systemNotificationsEnabled: true,
   languagePreference: 'system',
   themePreference: 'system',
 });
@@ -386,6 +388,7 @@ export class SeedStore {
       encryptedPluginData: settings.get('encrypted_plugin_data'),
       preventSystemSleep: settings.get('prevent_system_sleep') === 'true',
       autoUpdatePlugins: settings.get('auto_update_plugins') !== 'false',
+      systemNotificationsEnabled: settings.get('system_notifications_enabled') !== 'false',
       languagePreference: language === 'zh-CN' || language === 'en-US' ? language : 'system',
       themePreference:
         settings.get('theme_preference') === 'light' || settings.get('theme_preference') === 'dark'
@@ -464,6 +467,13 @@ export class SeedStore {
   async setAutoUpdatePlugins(enabled: boolean) {
     await this.setSetting('auto_update_plugins', JSON.stringify(enabled));
     this.value.autoUpdatePlugins = enabled;
+  }
+  systemNotificationsEnabled() {
+    return this.value.systemNotificationsEnabled;
+  }
+  async setSystemNotificationsEnabled(enabled: boolean) {
+    await this.setSetting('system_notifications_enabled', JSON.stringify(enabled));
+    this.value.systemNotificationsEnabled = enabled;
   }
   async setPreventSystemSleep(enabled: boolean) {
     await this.setSetting('prevent_system_sleep', JSON.stringify(enabled));

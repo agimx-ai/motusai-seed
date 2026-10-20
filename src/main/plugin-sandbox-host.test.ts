@@ -181,6 +181,9 @@ describe('SeedPluginSandboxSupervisor', () => {
 });
 
 describe('sandbox Host service permissions', () => {
+  it('requires the system notification permission for the SDK notification service', () => {
+    expect(requiredPermissions('seed.notifications', { version: 1, operation: 'show' })).toEqual(['system.notifications']);
+  });
   it('requires screen capture for the generic screen service', () => {
     expect(requiredPermissions('seed.screen', { version: 1, operation: 'capture' })).toEqual(['system.screen-capture']);
     expect(requiredPermissions('seed.screen', { version: 1, operation: 'list_displays' })).toEqual([

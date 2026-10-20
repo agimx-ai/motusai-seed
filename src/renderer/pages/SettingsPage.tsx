@@ -20,6 +20,8 @@ type SettingsPageProps = {
   onThemeChange: (preference: ThemePreference) => void;
   onPreventSystemSleepChange: () => void;
   onLaunchAtLoginChange: () => void;
+  notificationsBusy?: boolean;
+  onSystemNotificationsChange: () => void;
   onCheckForUpdates: () => void;
   onDownloadUpdate: () => void;
   onInstallUpdate: () => void;
@@ -39,6 +41,8 @@ export function SettingsPage({
   onThemeChange,
   onPreventSystemSleepChange,
   onLaunchAtLoginChange,
+  notificationsBusy = false,
+  onSystemNotificationsChange,
   onCheckForUpdates,
   onDownloadUpdate,
   onInstallUpdate,
@@ -118,6 +122,18 @@ export function SettingsPage({
                 checked={snapshot.preventSystemSleep}
                 onClick={onPreventSystemSleepChange}
                 label={t('settings.preventSleep')}
+              />
+            }
+          />
+          <SettingsRow
+            title={t('settings.systemNotifications')}
+            description={t('settings.systemNotificationsDescription')}
+            action={
+              <ToggleSwitch
+                checked={snapshot.systemNotificationsEnabled}
+                label={t('settings.systemNotifications')}
+                disabled={notificationsBusy}
+                onClick={onSystemNotificationsChange}
               />
             }
           />

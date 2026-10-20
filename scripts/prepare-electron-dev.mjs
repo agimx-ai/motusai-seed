@@ -11,6 +11,16 @@ function plistValue(plist, key) {
   return execFileSync('plutil', ['-extract', key, 'raw', '-o', '-', plist], { encoding: 'utf8' }).trim()
 }
 
+function registerDevelopmentApp(appPath) {
+  try {
+    execFileSync('codesign', ['--verify', '--deep', '--strict', appPath], { stdio: 'pipe' })
+  } catch {
+    execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], { stdio: 'pipe' })
+  }
+  execFileSync('/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister', ['-f', appPath], { stdio: 'pipe' })
+  return join(appPath, 'Contents', 'MacOS', 'Electron')
+}
+
 export function prepareElectronDev(projectRoot, electronBinary, electronVersion) {
   if (process.platform !== 'darwin') return electronBinary
 
@@ -26,7 +36,7 @@ export function prepareElectronDev(projectRoot, electronBinary, electronVersion)
     if (isAbsolute(readlinkSync(frameworkResources))) {
       throw new Error(`The development Electron app has invalid framework links: ${appPath}`)
     }
-    return join(appPath, 'Contents', 'MacOS', 'Electron')
+    return registerDevelopmentApp(appPath)
   }
 
   mkdirSync(outputDirectory, { recursive: true })
@@ -51,5 +61,5 @@ export function prepareElectronDev(projectRoot, electronBinary, electronVersion)
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true })
   }
-  return join(appPath, 'Contents', 'MacOS', 'Electron')
+  return registerDevelopmentApp(appPath)
 }

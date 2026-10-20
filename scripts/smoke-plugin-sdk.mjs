@@ -3,12 +3,14 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
 import { buildPlugin } from '@motus-ai/seed-sdk/tools';
 import { createPluginPage } from './plugin-page-smoke.mjs';
 import { verifyPluginPage } from './verify-plugin-page.mjs';
 
 const require = createRequire(import.meta.url);
 const { SeedPluginViewHost } = require('../dist/electron/main/plugin-view-host.js');
+const { SeedRuntime } = require('../dist/electron/main/runtime.js');
 const { NativePluginManager } = require('../dist/electron/main/native-plugin-manager.js');
 const { SeedPluginSandboxSupervisor } = require('../dist/electron/main/plugin-sandbox-host.js');
 const { inspectPluginDirectory, directoryRuntimePlugin } = require('../dist/electron/main/plugin-directory.js');
@@ -24,10 +26,28 @@ const deadline = setTimeout(() => {
   process.stderr.write('SDK smoke timed out.\n');
   app.exit(1);
 }, 45000);
+async function addNotificationProbe(directory) {
+  const manifestPath = join(directory, 'manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.permissions = ['system.notifications'];
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const servicePath = join(directory, 'src/service.ts');
+  await writeFile(servicePath, (await readFile(servicePath, 'utf8')).replace('onload() {', `onload() {
+    this.notificationClicks = 0;
+    this.registerMethod('notify', async () => {
+      this.notification = await this.app.notifications.show(
+        {title:'Complete',body:'Done',silent:true}, {click: () => {this.notificationClicks++}}
+      );
+      return this.notification.result;
+    });
+    this.registerMethod('notification-status', () => this.notificationClicks);
+    this.registerMethod('notification-close', async () => {await this.notification.close();return true});`));
+}
 async function run() {
   let failed = false;
   try {
     await cp(resolve('packages/seed-sdk/tests/fixtures/generic'), join(root, 'plugin'), { recursive: true });
+    await addNotificationProbe(join(root, 'plugin'));
     const source = join(root, 'plugin/src/main.ts');
     await writeFile(
       source,
@@ -48,11 +68,49 @@ async function run() {
     const built = await buildPlugin({ root: join(root, 'plugin'), runtime: 'native-host', service: 'src/service.ts' });
     const inspected = await inspectPluginDirectory(built.output);
     const plugin = directoryRuntimePlugin(inspected, 'official');
+    const notifications = [];
+    const notificationReads = new Map();
+    const notificationEvents = new Map();
+    const emitNotification = (owner, id, event) => {
+      const key = owner + ':' + id, reader = notificationReads.get(key);
+      if (reader) {notificationReads.delete(key);reader({done:false,event})}
+      else {const queue = notificationEvents.get(key) || [];queue.push(event);notificationEvents.set(key,queue)}
+    };
+    const verifyNotification = async (current, call) => {
+      assert.equal(await call('notify'), 'sent');
+      const record = notifications.at(-1);
+      assert.equal(record.owner, current.package_id);
+      assert.deepEqual(record.options, {title:'Complete',body:'Done',silent:true});
+      emitNotification(record.owner, record.id, 'click');
+      const until = Date.now() + 5000;
+      while (await call('notification-status') !== 1) {
+        if (Date.now() >= until) throw new Error('Notification callback did not reach owning plugin');
+        await new Promise(done => setTimeout(done, 20));
+      }
+      assert.equal(await call('notification-close'), true);
+      assert.equal(notificationReads.size, 0);
+    };
+    const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
+      runtimePlugins: [plugin], stopping: false, pluginIsAuthorized: () => true,
+      store: {systemNotificationsEnabled: () => true},
+      systemNotifications: {invoke: async (owner, request) => {
+        const key = owner + ':' + request.id;
+        if(request.operation === 'show') {notifications.push({owner,id:request.id,options:request.notification});return 'sent'}
+        if(request.operation === 'next') {
+          const event = notificationEvents.get(key)?.shift();
+          if(event) return {done:false,event};
+          return await new Promise(resolve => notificationReads.set(key, resolve));
+        }
+        if(request.operation === 'close') {
+          notificationReads.get(key)?.({done:true});notificationReads.delete(key);notificationEvents.delete(key);return null;
+        }
+        throw new Error('Unexpected notification operation');
+      }},
+    });
+    const broker = (...args) => runtime.invokePluginBroker(...args);
     native = new NativePluginManager(
       'SDK Smoke',
-      async () => {
-        throw new Error('Unexpected broker');
-      },
+      broker,
       () => {},
       (_id, event, error) => process.stderr.write(event + ': ' + error.message + '\n'),
       () => {},
@@ -70,6 +128,7 @@ async function run() {
       plugins: [current],
     });
     await native.start(plugin, configure(plugin));
+    await verifyNotification(plugin, method => native.call(plugin.package_id, {type:'service-call',method,arguments:{}}));
     let data = { revision: 7, data: { preference: 'kept across reload', pending: true } };
     const createView = (current) =>
       new SeedPluginViewHost(
@@ -206,17 +265,19 @@ async function run() {
     if ((await native.call(plugin.package_id, { type: 'service-call', method: 'status', arguments: {} })) !== process.platform + '-reloaded')
       throw new Error('Navigation stopped the backend');
     await cp(resolve('packages/seed-sdk/tests/fixtures/sandbox'), join(root, 'sandbox'), { recursive: true });
+    await addNotificationProbe(join(root, 'sandbox'));
     const browserBuild = await buildPlugin({ root: join(root, 'sandbox'), service: 'src/service.ts' });
     const browserPlugin = directoryRuntimePlugin(await inspectPluginDirectory(browserBuild.output), 'official');
+    runtime.runtimePlugins.push(browserPlugin);
     sandbox = new SeedPluginSandboxSupervisor(
-      async () => {
-        throw new Error('Unexpected sandbox broker');
-      },
+      broker,
       (_id, event, message) => {
         if (event.endsWith('.failed')) process.stderr.write(event + ': ' + message + '\n');
       },
     );
     await sandbox.configure([browserPlugin]);
+    await verifyNotification(browserPlugin, method => sandbox.callService(browserPlugin.package_id, method, {}));
+    assert.equal(notifications.length, 2);
     if ((await sandbox.callService(browserPlugin.package_id, 'status', {})) !== 'sandbox')
       throw new Error('Sandbox service failed');
     const browserView = createView(browserPlugin);
@@ -238,7 +299,7 @@ async function run() {
       throw new Error('Cancellation stopped service');
     if (viewErrors.length) throw new Error('Renderer errors: ' + viewErrors.join('\n'));
     process.stdout.write(
-      'SDK smoke passed: direct DOM, independent styles, native/sandbox isolation, RPC, cancellation, navigation, delayed startup and four same-version reloads on the open page with saved data.\n',
+      'SDK smoke passed: direct DOM, independent styles, native/sandbox isolation, RPC, notification send/click/close roundtrip (mock OS transport), cancellation, navigation, delayed startup and four same-version reloads on the open page with saved data.\n',
     );
     process.stdout.write('Reload screenshots: ' + screenshots + '\n');
   } catch (error) {

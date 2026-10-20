@@ -79,6 +79,9 @@ export function registerIpc(runtime: SeedRuntime) {
   handle(ipcChannels.autoUpdatePlugins, (_event, enabled) =>
     runtime.setAutoUpdatePlugins(z.boolean().parse(enabled)),
   );
+  handle(ipcChannels.systemNotificationsEnabled, (_event, enabled) =>
+    runtime.setSystemNotificationsEnabled(z.boolean().parse(enabled)),
+  );
   handle(ipcChannels.languagePreference, (_event, preference) =>
     runtime.setLanguagePreference(z.enum(['system', 'zh-CN', 'en-US']).parse(preference)),
   );

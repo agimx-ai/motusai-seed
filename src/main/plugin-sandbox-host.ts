@@ -84,6 +84,7 @@ export function requiredPermissions(service: string, argumentsValue: Record<stri
   if (service === 'seed.shell.open-path') return ['shell.open-path'];
   if (service === 'seed.process') return ['process.sidecar'];
   if (service === 'seed.screen') return ['system.screen-capture'];
+  if (service === 'seed.notifications') return ['system.notifications'];
   if (service === 'seed.audio') {
     const operation = String(argumentsValue.operation || '');
     if (

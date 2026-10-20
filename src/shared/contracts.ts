@@ -215,6 +215,7 @@ export type SeedSnapshot = {
   launchAtLogin: boolean;
   preventSystemSleep: boolean;
   autoUpdatePlugins: boolean;
+  systemNotificationsEnabled: boolean;
   languagePreference: SeedLanguagePreference;
   locale: SeedLocale;
   themePreference: SeedThemePreference;
@@ -381,6 +382,7 @@ export type SeedApi = {
   setLaunchAtLogin(enabled: boolean): Promise<boolean>;
   setPreventSystemSleep(enabled: boolean): Promise<boolean>;
   setAutoUpdatePlugins(enabled: boolean): Promise<boolean>;
+  setSystemNotificationsEnabled(enabled: boolean): Promise<boolean>;
   setLanguagePreference(preference: SeedLanguagePreference): Promise<void>;
   setThemePreference(preference: SeedThemePreference): Promise<void>;
   checkForUpdates(): Promise<boolean>;
@@ -436,6 +438,7 @@ export const ipcChannels = {
   launchAtLogin: 'seed:settings:launch-at-login',
   preventSystemSleep: 'seed:settings:prevent-system-sleep',
   autoUpdatePlugins: 'seed:settings:auto-update-plugins',
+  systemNotificationsEnabled: 'seed:settings:system-notifications',
   languagePreference: 'seed:settings:language-preference',
   themePreference: 'seed:settings:theme-preference',
   checkForUpdates: 'seed:updates:check',

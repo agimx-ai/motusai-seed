@@ -1,5 +1,14 @@
 export { Component, type Disposer } from './component.js';
 export { Events, type EventRef } from './events.js';
+export type {
+  SystemNotificationOptions,
+  SystemNotificationResult,
+  SystemNotificationService,
+  SystemNotification,
+  SystemNotificationEvent,
+  SystemNotificationListener,
+  SystemNotificationHandlers,
+} from './notifications.js';
 export {
   createPluginEventClient,
   type CapabilityEvent,
