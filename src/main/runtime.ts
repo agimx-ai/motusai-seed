@@ -1856,12 +1856,14 @@ export class SeedRuntime {
       visited.add(page.nextCursor);
       cursor = page.nextCursor;
     }
+    // Entitlement refresh publishes snapshots too. Keep the previous catalog until installed
+    // identities/icons are ready, so new cards cannot briefly classify every plugin as uninstalled.
+    if (options.refreshEntitlements !== false) await this.refreshInstalledEntitlements();
     this.verifiedCatalogPlugins.clear();
     for (const plugin of items) this.verifiedCatalogPlugins.set(plugin.id, plugin);
     this.remotePluginCatalog = items;
     this.remotePluginCatalogNextCursor = null;
     this.remotePluginCatalogRevision = `${Date.now()}`;
-    if (options.refreshEntitlements !== false) await this.refreshInstalledEntitlements();
     this.pluginCatalogStatus = 'ready';
     return this.remotePluginCatalog;
   }

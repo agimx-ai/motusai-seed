@@ -106,14 +106,28 @@ describe('Runtime plugin catalog loading', () => {
 
   it('keeps loading until installed authorization has also settled', async () => {
     const runtime = setup()
+    const items = [{ id: 'com.example.catalog' }] as SeedCatalogPlugin[]
+    Reflect.set(runtime, 'fetchPluginCatalog', vi.fn(async () => ({ items })))
     let finish!: () => void
     Reflect.set(runtime, 'refreshInstalledEntitlements', vi.fn(() => new Promise<void>((resolve) => { finish = resolve })))
     const request = runtime.refreshPluginCatalog()
     await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
     expect(Reflect.get(runtime, 'pluginCatalogStatus')).toBe('loading')
+    expect(Reflect.get(runtime, 'remotePluginCatalog')).toEqual([])
     finish()
     await request
     expect(Reflect.get(runtime, 'pluginCatalogStatus')).toBe('ready')
+    expect(Reflect.get(runtime, 'remotePluginCatalog')).toEqual(items)
+  })
+
+  it('preserves the previous catalog if installed authorization fails before publication', async () => {
+    const runtime = setup()
+    const previous = [{ id: 'com.example.previous' }]
+    Reflect.set(runtime, 'remotePluginCatalog', previous)
+    Reflect.set(runtime, 'fetchPluginCatalog', vi.fn(async () => ({ items: [{ id: 'com.example.next' }] })))
+    Reflect.set(runtime, 'refreshInstalledEntitlements', vi.fn(async () => { throw new Error('Authorization failed') }))
+    await expect(runtime.refreshPluginCatalog()).rejects.toThrow('Authorization failed')
+    expect(Reflect.get(runtime, 'remotePluginCatalog')).toBe(previous)
   })
 
   it('settles failed requests as errors, clears errors on retry, and preserves existing data', async () => {

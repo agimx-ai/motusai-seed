@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { PluginInstallProgress, SeedApi, SeedSnapshot, TerminalLogUploadProgress } from '../../shared/contracts'
@@ -11,6 +11,7 @@ function api(): SeedApi | null {
 export function useSeed() {
   const { t } = useTranslation()
   const [snapshot, setSnapshot] = useState<SeedSnapshot | null>(null)
+  const snapshotVersion = useRef(0)
   const [busy, setBusy] = useState('')
   const [logUploadProgress, setLogUploadProgress] = useState<TerminalLogUploadProgress | null>(null)
   const [pluginInstallProgress, setPluginInstallProgress] = useState<Record<string, PluginInstallProgress>>({})
@@ -18,13 +19,18 @@ export function useSeed() {
   const refresh = useCallback(async () => {
     const bridge = api()
     if (!bridge) throw new Error(t('errors.appUnavailable'))
-    setSnapshot(await bridge.snapshot())
+    const version = ++snapshotVersion.current
+    const next = await bridge.snapshot()
+    if (version === snapshotVersion.current) setSnapshot(next)
   }, [t])
 
   useEffect(() => {
     void refresh().catch((reason) => toast.error(userFacingErrorMessage(reason), { id: 'seed-refresh-error' }))
     return api()?.subscribe((event) => {
-      if (event.type === 'snapshot.changed') setSnapshot(event.snapshot)
+      if (event.type === 'snapshot.changed') {
+        snapshotVersion.current++
+        setSnapshot(event.snapshot)
+      }
       if (event.type === 'logs.upload.progress') setLogUploadProgress(event.progress)
       if (event.type === 'plugin.install.progress') setPluginInstallProgress((current) => {
         if (event.progress) return { ...current, [event.pluginId]: event.progress }
