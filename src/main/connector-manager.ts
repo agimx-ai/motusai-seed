@@ -8,7 +8,7 @@ import { pluginErrorBilling } from '../shared/plugin-error';
 export class ConnectorManager {
   private child: UtilityProcess | null = null;
   private stopping = false;
-  private readonly pendingPluginCapabilities = new Map<
+  private readonly pendingRequests = new Map<
     string,
     { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
   >();
@@ -32,10 +32,10 @@ export class ConnectorManager {
     child.stderr?.on('data', (chunk: Buffer) => this.onOutput('stderr', chunk.toString('utf8')));
     child.on('message', (message) => {
       const event = message as WorkerEvent;
-      if (event.type === 'plugin.capability.result') {
-        const pending = this.pendingPluginCapabilities.get(event.requestId);
+      if (event.type === 'plugin.capability.result' || event.type === 'configure.result') {
+        const pending = this.pendingRequests.get(event.requestId);
         if (!pending) return;
-        this.pendingPluginCapabilities.delete(event.requestId);
+        this.pendingRequests.delete(event.requestId);
         clearTimeout(pending.timer);
         if (event.ok) pending.resolve(event.result);
         else
@@ -67,7 +67,11 @@ export class ConnectorManager {
   }
 
   queryPluginCapabilities(packageId: string) {
-    return this.requestPluginCapability({ type: 'plugin.capability.list', packageId });
+    return this.requestPluginCommand({ type: 'plugin.capability.list', packageId });
+  }
+
+  async configure(command: Omit<Extract<WorkerCommand, { type: 'configure' }>, 'requestId'>): Promise<void> {
+    await this.requestPluginCommand(command);
   }
 
   invokePluginCapability(
@@ -77,11 +81,12 @@ export class ConnectorManager {
     signal?: AbortSignal,
     trace?: DiagnosticTraceContext,
   ) {
-    return this.requestPluginCapability({ type: 'plugin.capability.invoke', packageId, invocation, chain, trace }, signal);
+    return this.requestPluginCommand({ type: 'plugin.capability.invoke', packageId, invocation, chain, trace }, signal);
   }
 
-  private requestPluginCapability(
+  private requestPluginCommand(
     command:
+      | Omit<Extract<WorkerCommand, { type: 'configure' }>, 'requestId'>
       | { type: 'plugin.capability.list'; packageId: string }
       | {
           type: 'plugin.capability.invoke';
@@ -93,18 +98,21 @@ export class ConnectorManager {
     signal?: AbortSignal,
   ) {
     signal?.throwIfAborted();
+    if (this.stopping) return Promise.reject(new Error('本地连接器已停止。'));
     const requestId = randomUUID();
     return new Promise<unknown>((resolve, reject) => {
-      const cancel = () => this.send({ type: 'plugin.capability.cancel', requestId });
+      const cancel = () => {
+        if (command.type !== 'configure') this.send({ type: 'plugin.capability.cancel', requestId });
+      };
       const clean = () => signal?.removeEventListener('abort', cancel);
       signal?.addEventListener('abort', cancel, { once: true });
       const timer = setTimeout(() => {
         cancel();
         clean();
-        this.pendingPluginCapabilities.delete(requestId);
-        reject(new Error('插件能力请求超时。'));
+        this.pendingRequests.delete(requestId);
+        reject(new Error(command.type === 'configure' ? '插件运行配置超时。' : '插件能力请求超时。'));
       }, 10 * 60_000);
-      this.pendingPluginCapabilities.set(requestId, {
+      this.pendingRequests.set(requestId, {
         resolve: (value) => {
           clean();
           resolve(value);
@@ -120,18 +128,18 @@ export class ConnectorManager {
       } catch (error) {
         clean();
         clearTimeout(timer);
-        this.pendingPluginCapabilities.delete(requestId);
+        this.pendingRequests.delete(requestId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
   }
 
   private rejectPendingRequests(error: Error) {
-    for (const pending of this.pendingPluginCapabilities.values()) {
+    for (const pending of this.pendingRequests.values()) {
       clearTimeout(pending.timer);
       pending.reject(error);
     }
-    this.pendingPluginCapabilities.clear();
+    this.pendingRequests.clear();
   }
   async stop() {
     this.stopping = true;

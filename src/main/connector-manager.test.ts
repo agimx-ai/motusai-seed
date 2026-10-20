@@ -47,6 +47,50 @@ vi.mock('electron', async () => {
 import { ConnectorManager } from './connector-manager';
 
 describe('ConnectorManager', () => {
+  const configuration = {
+    type: 'configure' as const, appVersion: '0.3.5', locale: 'en-US',
+    backupRoot: '/isolated/backups', pluginDataRoot: '/isolated/data', plugins: [],
+  };
+
+  it('waits for the matching backend configuration acknowledgement', async () => {
+    const manager = new ConnectorManager('Seed', () => {});
+    const completed = vi.fn();
+    const first = manager.configure(configuration).then(completed);
+    const second = manager.configure(configuration).then(completed);
+    const child = state.children[0]!;
+    const [one, two] = child.messages as Array<Extract<WorkerCommand, { type: 'configure' }>>;
+    await Promise.resolve();
+    expect(completed).not.toHaveBeenCalled();
+    child.emit('message', { type: 'configure.result', requestId: one!.requestId!, ok: true });
+    await first;
+    expect(completed).toHaveBeenCalledTimes(1);
+    child.emit('message', { type: 'configure.result', requestId: two!.requestId!, ok: true });
+    await second;
+    expect(completed).toHaveBeenCalledTimes(2);
+    child.emit('exit', 0);
+  });
+
+  it('rejects a failed configuration and can configure the next build', async () => {
+    const manager = new ConnectorManager('Seed', () => {});
+    const failed = manager.configure(configuration);
+    const child = state.children[0]!;
+    const one = child.messages[0] as Extract<WorkerCommand, { type: 'configure' }>;
+    child.emit('message', { type: 'configure.result', requestId: one.requestId!, ok: false, error: 'Startup failed' });
+    await expect(failed).rejects.toThrow('Startup failed');
+    const recovered = manager.configure(configuration);
+    const two = child.messages[1] as Extract<WorkerCommand, { type: 'configure' }>;
+    child.emit('message', { type: 'configure.result', requestId: two.requestId!, ok: true });
+    await expect(recovered).resolves.toBeUndefined();
+    child.emit('exit', 0);
+  });
+
+  it('rejects pending page startup when the connector exits', async () => {
+    const manager = new ConnectorManager('Seed', () => {});
+    const pending = manager.configure(configuration);
+    state.children[0]!.emit('exit', 7);
+    await expect(pending).rejects.toThrow('本地连接器已退出');
+  });
+
   it('forwards the caller trace with a plugin capability request', async () => {
     const manager = new ConnectorManager('Seed', (event) => {
       if (event.type === 'host.invoke') manager.send({ type: 'host.result', requestId: event.requestId, ok: true });

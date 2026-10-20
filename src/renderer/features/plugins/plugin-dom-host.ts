@@ -144,7 +144,9 @@ class PluginDomHost {
       await this.controller!.show();
       return true;
     } catch (error) {
+      const withdrawn = this.stopped;
       await this.stop();
+      if (withdrawn) return true;
       throw error;
     }
   }

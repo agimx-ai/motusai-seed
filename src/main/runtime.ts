@@ -151,6 +151,7 @@ export class SeedRuntime {
   private readonly pluginViewMounts = new Map<BrowserWindow, { token: string; pluginId: string }>();
   private stopping = false;
   private pluginReloadWork: Promise<void> = Promise.resolve();
+  private pluginServicesReady: Promise<void> = Promise.resolve();
   private readonly developmentPlugins =
     !app.isPackaged && process.env.VITE_DEV_SERVER_URL
       ? new DevelopmentPluginSource(
@@ -1083,7 +1084,7 @@ export class SeedRuntime {
   }
 
   private configureWorker() {
-    this.connector.send({
+    const ready = this.connector.configure({
       type: 'configure',
       appVersion: app.getVersion(),
       locale: resolveSeedLocale(this.store.languagePreference()),
@@ -1095,6 +1096,9 @@ export class SeedRuntime {
           : plugin,
       ),
     });
+    this.pluginServicesReady = ready;
+    void ready.catch((error) => this.reportPluginViewFailure('', error));
+    return ready;
   }
 
   snapshot(): SeedSnapshot {
@@ -2150,6 +2154,13 @@ export class SeedRuntime {
         ? { ...consumer, configuration_revision: randomUUID() }
         : consumer,
     );
+    // Revoke frontend RPC before backend shutdown can reject its in-flight reads or writes.
+    for (const [id, host] of this.pluginViewHosts) {
+      const current = next.find((plugin) => plugin.package_id === id);
+      if (current && sourceIdentity(current) === sourceIdentity(host.plugin)) continue;
+      this.pluginViewHosts.delete(id);
+      await host.destroy();
+    }
     for (const previous of changed) {
       await this.releasePluginWork(previous.package_id);
       this.pluginBrowserAuthorization.cancelPlugin(previous.package_id);
@@ -2160,12 +2171,6 @@ export class SeedRuntime {
       this.pluginCapabilityCatalog.remove(previous.package_id);
     }
     this.runtimePlugins = next;
-    for (const [id, host] of this.pluginViewHosts) {
-      const current = this.runtimePlugins.find((plugin) => plugin.package_id === id);
-      if (current && sourceIdentity(current) === sourceIdentity(host.plugin)) continue;
-      this.pluginViewHosts.delete(id);
-      await host.destroy();
-    }
     await this.sandboxHost.configure(this.runtimePlugins, resolveSeedLocale(this.store.languagePreference()));
     await this.developmentPlugins?.pruneSnapshots();
   }
@@ -2222,10 +2227,14 @@ export class SeedRuntime {
             this.pluginCapabilityCatalog.remove(id);
             if (current.runtime_kind === 'sandboxed-web')
               await this.sandboxHost.configure(this.runtimePlugins, resolveSeedLocale(this.store.languagePreference()));
-            this.configureWorker();
+            await this.configureWorker();
           },
           call: async (id, method, args, signal) => {
             if (!plugin.has_service) throw new Error('This plugin does not declare a service.');
+            await this.waitForPluginServices();
+            signal.throwIfAborted();
+            if (!host?.active || this.pluginViewHosts.get(id) !== host)
+              throw new Error('Plugin view owner is no longer active.');
             if (plugin.runtime_kind === 'sandboxed-web')
               return await this.sandboxHost.callService(id, method, args, signal);
             const requestId = randomUUID();
@@ -2247,16 +2256,37 @@ export class SeedRuntime {
     return host;
   }
 
-  mountPluginView(owner: BrowserWindow, input: { pluginId: string; token: string }) {
-    const plugin = this.runtimePlugins.find(
-      (candidate) => candidate.package_id === input.pluginId && candidate.api_version === 2,
-    );
-    if (!plugin || !this.pluginIsAuthorized(plugin.package_id)) throw new Error('Plugin view is unavailable.');
+  private async waitForPluginServices() {
+    // Follow newer work too when builds/configuration overlap while a page or call is waiting.
+    for (;;) {
+      const reload = this.pluginReloadWork;
+      await reload;
+      const ready = this.pluginServicesReady;
+      await ready;
+      if (reload === this.pluginReloadWork && ready === this.pluginServicesReady) return;
+    }
+  }
+
+  async mountPluginView(owner: BrowserWindow, input: { pluginId: string; token: string }) {
     const previous = this.pluginViewMounts.get(owner);
-    if (previous && previous.pluginId !== plugin.package_id) this.pluginViewHosts.get(previous.pluginId)?.unmount();
-    this.pluginViewMounts.set(owner, { token: input.token, pluginId: plugin.package_id });
-    const host = this.ensurePluginView(plugin);
-    return host.mount(owner, input.token);
+    if (previous && previous.pluginId !== input.pluginId) this.pluginViewHosts.get(previous.pluginId)?.unmount();
+    const request = { token: input.token, pluginId: input.pluginId };
+    this.pluginViewMounts.set(owner, request);
+    try {
+      // A snapshot may reach the renderer before the Connector has started the replacement services.
+      await this.waitForPluginServices();
+      if (this.stopping || owner.isDestroyed() || this.pluginViewMounts.get(owner) !== request)
+        throw new Error('Plugin view owner is no longer active.');
+      const plugin = this.runtimePlugins.find(
+        (candidate) => candidate.package_id === input.pluginId && candidate.api_version === 2,
+      );
+      if (!plugin || !this.pluginIsAuthorized(plugin.package_id)) throw new Error('Plugin view is unavailable.');
+      const host = this.ensurePluginView(plugin);
+      return host.mount(owner, input.token);
+    } catch (error) {
+      if (this.pluginViewMounts.get(owner) === request) this.pluginViewMounts.delete(owner);
+      throw error;
+    }
   }
 
   async sendPluginViewMessage(owner: BrowserWindow, token: string, message: unknown) {

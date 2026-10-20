@@ -139,7 +139,9 @@ describe('trusted frontend DOM mounting', () => {
       expect(document.querySelector('link[href="seed-plugin://styles/styles.css"]')).not.toBeNull(),
     );
     for (const listener of listeners) listener({ token, type: 'stop' });
-    await vi.waitFor(() => expect(error).toHaveBeenCalled());
+    await vi.waitFor(() => expect(listeners.size).toBe(0));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(error).not.toHaveBeenCalled();
     expect(document.querySelector('link[href="seed-plugin://styles/styles.css"]')).toBeNull();
     expect(container.children).toHaveLength(0);
     expect(state.load).not.toHaveBeenCalled();

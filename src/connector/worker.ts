@@ -51,7 +51,7 @@ const localHttpGateway = new SeedLocalHttpGateway(
 let pluginsReady: Promise<void> = Promise.resolve();
 
 function configurePlugins(command: Extract<WorkerCommand, { type: 'configure' }>) {
-  pluginsReady = pluginsReady.then(async () => {
+  pluginsReady = pluginsReady.catch(() => undefined).then(async () => {
     await localHttpGateway.start();
     const failures = await pluginHost.start(command.plugins);
     for (const failure of failures) emit({ type: 'plugin.runtime.failed', ...failure });
@@ -170,7 +170,17 @@ async function handleCommand(command: WorkerCommand) {
   }
   if (command.type === 'configure') {
     configuration = command;
-    await configurePlugins(command);
+    try {
+      await configurePlugins(command);
+      if (command.requestId) emit({ type: 'configure.result', requestId: command.requestId, ok: true });
+    } catch (error) {
+      if (command.requestId)
+        emit({
+          type: 'configure.result', requestId: command.requestId, ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      throw error;
+    }
     return;
   }
   if (command.type === 'host.result') {

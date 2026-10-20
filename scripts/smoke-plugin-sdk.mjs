@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { buildPlugin } from '../packages/seed-plugin-tools/index.mjs';
 import { createPluginPage } from './plugin-page-smoke.mjs';
+import { verifyPluginPage } from './verify-plugin-page.mjs';
 
 const require = createRequire(import.meta.url);
 const { SeedPluginViewHost } = require('../dist/electron/main/plugin-view-host.js');
@@ -12,6 +13,7 @@ const { NativePluginManager } = require('../dist/electron/main/native-plugin-man
 const { SeedPluginSandboxSupervisor } = require('../dist/electron/main/plugin-sandbox-host.js');
 const { inspectPluginDirectory, directoryRuntimePlugin } = require('../dist/electron/main/plugin-directory.js');
 const root = await mkdtemp(join(tmpdir(), 'seed-sdk-smoke-'));
+const screenshots = await mkdtemp(join(tmpdir(), 'seed-reload-preview-'));
 app.setPath('userData', join(root, 'user-data'));
 app.on('window-all-closed', () => {});
 protocol.registerSchemesAsPrivileged([
@@ -30,6 +32,10 @@ async function run() {
     await writeFile(
       source,
       (await readFile(source, 'utf8'))
+        .replace(
+          'override display() {',
+          "override async display() { this.containerEl.dataset.initialStatus = await this.app.service.call('status');",
+        )
         .replace(
           "canvas.setAttribute('aria-label', 'Plugin-owned custom control');",
           "canvas.setAttribute('aria-label', 'Plugin-owned custom control'); canvas.className = 'w-[137px] dark:opacity-35';",
@@ -86,6 +92,10 @@ async function run() {
     view = createView(plugin);
     page = createPluginPage({ inspected, plugin, view, root });
     owner = page.owner;
+    const viewErrors = [];
+    owner.webContents.on('console-message', (event) => {
+      if (event.level === 'error') viewErrors.push(event.message);
+    });
     await page.load();
     const contents = owner.webContents;
     const evaluate = (source) => contents.executeJavaScript(source);
@@ -130,13 +140,6 @@ async function run() {
     }
     await evaluate('document.querySelector(".seed-setting button").click()');
     await wait(`document.querySelector('.seed-settings').dataset.result === '${process.platform}'`);
-    await evaluate('document.querySelector("header nav button").click()');
-    await wait('!document.querySelector("[data-plugin-view-owner]")');
-    if (
-      (await native.call(plugin.package_id, { type: 'service-call', method: 'status', arguments: {} })) !==
-      process.platform
-    )
-      throw new Error('Navigation stopped the backend');
     // Rebuild the same plugin version and replace its runtime generation without touching saved data.
     await writeFile(
       source,
@@ -156,10 +159,16 @@ async function run() {
       ...directoryRuntimePlugin(await inspectPluginDirectory(refreshed.output), 'official'),
       configuration_revision: 'rebuilt',
     };
-    await native.start(reloaded, configure(reloaded));
     const next = createView(reloaded);
-    await page.replace(reloaded, next);
+    let releaseStartup;
+    const servicesReady = new Promise((done) => { releaseStartup = done; })
+      .then(() => native.start(reloaded, configure(reloaded)));
+    await page.replace(reloaded, next, { servicesReady, keepSelection: true });
     view = next;
+    await new Promise((done) => setTimeout(done, 150));
+    if (await evaluate('!!document.querySelector("canvas") || !!document.querySelector("[role=alert]")'))
+      throw new Error('Frontend opened or failed before replacement backend was ready');
+    releaseStartup();
     await wait(
       '!!document.querySelector("canvas") && getComputedStyle(document.querySelector("canvas")).width === "141px"',
     );
@@ -171,6 +180,31 @@ async function run() {
       process.platform + '-reloaded'
     )
       throw new Error('Service reload failed');
+    if ((await evaluate('document.querySelector(".seed-settings").dataset.initialStatus')) !== process.platform + '-reloaded')
+      throw new Error('The page did not initialize against its replacement backend');
+    await writeFile(join(screenshots, 'dark-1200.png'), (await contents.capturePage()).toPNG());
+    // Repeat while remaining on the page; a fresh navigation request must not hide a reload regression.
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const theme = cycle === 1 ? 'dark' : 'light';
+      const width = cycle === 2 ? 1200 : 960;
+      page.appearance(theme);
+      owner.setSize(width, 700);
+      const repeated = { ...reloaded, configuration_revision: 'repeat-' + cycle };
+      const repeatedView = createView(repeated);
+      let release;
+      const ready = new Promise((done) => { release = done; }).then(() => native.start(repeated, configure(repeated)));
+      await page.replace(repeated, repeatedView, { servicesReady: ready, keepSelection: true });
+      view = repeatedView;
+      release();
+      await wait('document.querySelector(".seed-settings")?.dataset.initialStatus === ' + JSON.stringify(process.platform + '-reloaded'));
+      await wait(`innerWidth === ${width}`);
+      await writeFile(join(screenshots, `${theme}-${width}.png`), (await contents.capturePage()).toPNG());
+    }
+    await verifyPluginPage({ contents, owner, screenshots, page });
+    await evaluate('document.querySelector("header nav button").click()');
+    await wait('!document.querySelector("[data-plugin-view-owner]")');
+    if ((await native.call(plugin.package_id, { type: 'service-call', method: 'status', arguments: {} })) !== process.platform + '-reloaded')
+      throw new Error('Navigation stopped the backend');
     await cp(resolve('packages/seed-plugin-tools/fixtures/sandbox'), join(root, 'sandbox'), { recursive: true });
     const browserBuild = await buildPlugin({ root: join(root, 'sandbox'), service: 'src/service.ts' });
     const browserPlugin = directoryRuntimePlugin(await inspectPluginDirectory(browserBuild.output), 'official');
@@ -202,9 +236,11 @@ async function run() {
     }
     if ((await sandbox.callService(browserPlugin.package_id, 'status', {})) !== 'sandbox')
       throw new Error('Cancellation stopped service');
+    if (viewErrors.length) throw new Error('Renderer errors: ' + viewErrors.join('\n'));
     process.stdout.write(
-      'SDK smoke passed: direct DOM, independent styles, native/sandbox backend isolation, private RPC, cancellation, navigation and same-version data recovery.\n',
+      'SDK smoke passed: direct DOM, independent styles, native/sandbox isolation, RPC, cancellation, navigation, delayed startup and four same-version reloads on the open page with saved data.\n',
     );
+    process.stdout.write('Reload screenshots: ' + screenshots + '\n');
   } catch (error) {
     failed = true;
     process.stderr.write((error instanceof Error ? error.stack : String(error)) + '\n');

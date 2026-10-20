@@ -111,8 +111,9 @@ export function createPluginPage({ inspected, plugin, view, root, writeClipboard
     runtime,
     owner,
     mountCount: () => mountCount,
-    async replace(nextPlugin, nextView) {
+    async replace(nextPlugin, nextView, { servicesReady = Promise.resolve(), keepSelection = false } = {}) {
       await view.destroy();
+      runtime.pluginServicesReady = servicesReady;
       runtime.runtimePlugins = [nextPlugin];
       runtime.pluginViewHosts = new Map([[nextPlugin.package_id, nextView]]);
       runtime.pluginViewMounts.clear();
@@ -123,7 +124,8 @@ export function createPluginPage({ inspected, plugin, view, root, writeClipboard
       installed.runtimeKind = nextPlugin.runtime_kind;
       installed.manifestDigest = randomUUID();
       installed.version = nextPlugin.version;
-      snapshot.navigationRequest = { id: randomUUID(), destination: 'plugins', pluginId: nextPlugin.package_id };
+      if (!keepSelection)
+        snapshot.navigationRequest = { id: randomUUID(), destination: 'plugins', pluginId: nextPlugin.package_id };
       owner.webContents.send('seed:event', { type: 'snapshot.changed', snapshot: structuredClone(snapshot) });
     },
     async load() {

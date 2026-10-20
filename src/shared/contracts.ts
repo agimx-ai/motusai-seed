@@ -516,6 +516,7 @@ export type SeedPluginRuntimeDefinition = {
 export type WorkerCommand =
   | {
       type: 'configure';
+      requestId?: string;
       appVersion: string;
       locale: string;
       backupRoot: string;
@@ -576,7 +577,7 @@ export type WorkerEvent =
       trace?: import('./diagnostic-trace').DiagnosticTraceContext;
     }
   | {
-      type: 'plugin.capability.result';
+      type: 'plugin.capability.result' | 'configure.result';
       requestId: string;
       ok: boolean;
       result?: unknown;

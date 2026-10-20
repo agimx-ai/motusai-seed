@@ -79,6 +79,22 @@ function fixture() {
   };
 }
 describe('one runtime with distinct plugin sources', () => {
+  it('withdraws the old frontend before stopping a changed service', async () => {
+    const h = fixture();
+    h.setDevelopment([
+      {
+        installed: { id: h.one.package_id, version: h.one.version, source: 'development' },
+        runtime: { ...h.one, source: 'development', configuration_revision: 'new-code' },
+      },
+    ]);
+    h.stop.mockImplementation(async () => {
+      expect(h.destroyOne).toHaveBeenCalledTimes(1);
+      expect(h.runtime.pluginViewHosts.has(h.one.package_id)).toBe(false);
+    });
+    await h.runtime.reloadPlugins();
+    expect(h.destroyTwo).not.toHaveBeenCalled();
+  });
+
   it('does not prewarm frontend brokers when backend sources are configured', async () => {
     const h = fixture();
     h.one.runtime_kind = 'sandboxed-web';
