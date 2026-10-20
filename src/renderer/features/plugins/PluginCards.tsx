@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ActionButton, Tooltip } from '@motus-ai/seed-sdk/react';
 import { CatalogPluginIcon, InstalledPluginIcon } from '../../components/PluginIcon';
 import { ResourceCard } from '../../components/ResourceCard';
-import verifiedIconUrl from '../../assets/verified-light.svg';
+import verifiedIconUrl from '../../assets/verified.svg';
 import developmentIconUrl from '../../assets/development.svg';
 import mcpIconUrl from '../../assets/mcp.svg';
 import { cx } from '../../lib/display';
