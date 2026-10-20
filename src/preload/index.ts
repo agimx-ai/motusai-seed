@@ -31,6 +31,7 @@ const ipcChannels = {
   updateProfile: 'seed:account:update-profile',
   launchAtLogin: 'seed:settings:launch-at-login',
   preventSystemSleep: 'seed:settings:prevent-system-sleep',
+  autoUpdatePlugins: 'seed:settings:auto-update-plugins',
   languagePreference: 'seed:settings:language-preference',
   themePreference: 'seed:settings:theme-preference',
   checkForUpdates: 'seed:updates:check',
@@ -43,6 +44,7 @@ const ipcChannels = {
   cancelLogUpload: 'seed:logs:cancel-upload',
   refreshPluginCatalog: 'seed:plugins:refresh-catalog',
   installPlugin: 'seed:plugins:install',
+  updateAllPlugins: 'seed:plugins:update-all',
   loadMorePluginCatalog: 'seed:plugins:load-more-catalog',
   searchPluginCatalog: 'seed:plugins:search-catalog',
   uninstallPlugin: 'seed:plugins:uninstall',
@@ -85,6 +87,7 @@ const api: SeedApi = {
   updateProfile: (input) => ipcRenderer.invoke(ipcChannels.updateProfile, input),
   setLaunchAtLogin: (enabled: boolean) => ipcRenderer.invoke(ipcChannels.launchAtLogin, enabled),
   setPreventSystemSleep: (enabled: boolean) => ipcRenderer.invoke(ipcChannels.preventSystemSleep, enabled),
+  setAutoUpdatePlugins: (enabled: boolean) => ipcRenderer.invoke(ipcChannels.autoUpdatePlugins, enabled),
   setLanguagePreference: (preference: SeedLanguagePreference) =>
     ipcRenderer.invoke(ipcChannels.languagePreference, preference),
   setThemePreference: (preference: SeedThemePreference) => ipcRenderer.invoke(ipcChannels.themePreference, preference),
@@ -102,6 +105,7 @@ const api: SeedApi = {
     ipcRenderer.invoke(ipcChannels.searchPluginCatalog, query, cursor),
   installPlugin: (pluginId: string, version: string) =>
     ipcRenderer.invoke(ipcChannels.installPlugin, pluginId, version),
+  updateAllPlugins: () => ipcRenderer.invoke(ipcChannels.updateAllPlugins),
   cancelPluginInstall: (pluginId: string) => ipcRenderer.invoke(ipcChannels.cancelPluginInstall, pluginId),
   uninstallPlugin: (pluginId: string) => ipcRenderer.invoke(ipcChannels.uninstallPlugin, pluginId),
   subscribe(listener: (event: SeedEvent) => void) {

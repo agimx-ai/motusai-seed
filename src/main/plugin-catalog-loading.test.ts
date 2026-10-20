@@ -9,6 +9,7 @@ function setup() {
   const runtime = Object.assign(Object.create(SeedRuntime.prototype) as SeedRuntime, {
     pluginCatalogStatus: 'loading', installedPluginsStatus: 'loading', remotePluginCatalog: [],
     verifiedCatalogPlugins: new Map(),
+    pluginUninstallOperations: new Set(),
     publishSnapshot: vi.fn(async () => {}),
     fetchPluginCatalog: vi.fn(async () => ({ items: [] as SeedCatalogPlugin[] })),
     refreshInstalledEntitlements: vi.fn(async () => {}),
@@ -23,10 +24,11 @@ describe('Runtime plugin catalog loading', () => {
     { formalVersion: '1.0.0', developmentVersion: '2.0.0', runtimeVersion: '2.0.0', authorized: true, error: '插件安装状态' },
     { formalVersion: '1.1.0', developmentVersion: '2.0.0', runtimeVersion: '0.1.0', authorized: true, error: '运行时未能载入' },
     { formalVersion: '1.1.0', developmentVersion: '2.0.0', runtimeVersion: '2.0.0', authorized: false, error: '未获得运行权限' },
-  ])('validates the installed release independently of the selected runtime ($developmentVersion/$runtimeVersion/$authorized)', async ({ formalVersion, developmentVersion, runtimeVersion, authorized, error }) => {
+    { formalVersion: '1.1.0', developmentVersion: '0.2.0', runtimeVersion: '', authorized: true, enabled: false, error: undefined },
+  ])('validates the installed release independently of the selected runtime ($developmentVersion/$runtimeVersion/$authorized)', async ({ formalVersion, developmentVersion, runtimeVersion, authorized, error, enabled = true }) => {
     const runtime = setup()
     const id = 'com.example.test'
-    const installed = { id, version: formalVersion, enabled: true, status: 'ready', name: { en_US: 'Test', zh_Hans: 'Test' } }
+    const installed = { id, version: formalVersion, enabled, status: 'ready', name: { en_US: 'Test', zh_Hans: 'Test' } }
     const active = { ...installed, source: 'development', version: developmentVersion }
     const auditSystem = vi.fn(async () => {})
     const reloadPlugins = vi.fn(async () => {
@@ -56,6 +58,7 @@ describe('Runtime plugin catalog loading', () => {
       await expect(runtime.installPlugin(id, '1.1.0')).rejects.toThrow(error)
     } else {
       await expect(runtime.installPlugin(id, '1.1.0')).resolves.toBe(true)
+      expect(Reflect.get(runtime, 'pluginInstaller').install.mock.calls[0][1]).not.toHaveProperty('enabled')
       if (developmentVersion === '0.2.0') expect(reloadPlugins).toHaveBeenCalledOnce()
       expect(auditSystem).toHaveBeenCalledWith('plugin.install', 'allowed', '已安装 Test（1.1.0）。', undefined,
         expect.objectContaining({ plugin_version: '1.1.0' }))
@@ -92,6 +95,15 @@ describe('Runtime plugin catalog loading', () => {
     Reflect.set(runtime, 'pluginDataCleaner', () => ({ reset: async () => { throw new Error('Failed cleanup') } }))
     await expect(runtime.resetOrphanedPluginData([])).rejects.toThrow('Failed cleanup')
     expect(Reflect.get(runtime, 'resettingPluginData')).toBe(false)
+  })
+
+  it('does not uninstall an automatic update in progress or reinstall a plugin being removed', async () => {
+    const runtime = setup()
+    Reflect.set(runtime, 'pluginInstallOperations', new Map([['com.example.test', {}]]))
+    await expect(runtime.uninstallPlugin('com.example.test')).rejects.toThrow('正在安装或更新')
+    Reflect.set(runtime, 'pluginInstallOperations', new Map())
+    Reflect.set(runtime, 'pluginUninstallOperations', new Set(['com.example.test']))
+    await expect(runtime.installPlugin('com.example.test', '1.1.0')).rejects.toThrow('正在卸载')
   })
   it('starts in loading and reaches ready for a successfully loaded empty catalog', async () => {
     const runtime = setup()

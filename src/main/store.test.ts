@@ -28,6 +28,44 @@ async function temporaryDirectory() {
 }
 
 describe('SeedStore SQLite persistence', () => {
+  it('defaults automatic plugin updates on and preserves both preferences across restart', async () => {
+    const directory = await temporaryDirectory();
+    let store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    try {
+      expect(store.autoUpdatePlugins()).toBe(true);
+      for (const enabled of [false, true]) {
+        await store.setAutoUpdatePlugins(enabled);
+        await store.close();
+        store = new SeedStore(directory, 'MotusAI Seed');
+        await store.load();
+        expect(store.autoUpdatePlugins()).toBe(enabled);
+      }
+    } finally {
+      await store.close();
+    }
+  });
+
+  it('retains per-account plugin update checkpoints across restart without changing installed records', async () => {
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    const installed = { schema_version: 1, plugins: [] };
+    await store.setInstalledPluginState(installed);
+    await store.setPluginUpdateCheckpoint('alice', { appVersion: '0.3.6', pending: ['com.example.pending'] });
+    await store.setPluginUpdateCheckpoint('bob', { appVersion: '0.3.6', pending: [] });
+    await store.close();
+    const reopened = new SeedStore(directory, 'MotusAI Seed');
+    await reopened.load();
+    try {
+      expect(await reopened.pluginUpdateCheckpoint('alice')).toEqual({ appVersion: '0.3.6', pending: ['com.example.pending'] });
+      expect(await reopened.pluginUpdateCheckpoint('bob')).toEqual({ appVersion: '0.3.6', pending: [] });
+      expect(await reopened.pluginUpdateCheckpoint('other')).toBeUndefined();
+      expect(await reopened.installedPluginState()).toEqual(installed);
+    } finally {
+      await reopened.close();
+    }
+  });
   it('retains local announcement read IDs across restart, isolated by account', async () => {
     const directory = await temporaryDirectory();
     const store = new SeedStore(directory, 'MotusAI Seed');

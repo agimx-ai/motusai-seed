@@ -57,6 +57,7 @@ import { SeedPluginViewHost } from './plugin-view-host';
 import { currentNativePluginRuntimeDefinition } from './native-plugin-runtime-definition';
 import { SeedStore } from './store';
 import { SeedPluginInstaller } from './seed-plugin-installer';
+import { PluginUpdates } from './plugin-updates';
 import { mascotTiming, remainingMascotRunningMs } from './mascot-timing';
 import { SeedUpdater } from './updater';
 import { CloudDiagnosticUploader } from './cloud-diagnostic-uploader';
@@ -146,6 +147,7 @@ export class SeedRuntime {
   private navigationRequest: SeedSnapshot['navigationRequest'];
   private readonly consumedLocalClientApprovalIds = new Map<string, number>();
   private readonly pluginInstaller: SeedPluginInstaller;
+  private readonly pluginUpdates: PluginUpdates;
   private readonly fileBroker: FileBroker;
   private readonly screenCaptureService = new ScreenCaptureService();
   private readonly audioService: AudioService;
@@ -674,6 +676,20 @@ export class SeedRuntime {
       app.getVersion(),
       () => this.cloudAccessToken(),
     );
+    this.pluginUpdates = new PluginUpdates({
+      appVersion: app.getVersion(),
+      automaticEnabled: () => this.store.autoUpdatePlugins(),
+      account: () => this.authStatus.status === 'signed_in' && !this.stopping ? this.user?.id : undefined,
+      installed: () => this.installedPlugins,
+      canUpdate: (plugin) => this.pluginIsAuthorized(plugin.id),
+      refreshCatalog: () => this.refreshPluginCatalog(),
+      read: (account) => this.store.pluginUpdateCheckpoint(account),
+      write: (account, checkpoint) => this.store.setPluginUpdateCheckpoint(account, checkpoint),
+      install: (id, version, signal) => this.installPlugin(id, version, signal),
+      changed: () => {
+        if (!this.stopping) void this.publishSnapshot().catch(() => undefined);
+      },
+    });
     this.fileBroker = new FileBroker(
       () => ({
         backup_root: join(app.getPath('userData'), 'backups'),
@@ -1131,6 +1147,7 @@ export class SeedRuntime {
       installedPluginsStatus: this.installedPluginsStatus,
       catalogPlugins: this.remotePluginCatalog,
       pluginCatalogStatus: this.pluginCatalogStatus,
+      pluginUpdates: this.pluginUpdates?.snapshot(),
       ...(this.pluginCatalogError ? { pluginCatalogError: this.pluginCatalogError } : {}),
       ...(this.remotePluginCatalogNextCursor ? { catalogNextCursor: this.remotePluginCatalogNextCursor } : {}),
       localClients: this.localClients,
@@ -1138,6 +1155,7 @@ export class SeedRuntime {
       audit: this.store.audit(),
       launchAtLogin: loginSettings.openAtLogin,
       preventSystemSleep: this.store.preventSystemSleep(),
+      autoUpdatePlugins: this.store.autoUpdatePlugins(),
       languagePreference: this.store.languagePreference(),
       locale: resolveSeedLocale(this.store.languagePreference()),
       themePreference: this.store.themePreference(),
@@ -1286,6 +1304,7 @@ export class SeedRuntime {
   }
 
   async logout() {
+    const pluginUpdatesStopped = this.pluginUpdates.stop();
     this.pluginBrowserAuthorization.cancelAll();
     this.pendingCloudAuthorization?.reject(new Error('登录已取消。'));
     if (this.pendingCloudAuthorization) clearTimeout(this.pendingCloudAuthorization.timeout);
@@ -1303,6 +1322,7 @@ export class SeedRuntime {
     this.pluginCatalogError = undefined;
     this.installedPluginsStatus = 'loading';
     this.verifiedCatalogPlugins.clear();
+    await pluginUpdatesStopped;
     await this.reloadPlugins();
     if (this.developmentPlugins) this.configureWorker();
     this.authStatus = { status: 'signed_out' };
@@ -1371,6 +1391,14 @@ export class SeedRuntime {
     );
     await this.publishSnapshot();
     return this.store.preventSystemSleep();
+  }
+
+  async setAutoUpdatePlugins(enabled: boolean) {
+    await this.store.setAutoUpdatePlugins(enabled);
+    if (!enabled) this.pluginUpdates.stopAutomatic();
+    await this.publishSnapshot();
+    if (enabled && this.pluginCatalogStatus === 'ready') this.updatePluginsAfterStartup();
+    return this.store.autoUpdatePlugins();
   }
 
   async setLanguagePreference(preference: SeedLanguagePreference) {
@@ -1653,6 +1681,7 @@ export class SeedRuntime {
   }
 
   private async refreshInstalledEntitlements() {
+    const initial = this.installedPluginsStatus !== 'ready' || Date.now() >= this.entitlementExpiresAt;
     if (this.installedPluginsStatus !== 'ready') {
       this.installedPluginsStatus = 'loading';
       await this.publishSnapshot();
@@ -1660,6 +1689,7 @@ export class SeedRuntime {
     try {
       await this.readInstalledEntitlements();
       this.installedPluginsStatus = 'ready';
+      if (initial && this.pluginCatalogStatus === 'ready') this.updatePluginsAfterStartup();
     } catch (error) {
       // Preserve an already-loaded list during a failed routine renewal.
       if (this.installedPluginsStatus !== 'ready') this.installedPluginsStatus = 'error';
@@ -1873,7 +1903,14 @@ export class SeedRuntime {
     this.remotePluginCatalogNextCursor = null;
     this.remotePluginCatalogRevision = `${Date.now()}`;
     this.pluginCatalogStatus = 'ready';
+    this.updatePluginsAfterStartup();
     return this.remotePluginCatalog;
+  }
+
+  private updatePluginsAfterStartup() {
+    if (app.isPackaged && this.store.autoUpdatePlugins() && this.authStatus.status === 'signed_in' && this.installedPluginsStatus === 'ready' &&
+      Date.now() < this.entitlementExpiresAt && !this.stopping)
+      void this.pluginUpdates.automatic(this.remotePluginCatalog);
   }
 
   async loadMorePluginCatalog() {
@@ -1891,12 +1928,20 @@ export class SeedRuntime {
     return this.fetchPluginCatalog(query, cursor);
   }
 
-  async installPlugin(pluginId: string, version: string) {
+  updateAllPlugins() {
+    return this.pluginUpdates.updateAll();
+  }
+
+  async installPlugin(pluginId: string, version: string, signal?: AbortSignal) {
+    signal?.throwIfAborted();
     if (this.resettingPluginData) throw new Error('正在重置插件数据，请稍后安装。');
     if (this.pluginInstallOperations.has(pluginId)) throw new Error('此插件正在安装或更新。');
+    if (this.pluginUninstallOperations.has(pluginId)) throw new Error('此插件正在卸载。');
     const operationId = randomUUID();
     const operation = { operationId, controller: new AbortController(), cancelable: true };
     this.pluginInstallOperations.set(pluginId, operation);
+    const abort = () => { if (operation.cancelable) operation.controller.abort(); };
+    signal?.addEventListener('abort', abort, { once: true });
     const emitProgress = (progress: Omit<PluginInstallProgress, 'operationId'>) => {
       this.emit({ type: 'plugin.install.progress', pluginId, progress: { operationId, ...progress } });
     };
@@ -1942,7 +1987,6 @@ export class SeedRuntime {
           labels: plugin.labels,
           visibility: plugin.visibility,
           source: 'marketplace',
-          enabled: true,
         });
         emitProgress({ version, phase: 'activating', cancelable: false });
         await this.refreshInstalledEntitlements();
@@ -1965,12 +2009,12 @@ export class SeedRuntime {
         if (!installed) throw new Error('插件安装后未通过本地文件完整性校验。');
         if (installed.status === 'incompatible')
           throw new Error(installed.incompatibilityReason || '插件格式与当前客户端不兼容。');
-        if (installed.version !== verified.manifest.version || !installed.enabled)
+        if (installed.version !== verified.manifest.version)
           throw new Error('插件安装状态与所选版本不一致。');
         if (Date.now() >= this.entitlementExpiresAt || !this.authorizedInstalledPluginIds.has(installed.id))
           throw new Error('插件已安装，但当前账号未获得运行权限。');
         const activeVersion = active?.source === 'development' ? active.version : verified.manifest.version;
-        if (runtime?.version !== activeVersion) throw new Error('插件已安装，但对应版本的运行时未能载入。');
+        if (installed.enabled && runtime?.version !== activeVersion) throw new Error('插件已安装，但对应版本的运行时未能载入。');
         installedSummary = `已安装 ${installed.name.zh_Hans}（${installed.version}）。`;
         installedMetadata = {
           plugin_id: installed.id,
@@ -2006,6 +2050,7 @@ export class SeedRuntime {
       setTimeout(clearProgress, 500);
       return true;
     } finally {
+      signal?.removeEventListener('abort', abort);
       if (this.pluginInstallOperations.get(pluginId)?.operationId === operationId)
         this.pluginInstallOperations.delete(pluginId);
       if (!completed) clearProgress();
@@ -2022,6 +2067,7 @@ export class SeedRuntime {
 
   async uninstallPlugin(pluginId: string) {
     if (this.resettingPluginData) throw new Error('正在重置插件数据，请稍后卸载。');
+    if (this.pluginInstallOperations.has(pluginId)) throw new Error('此插件正在安装或更新。');
     if (this.pluginUninstallOperations.has(pluginId)) throw new Error('插件正在卸载。');
     this.pluginUninstallOperations.add(pluginId);
     try {
@@ -2644,6 +2690,7 @@ export class SeedRuntime {
 
   async stop() {
     this.stopping = true;
+    await this.pluginUpdates.stop();
     this.pluginEvents.clear();
     for (const calls of [this.capabilityCalls, this.sandboxCalls]) {
       for (const controller of calls.values()) controller.abort();

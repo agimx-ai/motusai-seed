@@ -10,7 +10,7 @@ import developmentIconUrl from '../../assets/development.svg';
 import mcpIconUrl from '../../assets/mcp.svg';
 import { cx } from '../../lib/display';
 import { useSeedI18n } from '../../i18n';
-import { isCatalogPluginInstallable } from './plugin-updates';
+import { isCatalogPluginInstallable } from '../../../shared/plugin-updates';
 import { compareSeedVersions } from '../../../shared/seed-version';
 import { pluginMcpTools } from './mcp-tools';
 import { PluginActionButton } from './PluginActionButton';

@@ -22,11 +22,7 @@ import { PluginsPage } from './pages/PluginsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PluginSettingsPage } from './pages/PluginSettingsPage';
 import { UsagePage } from './pages/UsagePage';
-import {
-  countAvailablePluginUpdates,
-  getAvailablePluginUpdates,
-  updatePluginsSequentially,
-} from './features/plugins/plugin-updates';
+import { countAvailablePluginUpdates } from '../shared/plugin-updates';
 import { pluginDataCleanupFeedback } from './features/plugins/plugin-data-cleanup-feedback';
 import { userFacingErrorMessage } from './lib/errors';
 import { useSeedI18n } from './i18n';
@@ -55,8 +51,7 @@ export default function App() {
   const currentPluginQuery = useRef('');
   currentPluginQuery.current = pluginQuery.trim();
   const [selectedPluginId, setSelectedPluginId] = useState('');
-  const [updatingAllPlugins, setUpdatingAllPlugins] = useState(false);
-  const updateAllInFlight = useRef(false);
+  const updatingAllPlugins = snapshot?.pluginUpdates?.running ?? false;
   const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pluginSearchRef = useRef<HTMLInputElement>(null);
@@ -189,49 +184,10 @@ export default function App() {
   const pluginUpdateCount = countAvailablePluginUpdates(plugins, snapshot.catalogPlugins ?? []);
   const updateAllPlugins = async () => {
     if (
-      updateAllInFlight.current ||
-      busy ||
+      updatingAllPlugins || busy ||
       Object.values(pluginInstallProgress).some((progress) => progress.phase !== 'completed')
-    )
-      return;
-    updateAllInFlight.current = true;
-    setUpdatingAllPlugins(true);
-    try {
-      const result = await run('plugin-update-all', async (api) => {
-        const catalog = await api.refreshPluginCatalog();
-        const current = await api.snapshot();
-        const updates = getAvailablePluginUpdates(current.plugins, catalog);
-        return updatePluginsSequentially(updates, (id, version) => api.installPlugin(id, version));
-      });
-      if (!result) return;
-      const summary = t('plugins.bulkUpdateResult', {
-        updated: result.updated,
-        failed: result.failed.length,
-        cancelled: result.cancelled,
-      });
-      if (result.failed.length) {
-        toast.error(summary, {
-          id: 'seed-plugin-update-all-result',
-          description: result.failed
-            .map(
-              ({ plugin, reason }) =>
-                `${resolveSeedLocalizedText(plugin.name, locale)}: ${userFacingErrorMessage(reason)}`,
-            )
-            .join('\n'),
-        });
-      } else if (result.cancelled) {
-        toast.info(summary, { id: 'seed-plugin-update-all-result' });
-      } else if (result.updated) {
-        toast.success(t('plugins.bulkUpdateComplete', { count: result.updated }), {
-          id: 'seed-plugin-update-all-result',
-        });
-      } else {
-        toast.info(t('plugins.updateNotificationEmpty'), { id: 'seed-plugin-update-all-result' });
-      }
-    } finally {
-      updateAllInFlight.current = false;
-      setUpdatingAllPlugins(false);
-    }
+    ) return;
+    await run('plugin-update-all', (api) => api.updateAllPlugins());
   };
   const selectedPlugin =
     plugins.find((plugin) => plugin.id === selectedPluginId) ??
@@ -404,6 +360,8 @@ export default function App() {
               <PluginSettingsPage
                 catalog={snapshot.catalogPlugins}
                 busy={Boolean(busy)}
+                autoUpdatePlugins={snapshot.autoUpdatePlugins}
+                onAutoUpdatePluginsChange={() => void run('plugin-auto-update', (api) => api.setAutoUpdatePlugins(!snapshot.autoUpdatePlugins))}
                 onListOrphanedPluginData={() => run('plugin-data-scan', (api) => api.listOrphanedPluginData())}
                 onResetOrphanedPluginData={async (ids) => {
                   const result = await run('plugin-data-reset', (api) => api.resetOrphanedPluginData(ids));

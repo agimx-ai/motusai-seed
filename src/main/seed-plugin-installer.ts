@@ -311,7 +311,7 @@ export class SeedPluginInstaller {
       if (record) {
         record.versions = [version];
         record.active_version = version.version;
-        record.enabled = options.enabled ?? true;
+        record.enabled = options.enabled ?? record.enabled;
       } else {
         state.plugins.push({
           id: verified.manifest.id,

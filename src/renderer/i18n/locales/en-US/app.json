@@ -322,6 +322,8 @@
     "language": "Language",
     "languageDescription": "App UI language",
     "cleanPluginData": "Clean Up Plugin Data",
+    "autoUpdatePlugins": "Automatically update plugins",
+    "autoUpdatePluginsDescription": "Update installed plugins on the first launch after an app upgrade.",
     "cleanPluginDataDescription": "Clean up saved data for uninstalled plugins. Installed plugins are not affected.",
     "cleanPluginDataAction": "Clean Up",
     "noOrphanedPluginData": "No saved data for uninstalled plugins to clean up.",

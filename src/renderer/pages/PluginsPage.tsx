@@ -21,7 +21,7 @@ import { PluginActionButton } from '../features/plugins/PluginActionButton';
 import { PluginDetailActions } from '../features/plugins/PluginDetailActions';
 import { PluginListSkeleton } from '../features/plugins/PluginListSkeleton';
 import { pluginMcpTools } from '../features/plugins/mcp-tools';
-import { isCatalogPluginInstallable } from '../features/plugins/plugin-updates';
+import { isCatalogPluginInstallable } from '../../shared/plugin-updates';
 import { compareSeedVersions } from '../../shared/seed-version';
 import { PluginViewSurface } from '../features/plugins/PluginViewSurface';
 import { useSeedI18n } from '../i18n';

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from '@motus-ai/seed-sdk'
 import type { PluginInstallProgress, SeedApi, SeedSnapshot, TerminalLogUploadProgress } from '../../shared/contracts'
+import { resolveSeedLocalizedText } from '../../shared/plugin-manifest'
 import { userFacingErrorMessage } from '../lib/errors'
 
 function api(): SeedApi | null {
@@ -12,9 +13,38 @@ export function useSeed() {
   const { t } = useTranslation()
   const [snapshot, setSnapshot] = useState<SeedSnapshot | null>(null)
   const snapshotVersion = useRef(0)
+  const handledPluginUpdateResult = useRef('')
   const [busy, setBusy] = useState('')
   const [logUploadProgress, setLogUploadProgress] = useState<TerminalLogUploadProgress | null>(null)
   const [pluginInstallProgress, setPluginInstallProgress] = useState<Record<string, PluginInstallProgress>>({})
+
+  useEffect(() => {
+    const result = snapshot?.pluginUpdates?.result;
+    if (!result || handledPluginUpdateResult.current === result.id) return;
+    handledPluginUpdateResult.current = result.id;
+    const id = 'seed-plugin-update-all-result';
+    if (result.error) {
+      toast.error(userFacingErrorMessage(result.error), { id });
+      return;
+    }
+    const summary = t('plugins.bulkUpdateResult', {
+      updated: result.updated, failed: result.failed.length, cancelled: result.cancelled,
+    });
+    if (result.failed.length) {
+      toast.error(summary, {
+        id,
+        description: result.failed.map(({ name, reason }) =>
+          `${resolveSeedLocalizedText(name, snapshot?.locale ?? 'en-US')}: ${userFacingErrorMessage(reason)}`,
+        ).join('\n'),
+      });
+    } else if (result.cancelled) {
+      toast.info(summary, { id });
+    } else if (result.updated) {
+      toast.success(t('plugins.bulkUpdateComplete', { count: result.updated }), { id });
+    } else {
+      toast.info(t('plugins.updateNotificationEmpty'), { id });
+    }
+  }, [snapshot?.pluginUpdates?.result, snapshot?.locale, t]);
 
   const refresh = useCallback(async () => {
     const bridge = api()

@@ -322,6 +322,8 @@
     "language": "语言",
     "languageDescription": "应用 UI 语言",
     "cleanPluginData": "清理插件数据",
+    "autoUpdatePlugins": "自动更新插件",
+    "autoUpdatePluginsDescription": "客户端升级后，首次启动时自动更新已安装的插件。",
     "cleanPluginDataDescription": "清理已卸载插件保留的数据，不影响已安装插件。",
     "cleanPluginDataAction": "清理",
     "noOrphanedPluginData": "没有需要清理的已卸载插件数据。",

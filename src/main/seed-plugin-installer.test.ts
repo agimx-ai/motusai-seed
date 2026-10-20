@@ -370,6 +370,23 @@ describe('Seed plugin installer', () => {
     expect(state().plugins[0]?.active_version).toBe('1.0.0');
   });
 
+  it('preserves disabled state on upgrade unless enabling is explicitly requested', async () => {
+    const userData = await mkdtemp(join(tmpdir(), 'seed-installer-disabled-test-'));
+    temporaryDirectories.push(userData);
+    const { installer, state } = createInstaller(userData);
+    const verified = (version: string, digest: string) => ({
+      manifest: resolvedManifest(version),
+      packageSha256: digest.repeat(64),
+      files: packageFiles(manifestSource.replace('"version": "1.0.0"', `"version": "${version}"`)),
+    });
+    await installer.install(verified('1.0.0', 'a'), { enabled: false });
+    await installer.install(verified('1.1.0', 'b'));
+    expect(state().plugins[0]).toMatchObject({ active_version: '1.1.0', enabled: false });
+    expect((await installer.listInstalled())[0]).toMatchObject({ version: '1.1.0', enabled: false, status: 'ready' });
+    await installer.install(verified('1.2.0', 'c'), { enabled: true });
+    expect(state().plugins[0]).toMatchObject({ active_version: '1.2.0', enabled: true });
+  });
+
   it('restores the previous sole version when an update cannot persist its state', async () => {
     const userData = await mkdtemp(join(tmpdir(), 'seed-installer-update-rollback-test-'));
     temporaryDirectories.push(userData);

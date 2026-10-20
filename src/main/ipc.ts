@@ -76,6 +76,9 @@ export function registerIpc(runtime: SeedRuntime) {
   handle(ipcChannels.preventSystemSleep, (_event, enabled) =>
     runtime.setPreventSystemSleep(z.boolean().parse(enabled)),
   );
+  handle(ipcChannels.autoUpdatePlugins, (_event, enabled) =>
+    runtime.setAutoUpdatePlugins(z.boolean().parse(enabled)),
+  );
   handle(ipcChannels.languagePreference, (_event, preference) =>
     runtime.setLanguagePreference(z.enum(['system', 'zh-CN', 'en-US']).parse(preference)),
   );
@@ -99,6 +102,7 @@ export function registerIpc(runtime: SeedRuntime) {
     const input = installPluginSchema.parse({ pluginId, version });
     return runtime.installPlugin(input.pluginId, input.version);
   });
+  handle(ipcChannels.updateAllPlugins, () => runtime.updateAllPlugins());
   handle(ipcChannels.cancelPluginInstall, (_event, pluginId) =>
     runtime.cancelPluginInstall(pluginIdSchema.parse(pluginId)),
   );

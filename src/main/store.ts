@@ -18,6 +18,7 @@ import type {
   UsageSummary,
 } from '../shared/contracts';
 import type { CloudSessionCredential } from './cloud-auth';
+import type { PluginUpdateCheckpoint } from './plugin-updates';
 import { ObservationStore, observationDatabaseFileName } from './observation-store';
 import type { PluginDataSnapshot } from '@motus-ai/seed-sdk';
 
@@ -27,6 +28,7 @@ type StoredConfig = {
   encryptedPluginSecrets?: string;
   encryptedPluginData?: string;
   preventSystemSleep: boolean;
+  autoUpdatePlugins: boolean;
   languagePreference: SeedLanguagePreference;
   themePreference: SeedThemePreference;
 };
@@ -85,6 +87,7 @@ type AuditRow = {
 
 const defaults = (): StoredConfig => ({
   preventSystemSleep: false,
+  autoUpdatePlugins: true,
   languagePreference: 'system',
   themePreference: 'system',
 });
@@ -382,6 +385,7 @@ export class SeedStore {
       encryptedPluginSecrets: settings.get('encrypted_plugin_secrets'),
       encryptedPluginData: settings.get('encrypted_plugin_data'),
       preventSystemSleep: settings.get('prevent_system_sleep') === 'true',
+      autoUpdatePlugins: settings.get('auto_update_plugins') !== 'false',
       languagePreference: language === 'zh-CN' || language === 'en-US' ? language : 'system',
       themePreference:
         settings.get('theme_preference') === 'light' || settings.get('theme_preference') === 'dark'
@@ -453,6 +457,13 @@ export class SeedStore {
   }
   preventSystemSleep() {
     return this.value.preventSystemSleep;
+  }
+  autoUpdatePlugins() {
+    return this.value.autoUpdatePlugins;
+  }
+  async setAutoUpdatePlugins(enabled: boolean) {
+    await this.setSetting('auto_update_plugins', JSON.stringify(enabled));
+    this.value.autoUpdatePlugins = enabled;
   }
   async setPreventSystemSleep(enabled: boolean) {
     await this.setSetting('prevent_system_sleep', JSON.stringify(enabled));
@@ -667,6 +678,18 @@ export class SeedStore {
   }
   async setInstalledPluginState(state: unknown) {
     await this.setSetting('installed_plugin_state', JSON.stringify(state));
+  }
+  async pluginUpdateCheckpoint(account: string): Promise<unknown> {
+    const row = await this.getDatabase()<SettingRow>('app_settings').where({ key: `plugin_updates:${account}` }).first();
+    if (!row) return undefined;
+    try {
+      return JSON.parse(row.value) as unknown;
+    } catch {
+      throw new Error('无法读取本机插件更新记录。');
+    }
+  }
+  async setPluginUpdateCheckpoint(account: string, checkpoint: PluginUpdateCheckpoint) {
+    await this.setSetting(`plugin_updates:${account}`, JSON.stringify(checkpoint));
   }
   async localClients(): Promise<LocalClientAuthorization[]> {
     const rows = await this.getDatabase()<LocalClientRow>('local_client_authorizations')

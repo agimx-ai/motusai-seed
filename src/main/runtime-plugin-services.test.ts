@@ -42,6 +42,7 @@ describe('generic plugin SDK brokers', () => {
       store: {
         audit: () => [],
         preventSystemSleep: () => false,
+        autoUpdatePlugins: () => true,
         languagePreference: () => 'en-US',
         themePreference: () => 'light',
       },

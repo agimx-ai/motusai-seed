@@ -207,12 +207,14 @@ export type SeedSnapshot = {
   catalogPlugins: SeedCatalogPlugin[];
   pluginCatalogStatus: 'loading' | 'ready' | 'error';
   pluginCatalogError?: string;
+  pluginUpdates?: { running: boolean; result?: PluginUpdateResult };
   catalogNextCursor?: string;
   localClients: LocalClientAuthorization[];
   navigationRequest?: SeedNavigationTarget & { id: string };
   audit: AuditEntry[];
   launchAtLogin: boolean;
   preventSystemSleep: boolean;
+  autoUpdatePlugins: boolean;
   languagePreference: SeedLanguagePreference;
   locale: SeedLocale;
   themePreference: SeedThemePreference;
@@ -333,6 +335,14 @@ export type PluginInstallProgress = {
   cancelable: boolean;
 };
 
+export type PluginUpdateResult = {
+  id: string;
+  updated: number;
+  cancelled: number;
+  failed: Array<{ pluginId: string; name: SeedLocalizedText; reason: string }>;
+  error?: string;
+};
+
 export type SeedEvent =
   | { type: 'snapshot.changed'; snapshot: SeedSnapshot }
   | { type: 'logs.upload.progress'; progress: TerminalLogUploadProgress | null }
@@ -370,6 +380,7 @@ export type SeedApi = {
   updateProfile(input: UpdateProfileInput): Promise<TerminalUserProfile>;
   setLaunchAtLogin(enabled: boolean): Promise<boolean>;
   setPreventSystemSleep(enabled: boolean): Promise<boolean>;
+  setAutoUpdatePlugins(enabled: boolean): Promise<boolean>;
   setLanguagePreference(preference: SeedLanguagePreference): Promise<void>;
   setThemePreference(preference: SeedThemePreference): Promise<void>;
   checkForUpdates(): Promise<boolean>;
@@ -384,6 +395,7 @@ export type SeedApi = {
   loadMorePluginCatalog(): Promise<SeedCatalogPlugin[]>;
   searchPluginCatalog(query: string, cursor?: string): Promise<SeedCatalogPage>;
   installPlugin(pluginId: string, version: string): Promise<boolean>;
+  updateAllPlugins(): Promise<void>;
   cancelPluginInstall(pluginId: string): Promise<boolean>;
   uninstallPlugin(pluginId: string): Promise<boolean>;
   subscribe(listener: (event: SeedEvent) => void): () => void;
@@ -423,6 +435,7 @@ export const ipcChannels = {
   updateProfile: 'seed:account:update-profile',
   launchAtLogin: 'seed:settings:launch-at-login',
   preventSystemSleep: 'seed:settings:prevent-system-sleep',
+  autoUpdatePlugins: 'seed:settings:auto-update-plugins',
   languagePreference: 'seed:settings:language-preference',
   themePreference: 'seed:settings:theme-preference',
   checkForUpdates: 'seed:updates:check',
@@ -437,6 +450,7 @@ export const ipcChannels = {
   loadMorePluginCatalog: 'seed:plugins:load-more-catalog',
   searchPluginCatalog: 'seed:plugins:search-catalog',
   installPlugin: 'seed:plugins:install',
+  updateAllPlugins: 'seed:plugins:update-all',
   cancelPluginInstall: 'seed:plugins:cancel-install',
   uninstallPlugin: 'seed:plugins:uninstall',
   windowMinimize: 'seed:window:minimize',
