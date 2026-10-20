@@ -1,124 +1,1041 @@
 # @motus-ai/seed-sdk
 
-此分支的官方插件已迁移到 Seed Plugin API v2；新 SDK 和插件尚未正式发布。本地测试构建不等于已经安装或正式交付，发布前仍须同步正式 SDK 版本与最低客户端版本。
+MotusAI Seed 插件开发 SDK —— 提供设置页、前后端通信、数据存储、公开能力、事件订阅和插件构建等核心能力。
 
-新插件使用类式生命周期，直接编写 DOM 或 React 界面，不声明表单、管理视图、Renderer 或 presentation。Seed 只提供可信前端 DOM 容器、后端隔离运行环境、通用组件和受控服务。
+## ✨ 特性
 
-一个 `@motus-ai/seed-sdk` 包统一提供运行 API、`/react` 共享组件、`/testing` 测试辅助和 `/tools` 开发工具，使用同一个版本与发布流程。构建脚本从 `/tools` 导入，插件前后端源码从运行 API／React 入口导入；运行入口不加载构建工具，`/tools` 只向 Node 环境导出，构建器拒绝将它导入插件产物。工具链依赖也会随 SDK 安装，子入口隔离不改变 npm 的依赖安装范围。
+- 🧩 **插件生命周期** — 支持异步初始化，卸载时自动清理监听器、定时器和子组件
+- 🎨 **DOM / React 界面** — 提供设置页、输入框、选择器、按钮、弹窗和消息提示
+- 🔗 **前后端通信** — 从页面调用插件后端方法，支持异步返回和取消
+- 🔐 **数据存储** — 按插件保存加密数据、后端配置和凭据
+- 🔌 **公开能力** — 注册公开方法，支持参数、结果校验和跨插件调用
+- 📡 **事件订阅** — 支持前后端通知，以及跨插件后台事件
+- 🔄 **开发热更新** — 监听源码变化，自动构建并同步到 Seed 开发客户端
+- 📦 **插件打包** — 生成 `.seedpkg` 安装包及 SHA-256 摘要
 
-根入口按运行环境加载：浏览器提供基础能力、DOM 控件和 `toast`，Node 只加载基础能力，不加载 React、ReactDOM 或提示组件。插件前端现有的根入口导入方式保持不变；DOM 控件和提示只用于前端。公开类型保留完整的作者接口，前后端的运行环境仍须遵守上述边界。
+## 📦 安装
 
-源码统一位于 `src`，包括 `src/tools` 的构建、打包、开发同步与 CLI；全部参与类型检查并生成到 `dist`。`scripts` 仅构建 SDK 自身，`tests/fixtures` 仅用于测试。发布包只携带 `dist` 和 README，包含工具类型声明，不携带测试样例、源码或无效的 source map。
-
-## 界面入口
-
-源码入口默认导出 Plugin 子类。设置内容由插件代码直接渲染；下面使用 SDK 的可选 DOM 组件：
-
-```ts
-import { Plugin, PluginSettingTab, Setting } from '@motus-ai/seed-sdk';
-
-class Settings extends PluginSettingTab {
-  display() {
-    this.addChild(new Setting(this.containerEl).setName('Clock')).addButton((button) =>
-      button.setButtonText('Read').onClick(async () => {
-        const result = await this.app.service.call<{ iso: string }>('now');
-        this.containerEl.dataset.result = result.iso;
-      }),
-    );
-  }
-}
-
-export default class ClockPlugin extends Plugin {
-  onload() {
-    this.addSettingTab(new Settings(this.app, this));
-  }
-}
+```bash
+npm install --save-dev @motus-ai/seed-sdk
+# 或
+yarn add --dev @motus-ai/seed-sdk
 ```
 
-React 界面可以继承 ReactSettingTab，实现 render() 并返回普通 JSX。模型选择器、下拉框、思考等级滑块和主题图标由客户端与插件共用同一份实现：
+使用 React 组件时：
 
-```ts
-import { ReactSettingTab, ModelSelect, SelectControl, SegmentedControl, DiscreteSlider, ThemedIcon } from '@motus-ai/seed-sdk/react';
+```bash
+npm install react@^19 react-dom@^19 react-i18next@^17 lucide-react@^0.468 streamdown@^2.6
+npm install --save-dev typescript @types/react@^19 @types/react-dom@^19
 ```
 
-插件可以组合这些组件，也可以自行实现任何新控件。这里没有控件名称白名单，也没有根据 JSON 配置生成页面的解释器。ReactSettingTab 会在隐藏或卸载时卸载 React Root，并跟随宿主语言和主题更新。
+## 🚀 快速开始
 
-`SegmentedControl` 复用产品壳原有的分段切换样式和键盘交互。插件直接传入 `value`、`options`、`onValueChange` 和 `label`，自己决定切换后的 JSX 内容；组件不读写配置，也不解释模型来源等业务概念。
-
-`AsyncCombobox` 复用原有可输入搜索下拉框：单个输入框支持自由输入、按选项名称／值过滤和键盘选择，选择后显示名称、通过 `onChange` 返回真实值。选项、加载状态、空态／失败文案和刷新回调由插件传入；组件不请求模型目录、不读取凭据或保存配置。
-
-`FileInputControl` 复用原有文件字段的选择、列表和删除样式，扩展名、数量限制、路径解析、文案和持久化由调用方传入。`StatusLine` 只展示状态圆点、内容和可选操作；不解释连接、任务或插件业务状态。两者都是直接导入的 React 组件，不是声明式页面解释器。
-
-官方可信插件前端直接挂载到客户端同一文档的 HTMLElement 容器；没有 iframe、独立 WebContentsView、坐标／高度同步或滚动转发。页面按浏览器原生文档流自动撑高，整页统一滚动；插件内部确有需要的滚动列表和模态弹窗保留原生滚动语义。插件 CSS 使用自己的类名前缀或根容器作用域，复用宿主主题变量，不覆盖产品壳全局样式。可信前端与壳共享 Renderer，不是逐插件安全沙箱；Renderer 关闭 Node，后端仍独立隔离。
-
-## 后端入口
-
-需要特权服务时，在独立源码入口默认导出 PluginService 子类。界面不能导入后端实现；两端通过当前插件私有的、可取消的服务调用通信：
+`src/service.ts`：
 
 ```ts
 import { PluginService } from '@motus-ai/seed-sdk';
 
 export default class ClockService extends PluginService {
   onload() {
-    this.registerMethod('now', () => ({ iso: new Date().toISOString() }));
+    // 1. 注册后端方法
+    this.registerMethod('now', (_args, signal) => {
+      signal.throwIfAborted();
+      return { iso: new Date().toISOString() };
+    });
   }
 }
 ```
 
-当前样例的对外能力使用 addCapability()，本地 HTTP/SSE 使用 registerLocalApi()，连接使用 registerConnection()。公开方法的权限、Schema、审批、审计和计费仍由宿主校验；私有服务方法不是公开 HTTP 路由。
+`src/main.ts`：
 
-官方插件使用 `addCapability(definition, handler)` 在代码中同时注册公开方法和实现，Manifest 不包含能力、方法、错误或 UI 清单。宿主接收隔离进程的运行时注册，校验后用于发现、审批与调用；读取基础元数据和翻译无需执行插件代码。SDK 用 i18next 处理语言资源，错误键为 `capabilities.<id>.errors.<code>`。
+```ts
+import { Plugin, PluginSettingTab, Setting } from '@motus-ai/seed-sdk';
 
-PluginServices 不提供声明式管理视图或宿主内部接口。网络连接、任务、授权、凭据和系统 Broker 仍通过受控宿主服务访问。
+class ClockSettings extends PluginSettingTab {
+  display() {
+    // 2. 添加设置项和按钮
+    const row = this.addChild(
+      new Setting(this.containerEl)
+        .setName('当前时间')
+        .setDesc('点击按钮，从插件后端读取时间。'),
+    );
 
-## 生命周期与事件
+    row.addButton((button) => {
+      button.setButtonText('读取时间').onClick(async () => {
+        button.setDisabled(true);
+        try {
+          // 3. 调用后端方法并显示结果
+          const result = await this.app.service.call<{ iso: string }>(
+            'now',
+            {},
+            row.signal,
+          );
+          row.setDesc(result.iso);
+        } finally {
+          button.setDisabled(false);
+        }
+      });
+    });
+  }
+}
 
-- onload() 可以异步；失败后仍清理已经注册的资源。
-- onunload() 是同步钩子。需要等待的异步清理使用 register(async () => ...)，宿主卸载过程会排空注册的清理。
-- addChild/removeChild 绑定子组件生命周期；已卸载实例不能重新加载，重载必须构造新实例。
-- registerEvent/registerDomEvent/registerInterval 自动释放监听和定时器。
-- addCommand 自动命名空间隔离；removeCommand 接收插件内原始 ID，清理幂等。
-- Events/EventRef 是内存通知，不提供重启回放。持久任务、会话和 SSE 恢复仍由各自的权威存储和协议负责。
-- 前端控制器首次打开插件页时加载，设置页打开时才渲染。关闭页面只清理显示资源并保留控制器；停止或重载插件时释放控制器及所属贡献。后端生命周期不由页面开关决定。
+export default class ClockPlugin extends Plugin {
+  onload() {
+    // 4. 注册设置页
+    this.addSettingTab(new ClockSettings(this.app, this));
+  }
+}
+```
 
-## 数据
+`build.mjs`：
 
-Plugin 与 PluginService 的 loadData/saveData 访问同一个按插件隔离的加密普通数据记录。每个实例持有自己的读取修订号；并发冲突返回 plugin_data_conflict，不静默覆盖。读取不存在的数据返回 null，解密失败或存储不可用不能当成空数据。
+```js
+import { buildPlugin } from '@motus-ai/seed-sdk/tools';
 
-后端 `app.settings` 直接访问旧加密配置记录，不复制到明文 data.json。snapshot/save/saveMany 提供修订号与原子并发校验，读取失败不能当成空配置。插件保存前校验自己的字段，界面只收到插件明确返回的脱敏数据。原有凭据键和 plugin-data/<plugin_id> 路径沿用。
+// 5. 构建插件
+await buildPlugin({
+  root: import.meta.dirname,
+  service: 'src/service.ts',
+});
+```
 
-配置内容是插件拥有的任意 JSON，不存在通用 profiles、default_profile_id、values 或 schema_version 要求。`snapshot<T>(id)`、`get<T>(id)`、`update<T>(id, ...)` 的 T 由插件定义。宿主不补默认字段、不改写旧记录；插件按自身业务解释已有数据。`app.settings` 仅向后端提供，不能把凭据放进 UI 和后端共用的 `loadData/saveData`。
+---
 
-`buildPlugin` 为当前插件 UI 依赖图独立编译 Tailwind 类和可选自定义 CSS，生成并校验 `styles.css`。工具类通过 CSS `@scope` 限定在相同插件 ID 的 `[data-plugin-view-owner]` 与 `[data-plugin-view-portal]` 中，不能覆盖产品壳或其他插件。SDK 弹窗和菜单自动标记弹出层；插件自行 portal 到 document.body 时，可从 `usePluginStyleScope()` 读取当前 ID 并赋给 `data-plugin-view-portal`。ReactSettingTab 自动提供作用域；手动使用 ComponentProvider 时传入 `pluginId`。自定义 CSS 仍须使用插件类名前缀或根容器作用域。无需客户端扫描插件源码或重新构建客户端。动态类使用完整类名，必要时在插件样式中使用 Tailwind `@source inline(...)`。共享组件和主题样式由 SDK 维护，与客户端窗口、侧栏和平台页面样式分离。
+## 📖 API 文档
 
-`@motus-ai/seed-sdk/react` 也导出原有的 `ActionButton`、`IconButton`、`Tooltip`、`FieldLabel`、`DisclosureControl` 和 `TextInputControl`。客户端与插件复用同一份组件实现，迁移设置页时保留既有尺寸、帮助提示和折叠交互；`StatusBadge` 只负责状态胶囊的展示，`Dialog` 负责模态焦点、关闭和原有面板样式。页面分组、文案、业务状态和调用仍由插件代码组合，不增加声明式表单解释器。单个设置页不额外显示重复的导航按钮；多个设置页或注册视图仍保留导航。
+### `Plugin`
 
-全局短提示统一使用 `@motus-ai/seed-sdk` 导出的 `toast`，支持 `success`、`info`、`warning`、`error`、`loading`、`promise`、`dismiss` 以及描述、操作按钮和同 ID 更新。客户端在应用根挂载一次 `@motus-ai/seed-sdk/react` 的 `Toaster`，负责主题和内容区域居中；插件直接调用 `toast`，共用同一个队列和完整样式，无需再次挂载组件。
+前端插件类，继承自 `Component`，提供设置页、命令、视图和数据读写等功能。
+
+#### 方法一览
+
+| 方法 | 说明 | 返回值 |
+| --- | --- | --- |
+| `addSettingTab(tab)` | 添加设置页 | `void` |
+| `registerView(type, creator)` | 注册视图类型和创建函数 | `void` |
+| `addCommand(command)` | 注册命令 | `Command` |
+| `removeCommand(id)` | 按插件内 ID 移除命令 | `void` |
+| `addRibbonIcon(icon, title, callback)` | 添加工具栏按钮，使用 Lucide 图标名 | `HTMLElement` |
+| `addStatusBarItem()` | 添加当前插件的状态元素 | `HTMLElement` |
+| `loadData<T>()` | 读取普通数据；不存在时返回 `null` | `Promise<T \| null>` |
+| `saveData(data)` | 保存可序列化的数据 | `Promise<void>` |
+
+#### 属性
+
+| 属性 | 说明 | 类型 |
+| --- | --- | --- |
+| `app` | 前端接口 | `App` |
+| `manifest` | 插件信息 | `PluginManifest` |
+
+### `App`
+
+| 属性 / 方法 | 类型或返回值 | 说明 |
+| --- | --- | --- |
+| `locale` | `string` | 当前语言 |
+| `theme` | `'light' \| 'dark'` | 当前主题 |
+| `i18n` | i18next 实例 | 读取当前语言的文案 |
+| `events` | `Events` | 当前插件前端事件 |
+| `service.call<T>(method, args?, signal?)` | `Promise<T>` | 调用插件后端方法 |
+| `reloadService?.()` | `Promise<void>` | 重新加载插件后端 |
+| `resources?.url(path)` | `string` | 包内资源 URL |
+| `files?.pick(options?)` | `Promise<string[]>` | 选择文件，取消返回 `[]` |
+| `files?.path(file)` | `string` | 获取 `File` 的本地路径 |
+| `clipboard?.writeText(text)` | `Promise<void>` | 写入剪贴板 |
+
+### `PluginService`
+
+后端插件类，继承自 `Component`，提供方法注册、能力注册、事件发布和配置读写等功能。
+
+#### 方法一览
+
+| 方法 | 说明 | 返回值 |
+| --- | --- | --- |
+| `registerMethod(name, handler)` | 注册私有方法；`handler(args, signal)` 返回结果或 Promise | `void` |
+| `publish(name, data)` | 将通知发送给当前插件前端的 `app.events` | `Promise<void>` |
+| `addCapability(definition, handler?)` | 注册公开能力；有方法时必须传处理器 | `void` |
+| `registerLocalApi(registration)` | 注册本地 HTTP 路由和请求处理器 | `void` |
+| `registerConnection(descriptor)` | 注册连接状态、重连与关闭回调 | `SeedConnectionHandle` |
+| `resourceUrl(path)` | 获取已声明资源的 URL | `string` |
+| `loadData<T>()` / `saveData(data)` | 与前端共用的普通数据 | `Promise<T \| null>` / `Promise<void>` |
+
+#### 属性
+
+| 属性 | 说明 | 类型 |
+| --- | --- | --- |
+| `app` | 后端接口 | `ServiceApp` |
+| `manifest` | 插件信息 | `PluginManifest` |
+| `i18n` | 读取翻译文案 | i18next 实例 |
+
+### `ServiceApp`
+
+| 属性 | 常用接口 / 返回值 | 用途 |
+| --- | --- | --- |
+| `package` | `package_id`、`version`、`data_path` | 当前插件身份与数据目录 |
+| `settings` | `PluginSettingsStore` | 后端配置记录 |
+| `secrets` | `get(key): Promise<string \| undefined>`、`set(key, value)`、`delete(key)` | 凭据存储；写入 / 删除返回 `Promise<void>` |
+| `capabilities` | `list()`、`invoke(input)`、可选 `stream(input)` | 调用已声明消费的公开能力 |
+| `events` | `list()`、`publish(input)`、`subscribe(options, handler)` | 跨插件后台事件 |
+| `tasks` | `start(input)`、`run(input, work)` | 后台任务的状态与取消 |
+| `connections` | `register(descriptor)` | 插件连接的生命周期与状态 |
+| `authorization` | `authorize(request, signal?)` | 浏览器 OAuth / OIDC 授权 |
+| `audit` | `record(entry): Promise<void>` | 记录审计信息 |
+| `diagnostics` | `report(entry)`、`error(event, error, context?)` | 记录诊断信息 |
+| `invokeHost(service, args)` | `Promise<unknown>` | 调用受控宿主服务，如音频采集 |
+
+---
+
+### `service.call` 详细说明
+
+调用当前插件的后端方法，支持异步返回和取消。
+
+```ts
+import type { App } from '@motus-ai/seed-sdk';
+
+export async function greet(app: App, name: string, signal?: AbortSignal) {
+  return await app.service.call<{ message: string }>(
+    'greet',  // 后端方法名
+    { name }, // 方法参数
+    signal,   // 取消信号
+  );
+}
+```
+
+返回值：`Promise<T>`。
+
+### `registerMethod` 详细说明
+
+注册供插件页面调用的方法，回调接收方法参数和取消信号。
+
+```ts
+import { PluginService } from '@motus-ai/seed-sdk';
+
+export default class GreetingService extends PluginService {
+  onload() {
+    this.registerMethod('greet', ({ name }, signal) => {
+      signal.throwIfAborted();
+      return { message: 'Hello, ' + String(name ?? 'World') };
+    });
+  }
+}
+```
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `name` | `string` | 方法名 |
+| `handler` | `(args: Record<string, unknown>, signal: AbortSignal) => unknown \| Promise<unknown>` | 方法实现 |
+
+返回值：`void`。
+
+---
+
+### `Component`
+
+生命周期管理类，提供事件注册、定时器和资源清理等功能。
+
+| 方法 | 说明 | 返回值 |
+| --- | --- | --- |
+| `onload()` | 初始化钩子，由宿主调用，可异步 | `void \| Promise<void>` |
+| `onunload()` | 同步卸载 | `void` |
+| `register(disposer)` | 注册清理函数，卸载时按逆序执行并等待完成 | `void` |
+| `registerEvent(ref)` | 注册 `Events.on()` 返回的监听引用，卸载时取消 | `void` |
+| `registerDomEvent(target, type, callback, options?)` | 监听 DOM 事件，卸载时移除 | `void` |
+| `registerInterval(id)` | 接收 `setInterval()` 的返回值，卸载时清除 | 原定时器 ID |
+| `addChild(child)` | 接管一个子组件的生命周期 | 传入的子组件 |
+| `removeChild(child)` | 卸载并移除子组件 | `Promise<T>` |
+| `load()` | 加载新组件实例 | `Promise<void>` |
+| `unload()` | 取消工作并等待资源清理 | `Promise<void>` |
+
+#### 属性
+
+| 属性 | 说明 | 类型 |
+| --- | --- | --- |
+| `signal` | 组件卸载时触发取消 | `AbortSignal` |
+| `loaded` | 是否已完成加载 | `boolean` |
+
+---
+
+### `PluginSettingTab` / `Setting`
+
+创建设置页并添加文本、开关、下拉框、滑块和按钮。
+
+| 接口 | 参数 / 用途 | 返回值 |
+| --- | --- | --- |
+| `new PluginSettingTab(app, plugin)` | 前端 `App` 与所属 `Plugin` | 设置页实例 |
+| `display()` | 渲染页面，可异步 | `void \| Promise<void>` |
+| `update()` | 重新渲染当前设置页 | `Promise<void>` |
+| `new Setting(containerEl)` | 在指定元素中创建一行设置 | `Setting` |
+| `setName(text)` / `setDesc(text)` | 设置名称 / 说明 | `this` |
+| `setHeading()` / `setDisabled(value)` | 标题行 / 禁用整行 | `this` |
+| `addText(callback)` / `addTextArea(callback)` | 创建文本输入框 | `this` |
+| `addToggle(callback)` / `addDropdown(callback)` | 创建开关 / 下拉框 | `this` |
+| `addSlider(callback)` / `addButton(callback)` | 创建滑块 / 按钮 | `this` |
+
+#### 控件方法
+
+| 控件 | 常用方法 | 返回值 |
+| --- | --- | --- |
+| `TextComponent` / `TextAreaComponent` | `setValue(string)`、`setPlaceholder(string)`、`onChange(callback)` | `this`；`getValue()` 返回 `string` |
+| `ToggleComponent` | `setValue(boolean)`、`onChange(callback)` | `this`；`getValue()` 返回 `boolean` |
+| `DropdownComponent` | `addOption(value, label)`、`addOptions(record)`、`setValue(string)` | `this`；`getValue()` 返回 `string` |
+| `SliderComponent` | `setLimits(min, max, step)`、`setValue(number)`、`onChange(callback)` | `this`；`getValue()` 返回 `number` |
+| `ButtonComponent` | `setButtonText(text)`、`setTooltip(text)`、`setCta()`、`setWarning()`、`onClick(callback)` | `this` |
+
+---
+
+### `PluginSettingsStore`
+
+读取和更新后端配置，通过 `this.app.settings` 使用。
+
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `snapshot<T>(id)` | 配置 ID | `Promise<PluginSettingsSnapshot<T>>` |
+| `get<T>(id)` | 配置 ID | `Promise<T \| null>` |
+| `save<T>(id, value, revision)` | 配置 ID、新值、读取时的修订号 | `Promise<PluginSettingsSnapshot<T>>` |
+| `saveMany<T>(updates)` | `{ id, value, revision }[]`；整批校验并保存 | `Promise<Record<string, PluginSettingsSnapshot<T>>>` |
+| `update<T>(id, mutate)` | `mutate(value: T \| null)` 返回新值或 Promise | `Promise<PluginSettingsSnapshot<T>>` |
+| `transaction<T>(ids, mutate)` | 多个 ID；回调返回要更新的 ID 与值 | `Promise<Record<string, PluginSettingsSnapshot<T>>>` |
+
+返回结构为 `PluginSettingsSnapshot<T>`；保存冲突时返回 `plugin_settings_conflict`。
+
+### `secrets`
+
+保存、读取和删除 Token 等凭据，通过 `this.app.secrets` 使用。
+
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `get(key)` | `key: string` | `Promise<string \| undefined>` |
+| `set(key, value)` | `key: string`、`value: string` | `Promise<void>` |
+| `delete(key)` | `key: string` | `Promise<void>` |
+
+---
+
+### `ReactSettingTab`
+
+使用 React 编写设置页，实现 `render()` 返回 JSX。
+
+| 接口 | 参数 | 返回值 |
+| --- | --- | --- |
+| `new Settings(app, plugin)` | 前端 `App` 与所属 `Plugin` | 设置页实例 |
+| `render()` | 无 | `ReactNode` |
+
+#### 组件一览
+
+| 组件 | 主要参数 | 用途 |
+| --- | --- | --- |
+| `SelectControl` | `label`、`value`、`options`、`onValueChange` | 单级或递归多级下拉选择 |
+| `SegmentedControl` | `label`、`value`、`options`、`onValueChange` | 分段切换 |
+| `ModelSelectControl` / `ModelSelect` | `label`、`value`、`options`、`onChange`、`presentation` | 选择模型和思考等级 |
+| `AsyncCombobox` | `value`、`options`、`onChange` | 可输入、可搜索的选择框 |
+| `TextInputControl` | 原生 input 属性，如 `value`、`onChange` | 文本输入 |
+| `ActionButton` | 原生 button 属性、`tone`、`busy`、`icon` | 操作按钮 |
+| `IconButton` | `icon`、`label`、`onClick`、`tone`、`busy` | 图标按钮；`label` 同时用作可访问名称和提示 |
+| `Tooltip` | `children`、`content`、`delayMs`、`placement` | 悬停 / 聚焦提示 |
+| `FieldLabel` | `children`、`description`、`helpUrl` | 字段名称、帮助提示与链接 |
+| `DisclosureControl` | `open`、`label`、`onToggle`、`children`、`actions` | 显示折叠标题栏与操作按钮 |
+| `FileInputControl` | `value`、`multiple`、`accept`、`onChange`、`getPathForFile` 及标签 / 错误文案 | 本地文件选择与拖放 |
+| `StatusLine` | `children`、`tone`、`pending`、`actions` | 状态行 |
+| `StatusBadge` | `children`、`tone`、可选 `onClick` | 状态胶囊 |
+| `Dialog` | `open`、`title`、`closeLabel`、`onClose`、`children`、`busy` | 带焦点管理的对话框 |
+| `Flow` / `FlowStep` | `children`；步骤还需 `icon`、`title`，可选 `muted` | 步骤布局 |
+| `MarkdownContent` | `children: string`、`streaming` | 静态 / 流式 Markdown |
+| `Collection` / `CollectionCard` | `children`；卡片使用 `icon`、`title`、`description`、`onOpen`、`actions` | 集合与可打开的卡片 |
+
+#### `SelectControl` 参数
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `label` | `string` | 是 | — | 控件名称 |
+| `value` | `Value` | 是 | — | 当前选中值 |
+| `options` | `SelectControlOption<Value>[]` | 是 | — | 选项列表，`children` 用于添加子选项 |
+| `onValueChange` | `(value: Value) => void` | 是 | — | 选中叶子选项时回调，参数为该项的 `value` |
+| `placeholder` | `string` | 否 | `label` | 未选中时显示的文案 |
+| `disabled` / `loading` | `boolean` | 否 | `false` | 禁用 / 加载状态 |
+| `portal` | `boolean` | 否 | `false` | 将下拉菜单挂载到页面弹层容器 |
+| `closeOnSelect` | `boolean` | 否 | `true` | 选择后关闭菜单 |
+| `variant` | `'compact' \| 'form' \| 'model'` | 否 | `'compact'` | 展示样式 |
+| `size` | `'default' \| 'form'` | 否 | `'default'` | 控件尺寸 |
+
+#### `ModelSelectControl` 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `label` | `string` | 是 | 控件名称 |
+| `value` | `string` | 是 | 选中的模型 |
+| `options` | `(SelectControlOption<string> & { thinkingLevels?: readonly string[] })[]` | 是 | 模型选项 |
+| `onChange` | `(model: string, thinking: string) => void` | 是 | 模型 / 思考等级变化 |
+| `presentation` | `ModelSelectPresentation` | 是 | 分类与状态文案 |
+| `thinkingValue` | `string` | 否 | 当前思考等级 |
+| `disabled` / `loading` | `boolean` | 否 | 禁用 / 加载状态 |
+| `size` | `'default' \| 'form'` | 否 | 控件尺寸，默认 `'default'` |
+
+---
+
+### `toast` 使用示例
 
 ```ts
 import { toast } from '@motus-ai/seed-sdk';
 
-const id = toast.loading('正在保存…');
-toast.success('保存成功', { id });
+toast.success('保存成功');
 toast.error('保存失败', { description: '请检查连接后重试。' });
 ```
 
-native-host 和 sandboxed-web 后端都支持经 consumes、Schema、审批、审计与计费校验的 capabilities.list/invoke/stream；调用的取消和所属 Component 卸载都会沿 IPC 传到提供方。后台 tasks 在两种环境中均参与平台活动观察。sandboxed-web 不开放 Node、任意网络连接或本地 HTTP handler；后两者仍需 native-host 及对应静态权限，不提供伪成功或静默降级。
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `toast(message, options?)` | 消息、提示选项 | `string \| number` |
+| `toast.success/info/warning/error(message, options?)` | 消息、提示选项 | `string \| number` |
+| `toast.loading(message, options?)` | 加载提示 | `string \| number` |
+| `toast.promise(promise, options)` | Promise 与状态文案 | 带 `unwrap(): Promise<T>` 的提示结果 |
+| `toast.dismiss(id?)` | 提示 ID，省略时关闭全部 | `string \| number` |
 
-UI 的命令、toolbar/ribbon、视图和状态项属于当前插件的 DOM 容器，不是 Obsidian 的全局工作区。toolbar 图标使用 Lucide 名称并随注册清理；页面隐藏不等于卸载后端。SDK 不宣称提供尚不存在的全局命令面板或全局 DOM 状态栏。
+---
 
-UI 可调用 `app.reloadService()` 重新加载自己的后端；不能重载其他插件。正常卸载与用户取消不同，持久提问和会话须通过 Pi 的原有恢复机制保留。
+### `addCapability` 详细说明
 
-`app.resources.url(path)` / `PluginService.resourceUrl(path)` 返回已声明资源地址；`app.files.pick()` 和 `app.files.path(file)` 复用系统文件选择与拖放路径能力。`PluginService.publish(name,data)` 将通知发给自己的 UI `app.events`，不提供跨插件事件广播或重启回放。
+注册公开能力和调用处理器。处理器接收方法名和 `SeedInvocation`，返回 `Promise<unknown>`。
+
+#### `CapabilityDefinition`
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `id` | `string` | 是 | 能力标识 |
+| `version` | `number` | 是 | 能力版本号 |
+| `exposure` | `'terminal' \| 'plugin' \| 'local'` | 否 | 能力公开范围 |
+| `methods` | `CapabilityMethod[]` | 是 | 公开方法；只发布事件时填 `[]` |
+| `events` | `CapabilityEvent[]` | 否 | 后台事件定义 |
+| `descriptionKey` | `string` | 否 | 能力描述的翻译键 |
+| `annotations` | `Record<string, unknown>` | 否 | 能力注解 |
+
+#### `CapabilityMethod`
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `name` | `string` | 是 | 方法名 |
+| `risk` | `'read' \| 'write' \| 'control'` | 是 | 读取、写入或控制风险 |
+| `inputSchema` / `outputSchema` | JSON Schema 对象 | 否 | 校验方法参数 / 返回结果 |
+| `displayNameKey` / `descriptionKey` | `string` | 否 | 展示名称 / 描述的翻译键 |
+| `platforms` | `('darwin' \| 'linux' \| 'win32')[]` | 否 | 支持的平台 |
+| `annotations` | `Record<string, unknown>` | 否 | 方法注解 |
+
+### `capabilities` 详细说明
+
+查找其他插件提供的能力，并调用指定方法。
+
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `list()` | 无 | `Promise<SeedAvailableCapability[]>` |
+| `invoke(input)` | 下表 | `Promise<unknown>` |
+| `stream?(input)` | 相同调用参数，方法注解需包含 `seed.stream: true` | `AsyncIterable<unknown>` |
+
+`invoke()` 参数：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `capability` | `string` | 是 | — | 能力 ID |
+| `method` | `string` | 是 | — | 方法名 |
+| `arguments` | `Record<string, unknown>` | 是 | — | 方法参数 |
+| `provider_plugin_id` | `string` | 多提供方时 | — | 提供方插件 ID |
+| `request_id` | `string` | 否 | — | 请求编号 |
+| `signal` | `AbortSignal` | 否 | — | 取消信号 |
+| `include_billing` | `boolean` | 否 | `false` | 返回 `{ result, billing }` |
+| `activity` | `'foreground' \| 'background'` | 否 | `'foreground'` | 活动记录方式 |
+
+---
+
+### `invokeHost` 详细说明
+
+调用 Seed 系统服务，例如音频采集。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `service` | `string` | 是 | 服务标识，例如 `seed.audio` |
+| `args` | `Record<string, unknown>` | 是 | 服务参数 |
+
+返回值：`Promise<unknown>`。
+
+### `mountPluginService` 详细说明
+
+加载插件后端，用于测试方法调用、配置读写和能力注册。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `entry` | `PluginTestEntry` | 是 | 后端服务类或初始化函数 |
+| `options.project` | `URL` | 是 | 包含 `manifest.json` 的工程目录 |
+| `options.settings` | `Record<string, unknown>` | 否 | 初始配置 |
+| `options.invokeHost` | `PluginServices['invokeHost']` | 否 | 宿主服务替身 |
+| `options.invokeCapability` | `SeedPluginCapabilityService['invoke']` | 否 | 能力调用替身 |
+
+返回的测试上下文：
+
+| 属性 / 方法 | 返回值 / 说明 |
+| --- | --- |
+| `service` | 已加载的 `PluginService` |
+| `definitions` | `Map<string, CapabilityDefinition>` |
+| `invoke(id, method, invocation)` | `Promise<unknown>`，调用注册的能力 |
+| `dispose()` | `Promise<void>`，卸载服务 |
+| `reconnectConnection(id)` | `Promise<void>`，触发连接重连 |
+| `activeTaskCount()` | `number`，当前任务数 |
+
+---
+
+## ⚙️ 配置选项
+
+### `manifest.json`
+
+| 方法 | 参数说明 | 返回值 |
+| --- | --- | --- |
+| `addSettingTab(tab)` | 设置页实例，如 `new Settings(this.app, this)` | `void` |
+| `registerView(type, creator)` | 视图类型及 `(host: ViewHost) => View` 创建函数 | `void` |
+| `addCommand(command)` | 命令对象，字段见下表 | 带命名空间 ID 的 `Command` |
+| `removeCommand(id)` | 插件内的原始命令 ID | `void` |
+| `addRibbonIcon(icon, title, callback)` | Lucide 图标名、提示文案、点击回调 | `HTMLElement` |
+| `addStatusBarItem()` | 添加当前插件的状态元素 | `HTMLElement` |
+| `loadData<T>()` | 读取普通数据；不存在时返回 `null` | `Promise<T \| null>` |
+| `saveData(data)` | 保存可序列化的数据 | `Promise<void>` |
+
+### `buildPlugin`
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `root` | `string` | 当前工作目录 | 插件工程目录 |
+| `view` | `string` | `src/main.ts` | 前端入口；React 通常使用 `src/main.tsx` |
+| `service` | `string` | 不构建后端 | 后端入口 |
+| `runtime` | `'sandboxed-web' \| 'native-host'` | `'sandboxed-web'` | 后端运行环境；`native-host` 必须提供 `service` |
+| `styles` | `string` | — | 自定义 CSS 文件 |
+| `outdir` | `string` | `dist` | 工程目录内的输出子目录 |
+| `resources` | `{ path: string; source: string }[]` | `[]` | 包内路径与工程源文件 |
+| `capabilities` | `string` | `src/capabilities.ts`（若存在） | 导出 `capabilities` 数组的文件 |
+| `serviceOptions` | esbuild `BuildOptions` | — | 后端构建选项 |
+
+返回值：`Promise<{ output: string; manifest: BuiltPluginManifest }>`。
+
+### `packPlugin`
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `root` | `string` | 当前工作目录 | 工程目录 |
+| `outdir` | `string` | `'dist'` | 已构建产物目录 |
+| `packages` | `string` | `'artifacts'` | 安装包输出目录 |
+| `variant` | `PluginPackageVariant` | — | 平台目标与附加资源 |
+
+返回值：`Promise<{ packagePath: string; sha256: string; size: number }>`，`size` 单位为字节。
+
+---
+
+## 📡 事件列表
+
+### 前端事件
+
+通过 `app.events.on(name, listener)` 监听后端 `publish(name, data)` 发送的通知。
+
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `events.on(name, listener, context?)` | 事件名、回调及可选 this 上下文 | `EventRef` |
+| `events.off(name, listener)` | 移除指定监听 | `void` |
+| `events.offref(ref)` | 移除监听引用 | `void` |
+| `events.trigger(name, ...args)` | 触发当前事件对象的监听 | `void` |
+
+### 后台事件
+
+通过 `app.events.subscribe(options, handler)` 订阅其他插件发布的事件。
+
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `list()` | 无 | `Promise<AvailablePluginEvent[]>` |
+| `publish(input)` | `{ capability, event, version, data }` | `Promise<PluginEvent>` |
+| `subscribe<T>(options, handler)` | 订阅参数，及 `(event: PluginEvent<T>, signal) => void \| Promise<void>` | `Promise<PluginEventSubscription>` |
+
+订阅参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `provider_plugin_id` | `string` | 是 | 精确指定提供方插件 |
+| `capability` | `string` | 是 | 能力 ID |
+| `event` | `string` | 是 | 事件名 |
+| `version` | `number` | 是 | 事件版本 |
+| `signal` | `AbortSignal` | 否 | 主动取消订阅 |
+
+订阅结果：
+
+| 属性 / 方法 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | `string` | 订阅 ID |
+| `signal` | `AbortSignal` | 订阅取消信号 |
+| `closed` | `Promise<void>` | 投递结束；提供方停止、撤权、传输异常或溢出时拒绝 |
+| `unsubscribe()` | `Promise<void>` | 停止投递 |
+
+---
+
+## 📋 数据类型
+
+### `SeedInvocation`
+
+```ts
+import type { SeedInvocationPrincipal } from '@motus-ai/seed-sdk';
+
+export type SeedInvocation = {
+  request_id: string;                 // 请求 ID
+  arguments: Record<string, unknown>; // 方法参数
+  signal?: AbortSignal;              // 取消信号
+  provider_plugin_id?: string;        // 提供方插件 ID
+  capability?: string;               // 能力 ID
+  session_id?: string;               // 会话 ID
+  principal?: SeedInvocationPrincipal;
+  billing?: { call_id: string; amount: number; price_revision: number };
+  approval?: unknown;
+  context?: unknown;
+  input?: unknown;
+};
+```
+
+### `PluginSettingsSnapshot<T>`
+
+```ts
+export type PluginSettingsSnapshot<T = unknown> = {
+  revision: string; // 保存时使用的修订号
+  value: T | null;  // 配置内容
+};
+```
+
+### `PluginEvent<T>`
+
+```ts
+export type PluginEvent<T = unknown> = {
+  id: string;                  // 事件 ID
+  provider_plugin_id: string;   // 发布事件的插件 ID
+  capability: string;          // 所属能力
+  capability_version: number;  // 能力版本
+  event: string;               // 事件名称
+  event_version: number;       // 事件版本
+  published_at: string;        // 发布时间
+  data: T;                    // 事件数据
+};
+```
+
+### `SelectControlOption<Value>`
+
+```ts
+export type SelectControlOption<Value extends string> = {
+  value: Value;
+  label: string;
+  description?: string;
+  children?: SelectControlOption<Value>[];
+  disabled?: boolean;
+  group?: string;
+  iconDataUrl?: string;
+  iconDarkDataUrl?: string;
+};
+```
+
+### `ModelSelectPresentation`
+
+```ts
+export type ModelSelectPresentation = {
+  placeholder: string;
+  unavailable: string;
+  loading: string;
+  groups?: Record<string, string>;
+  thinking: {
+    label: string;
+    unselected: string;
+    unsupported: string;
+    chooseModel: string;
+    default: string;
+    levels: Record<string, string>;
+  };
+};
+```
+
+---
+
+## 📂 项目结构
+
+```text
+clock-plugin/
+├── src/
+│   ├── main.ts             # 插件页面
+│   ├── service.ts          # 插件后端
+│   └── capabilities.ts     # 公开能力（可选）
+├── locales/                # 翻译文件（可选）
+├── manifest.json           # 插件信息
+├── package.json
+└── build.mjs               # 构建脚本
+```
+
+`package.json`：
+
+```json
+{
+  "name": "example-clock-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "keywords": ["productivity"],
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "seed-plugin dev",
+    "pack": "npm run build && seed-plugin pack"
+  }
+}
+```
+
+`manifest.json`：
+
+```json
+{
+  "id": "com.example.clock",
+  "name": "Clock",
+  "version": "1.0.0",
+  "minAppVersion": "0.3.5",
+  "description": "Read the current time from a plugin service.",
+  "author": "Your Name"
+}
+```
+
+---
+
+## 🧩 完整使用示例
+
+### 读取和保存数据
+
+```ts
+import { PluginService } from '@motus-ai/seed-sdk';
+
+type Counter = { count: number };
+
+export default class CounterService extends PluginService {
+  onload() {
+    this.registerMethod('read', async () => {
+      return (await this.loadData<Counter>()) ?? { count: 0 };
+    });
+
+    this.registerMethod('increment', async (_args, signal) => {
+      signal.throwIfAborted();
+      const current = (await this.loadData<Counter>()) ?? { count: 0 };
+      const next = { count: current.count + 1 };
+      await this.saveData(next);
+      return next;
+    });
+  }
+}
+```
+
+### 校验和保存配置
+
+```ts
+import { PluginService, SeedPluginError } from '@motus-ai/seed-sdk';
+
+type Preferences = { title: string };
+
+export default class PreferencesService extends PluginService {
+  onload() {
+    this.registerMethod('getPreferences', async () => {
+      return (await this.app.settings.get<Preferences>('preferences'))
+        ?? { title: 'My plugin' };
+    });
+
+    this.registerMethod('savePreferences', async ({ title }, signal) => {
+      signal.throwIfAborted();
+      if (typeof title !== 'string' || !title.trim() || title.length > 100) {
+        throw new SeedPluginError('invalid_title', '标题必须为 1–100 个字符。');
+      }
+      const saved = await this.app.settings.update<Preferences>(
+        'preferences',
+        () => ({ title: title.trim() }),
+      );
+      return saved.value;
+    });
+  }
+}
+```
+
+### 保存和删除凭据
+
+```ts
+import { PluginService, SeedPluginError } from '@motus-ai/seed-sdk';
+
+export default class CredentialService extends PluginService {
+  onload() {
+    this.registerMethod('setToken', async ({ token }) => {
+      if (typeof token !== 'string' || !token.trim()) {
+        throw new SeedPluginError('token_required', '请输入 Token。');
+      }
+      await this.app.secrets.set('api-token', token);
+      return { configured: true };
+    });
+
+    this.registerMethod('tokenStatus', async () => ({
+      configured: Boolean(await this.app.secrets.get('api-token')),
+    }));
+
+    this.registerMethod('deleteToken', async () => {
+      await this.app.secrets.delete('api-token');
+      return { configured: false };
+    });
+  }
+}
+```
+
+### React 设置页
+
+`src/main.tsx`：
+
+```tsx
+import { useState } from 'react';
+import { Plugin, toast, type App } from '@motus-ai/seed-sdk';
+import {
+  ActionButton,
+  ReactSettingTab,
+  SelectControl,
+} from '@motus-ai/seed-sdk/react';
+
+function ClockPage({ app }: { app: App }) {
+  const [format, setFormat] = useState<'local' | 'iso'>('local');
+  const [time, setTime] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function refresh() {
+    setBusy(true);
+    try {
+      const result = await app.service.call<{ iso: string }>('now');
+      setTime(format === 'iso'
+        ? result.iso
+        : new Date(result.iso).toLocaleString(app.locale));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '读取失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <SelectControl<'local' | 'iso'>
+        label="时间格式"
+        value={format}
+        options={[
+          { value: 'local', label: '本地时间' },
+          { value: 'iso', label: 'ISO 8601' },
+        ]}
+        onValueChange={setFormat}
+        disabled={busy}
+      />
+      <ActionButton busy={busy} onClick={() => void refresh()}>
+        读取时间
+      </ActionButton>
+      <output aria-live="polite">{time}</output>
+    </div>
+  );
+}
+
+class ClockSettings extends ReactSettingTab {
+  render() {
+    return <ClockPage app={this.app} />;
+  }
+}
+
+export default class ClockPlugin extends Plugin {
+  onload() {
+    this.addSettingTab(new ClockSettings(this.app, this));
+  }
+}
+```
+
+`build.mjs`：
+
+```js
+import { buildPlugin } from '@motus-ai/seed-sdk/tools';
+
+await buildPlugin({
+  root: import.meta.dirname,
+  view: 'src/main.tsx',
+  service: 'src/service.ts',
+});
+```
+
+### 多级下拉菜单
+
+```ts
+import type { SelectControlOption } from '@motus-ai/seed-sdk/react';
+
+export const destinations: SelectControlOption<string>[] = [
+  {
+    value: 'team',
+    label: '团队',
+    children: [
+      { value: 'engineering', label: '研发', children: [
+        { value: 'room-1', label: '项目频道', description: '可用' },
+      ] },
+    ],
+  },
+];
+```
+
+### 保存结果提示
+
+```ts
+import { toast } from '@motus-ai/seed-sdk';
+
+export async function saveWithNotice(save: () => Promise<void>) {
+  const id = toast.loading('正在保存…');
+  try {
+    await save();
+    toast.success('保存成功', { id });
+  } catch (error) {
+    toast.error('保存失败', {
+      id,
+      description: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+```
+
+### 注册公开能力 + 跨插件调用
+
+提供方 `src/capabilities.ts`：
+
+```ts
+import type { CapabilityDefinition } from '@motus-ai/seed-sdk';
+
+export const clockCapability: CapabilityDefinition = {
+  id: 'example_clock',
+  version: 1,
+  exposure: 'plugin',
+  methods: [{
+    name: 'now',
+    risk: 'read',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: { iso: { type: 'string' } },
+      required: ['iso'],
+      additionalProperties: false,
+    },
+  }],
+};
+
+export const capabilities = [clockCapability];
+```
+
+提供方 `src/service.ts`：
+
+```ts
+import { PluginService, SeedPluginError } from '@motus-ai/seed-sdk';
+import { clockCapability } from './capabilities.js';
+
+export default class ClockService extends PluginService {
+  onload() {
+    const now = () => ({ iso: new Date().toISOString() });
+    this.registerMethod('now', now);
+
+    this.addCapability(clockCapability, {
+      async invoke(method, invocation) {
+        invocation.signal?.throwIfAborted();
+        if (method !== 'now') {
+          throw new SeedPluginError('unknown_method', '不支持的方法。');
+        }
+        return now();
+      },
+    });
+  }
+}
+```
+
+消费方 `manifest.json`：
+
+```json
+{
+  "consumes": [
+    { "capability": "example_clock", "methods": ["now"] }
+  ]
+}
+```
+
+消费方 `src/service.ts`：
+
+```ts
+import { PluginService, SeedPluginError } from '@motus-ai/seed-sdk';
+
+export default class ClockConsumer extends PluginService {
+  onload() {
+    this.registerMethod('readProviderClock', async ({ providerPluginId }, signal) => {
+      if (typeof providerPluginId !== 'string' || !providerPluginId) {
+        throw new SeedPluginError('provider_required', '请选择提供时钟的插件。');
+      }
+      return await this.app.capabilities.invoke({
+        provider_plugin_id: providerPluginId,
+        capability: 'example_clock',
+        method: 'now',
+        arguments: {},
+        signal,
+      });
+    });
+
+    this.registerMethod('clockProviders', async () => {
+      const available = await this.app.capabilities.list();
+      return available.filter((item) => item.id === 'example_clock');
+    });
+  }
+}
+```
+
+### 前后端事件通知
+
+`src/main.ts`：
+
+```ts
+import { Plugin, PluginSettingTab, Setting } from '@motus-ai/seed-sdk';
+
+class UpdateSettings extends PluginSettingTab {
+  display() {
+    const output = document.createElement('output');
+    output.textContent = '等待后台更新';
+    this.containerEl.append(output);
+    this.addChild(new Setting(this.containerEl).setName('后台通知'))
+      .addButton((button) => button.setButtonText('发送更新')
+        .onClick(() => this.app.service.call('notify')));
+
+    this.registerEvent(this.app.events.on('updated', (data: { iso: string }) => {
+      output.textContent = data.iso;
+    }));
+  }
+}
+
+export default class UpdatePlugin extends Plugin {
+  onload() {
+    this.addSettingTab(new UpdateSettings(this.app, this));
+  }
+}
+```
+
+`src/service.ts`：
+
+```ts
+import { PluginService } from '@motus-ai/seed-sdk';
+
+export default class UpdateService extends PluginService {
+  onload() {
+    this.registerMethod('notify', async () => {
+      const data = { iso: new Date().toISOString() };
+      await this.publish('updated', data);
+      return data;
+    });
+  }
+}
+```
 
 ### 跨插件后台事件
 
-后端的 `app.events` 提供 `list()`、`publish()` 和 `subscribe()`。事件属于插件代码注册的公开能力；SDK 与客户端只处理契约、消费声明、宿主分发和生命周期，不定义业务事件名、数据字段或处理策略。前端的 `app.events` 仍是当前插件自己的内存通知，两者边界不同。
-
-提供方通过 `addCapability()` 注册事件名、事件版本和 JSON Schema。仅发布事件的能力使用 `methods: []`，无需方法处理器；提供方法时仍须传入处理器。
+提供方 `src/capabilities.ts`：
 
 ```ts
-this.addCapability({
+import type { CapabilityDefinition } from '@motus-ai/seed-sdk';
+
+export const updates: CapabilityDefinition = {
   id: 'example_updates',
   version: 1,
   exposure: 'plugin',
@@ -133,138 +1050,288 @@ this.addCapability({
       additionalProperties: false,
     },
   }],
-});
+};
 
-await this.app.events.publish({
-  capability: 'example_updates', event: 'changed', version: 1,
-  data: { revision: 2 },
-});
+export const capabilities = [updates];
 ```
 
-消费方在自己的 Manifest 声明事件边界；声明方法、annotation 匹配不会授予事件订阅权限。
-
-```json
-{ "consumes": [{ "capability": "example_updates", "events": ["changed"] }] }
-```
-
-服务中订阅发现到的提供方，无需打开任何插件页面：
+提供方 `src/service.ts`：
 
 ```ts
-const offered = await this.app.events.list();
-const subscription = await this.app.events.subscribe<{ revision: number }>({
-  provider_plugin_id: selectedProvider,
-  capability: 'example_updates', event: 'changed', version: 1,
-}, async (event, signal) => {
-  await handleChange(event.data, signal); // 由消费插件实现
+import { PluginService } from '@motus-ai/seed-sdk';
+import { updates } from './capabilities.js';
+
+export default class UpdatePublisher extends PluginService {
+  onload() {
+    this.addCapability(updates);
+    this.registerMethod('notify', async ({ revision }) => {
+      return await this.app.events.publish({
+        capability: 'example_updates',
+        event: 'changed',
+        version: 1,
+        data: { revision },
+      });
+    });
+  }
+}
+```
+
+消费方 `manifest.json`：
+
+```json
+{
+  "consumes": [
+    { "capability": "example_updates", "events": ["changed"] }
+  ]
+}
+```
+
+消费方 `src/service.ts`：
+
+```ts
+import { PluginService, SeedPluginError } from '@motus-ai/seed-sdk';
+
+export default class UpdateSubscriber extends PluginService {
+  async onload() {
+    const offered = await this.app.events.list();
+    const providers = offered.filter((item) =>
+      item.capability === 'example_updates'
+      && item.name === 'changed'
+      && item.version === 1,
+    );
+    if (providers.length !== 1) {
+      throw new SeedPluginError('provider_required', '请先配置唯一的更新事件提供方。');
+    }
+
+    const subscription = await this.app.events.subscribe<{ revision: number }>({
+      provider_plugin_id: providers[0].provider_plugin_id,
+      capability: 'example_updates',
+      event: 'changed',
+      version: 1,
+      signal: this.signal,
+    }, async (event, signal) => {
+      signal.throwIfAborted();
+      await this.app.settings.update<{ revision: number }>(
+        'last-update',
+        () => ({ revision: event.data.revision }),
+      );
+    });
+
+    this.register(async () => {
+      await subscription.unsubscribe();
+      await subscription.closed;
+    });
+  }
+}
+```
+
+### 中英文翻译
+
+`manifest.json`：
+
+```json
+{
+  "id": "com.example.clock",
+  "name": { "$t": "plugin.name" },
+  "version": "1.0.0",
+  "minAppVersion": "0.3.5",
+  "description": { "$t": "plugin.description" },
+  "author": "Your Name",
+  "i18n": {
+    "defaultLocale": "en-US",
+    "resources": {
+      "en-US": "locales/en-US.json",
+      "zh-CN": "locales/zh-CN.json"
+    }
+  }
+}
+```
+
+`locales/en-US.json`：
+
+```json
+{
+  "plugin": {
+    "name": "Clock",
+    "description": "Read the current time."
+  },
+  "settings": { "title": "Current time" }
+}
+```
+
+`locales/zh-CN.json`：
+
+```json
+{
+  "plugin": {
+    "name": "时钟",
+    "description": "读取当前时间。"
+  },
+  "settings": { "title": "当前时间" }
+}
+```
+
+前端通过 `this.app.i18n.t('settings.title')` 读取文案，后端通过 `this.i18n.t('settings.title')` 读取。
+
+### 音频采集
+
+`manifest.json`：
+
+```json
+{ "permissions": ["device.audio.capture"] }
+```
+
+`src/service.ts`：
+
+```ts
+import { PluginService } from '@motus-ai/seed-sdk';
+
+export default class AudioService extends PluginService {
+  onload() {
+    this.registerMethod('startRecording', async () => {
+      return await this.app.invokeHost('seed.audio', {
+        operation: 'capture.start',
+        source: 'microphone',
+      });
+    });
+    this.registerMethod('pauseRecording', async () => {
+      return await this.app.invokeHost('seed.audio', {
+        operation: 'capture.pause',
+      });
+    });
+    this.registerMethod('stopRecording', async () => {
+      return await this.app.invokeHost('seed.audio', {
+        operation: 'capture.stop',
+      });
+    });
+  }
+}
+```
+
+| 参数 / 操作 | 说明 |
+| --- | --- |
+| `capture.start` 的 `source` | `microphone`（默认）、`system`、`mixed`；一次采集期间不更换音源 |
+| `capture.pause` / `capture.resume` | 暂停 / 继续当前录音 |
+| `capture.status` | 读取当前录音状态，包含音源 |
+| `capture.segment` / `capture.stop` | 取得当前分段 / 停止录音 |
+| `capture.consume` 的 `audio_session_id` | 读取分段音频，返回 `pcm_base64`、`duration_ms`、`sample_rate`、`channels` |
+| `capture.sessions` | 返回当前插件的持久录音会话 |
+| `capture.read` / `capture.ack` 的 `session_id`、`segment_id` | 读取 / 确认持久分段；读取结果还包含 `segment_id` |
+
+- 音频格式为 PCM16、单声道、16 kHz
+- `microphone` 支持 macOS、Windows 和 Linux
+- `system` / `mixed` 支持 macOS 14.2+ 和 Windows
+
+### 测试后端方法
+
+```ts
+import assert from 'node:assert/strict';
+import { mountPluginService } from '@motus-ai/seed-sdk/testing';
+import ClockService from './src/service.js';
+
+const context = await mountPluginService(ClockService, {
+  project: new URL('./', import.meta.url),
 });
 
-// 可选：主动停止；服务卸载也会自动取消。
-await subscription.unsubscribe();
-await subscription.closed;
+try {
+  const result = await context.service.call('now', {}) as { iso: string };
+  assert.ok(Number.isFinite(Date.parse(result.iso)));
+} finally {
+  await context.dispose();
+}
 ```
 
-- 宿主校验实际提供方身份、公开范围、精确 `consumes.events`、事件版本与数据 Schema。`local` 能力不提供跨插件事件。发布者只能发布自己已注册的事件。
-- 事件信封为 `id / provider_plugin_id / capability / capability_version / event / event_version / published_at / data`。身份、ID 和时间由宿主生成；数据必须为 JSON，单次发布上限 64 KiB。
-- `publish()` 只确认校验及入队，不等待订阅者完成。各订阅独立排队并串行调用处理器，处理器失败记录诊断后继续，不阻塞其他订阅者或发布者。处理器应将收到的 AbortSignal 传到实际工作中。
-- 每个插件最多 64 个订阅，宿主总计最多 256 个。单个订阅队列最多 128 条或 512 KiB；溢出会终止该订阅，`closed` 以 `plugin_event_overflow` 拒绝，不能当作无变化。提供方停止、契约变化、撤权及传输故障也会终止订阅；消费方通过 `closed` 判断恢复，重新发现、补读并订阅由插件决定。
-- `unsubscribe()` 幂等，停止新投递，不等待当前处理器；`closed` 等待投递循环退出。消费服务卸载、重载或进程退出会清理订阅，旧代次无法继续消费。页面隐藏不停止后台服务或订阅。
-- 这是在线内存通知，不提供历史回放、持久队列或恰好一次处理。持久状态、补读接口、游标和业务去重仍由提供方／消费方拥有；框架 Core `/v1/events` 继续只承担框架生命周期。
+```bash
+npm install --save-dev tsx
+npx tsx clock.test.ts
+```
 
-本节接口属于当前未发布源码。正式分发时须使用包含该接口的 SDK 和客户端，并在插件 `minAppVersion` 中声明对应最低客户端版本；本地构建通过不代表旧客户端支持。
-
-`app.clipboard.writeText(text)` 通过通用平台桥写入文本，复用客户端现有的大小校验，不依赖浏览器剪贴板权限；不提供剪贴板读取。复制按钮、复制内容和反馈由插件自己实现。
-
-## 单文件构建
-
-使用 @motus-ai/seed-sdk/tools 的 buildPlugin() 分别编译 UI 与服务依赖图。宿主注入 SDK，浏览器依赖图禁止 Node 导入。最终只生成一个 main.js，内部两个入口分别加载，不共享对象或实例。
+### 构建和打包
 
 ```js
-// build.mjs
+import { buildPlugin, packPlugin } from '@motus-ai/seed-sdk/tools';
+
+await buildPlugin({
+  root: import.meta.dirname,
+  service: 'src/service.ts',
+});
+
+const { packagePath, sha256, size } = await packPlugin({
+  root: import.meta.dirname,
+});
+console.log({ packagePath, sha256, bytes: size });
+```
+
+### 自定义样式和资源
+
+```js
 import { buildPlugin } from '@motus-ai/seed-sdk/tools';
 
-await buildPlugin({ root: import.meta.dirname, service: 'src/service.ts' });
+const result = await buildPlugin({
+  root: import.meta.dirname,
+  view: 'src/main.tsx',
+  service: 'src/service.ts',
+  styles: 'src/styles.css',
+  resources: [
+    { path: 'assets/logo.png', source: 'assets/logo.png' },
+  ],
+});
+
+console.log(result.output);
+console.log(result.manifest.id);
 ```
 
-安装 SDK 后即可在项目脚本使用 `seed-plugin dev` 和 `seed-plugin pack`；Node 工具入口也导出 `developPlugin`、`publishDevelopmentPlugin`、`collectPluginFiles` 和 `packPlugin`。开发同步、构建和打包仍由插件自己的 `build.mjs` 与可选 `package.mjs` 定义，不解释业务。
+---
 
-TypeScript 构建脚本也可从 `/tools` 导入 `BuildPluginOptions`、`PackPluginOptions`、`PluginResource`、`BuiltPluginManifest` 和 `PluginPackageHook` 等类型。
+## 🔧 开发
 
-构建选项 `view` 指定界面源码，默认 `src/main.ts`；`service` 指定可选后端源码。产物提供 `loadView` 和可选 `loadService`，由宿主分别加载。ReactSettingTab 提供插件自己的 i18next 实例，以及 `ComponentProvider` 弹层样式作用域；自行挂载 React Root 时也可从 `@motus-ai/seed-sdk/react` 导入该组件。
+```bash
+# 安装依赖
+npm install
 
-`ModelSelectControl` 的 `presentation: ModelSelectPresentation` 由插件自己的语言资源提供：包括占位／加载／不可用文案、任意模型分类及顺序，以及思考等级名称。模型和支持的等级仍通过 `options` 传入；SDK 只处理布局、选择和键盘交互，不内置模型来源或等级枚举。
+# 开发模式（监听文件变化）
+npm run dev
 
-`SelectControl` 的选项可通过递归 `children` 声明多级菜单，不限两级。父项负责展开，只有叶子项触发 `onValueChange`；选中后显示叶子名称。每项支持 `disabled`、`description` 及图标；空的子菜单不可选择。上下键在当前列移动，左右键进入／返回层级，Enter 选择，Escape 关闭并返回焦点。`portal`、`loading`、`closeOnSelect` 等行为与单级下拉共用，普通单级及模型分组用法保持不变。
+# 构建
+npm run build
 
-```tsx
-<SelectControl
-  label="Destination"
-  value={destination}
-  onValueChange={setDestination}
-  options={[
-    { value: 'team', label: 'Team', children: [
-      { value: 'engineering', label: 'Engineering', children: [
-        { value: 'room-1', label: 'Project room', description: 'Available' },
-      ] },
-    ] },
-  ]}
-/>
+# 打包
+npm run pack
 ```
 
-节点 `value` 在整棵选项树中保持唯一。分组、具体业务状态和文案由插件提供，SDK 不解释业务数据。
+工具函数：
 
-调用 `seed.cloud.relay` 或 `seed.cloud.relay.stream.start` 时，按模型计费的插件显式传入顶层 `model_id`。宿主校验并交给 Cloud，不从 `payload` 推断计费标识；不按模型计费的调用不传此字段。价格、权限与最终结算仍由 Cloud 决定。
+| 方法 | 参数 / 默认值 | 返回值 |
+| --- | --- | --- |
+| `readPluginCapabilities({ root?, entry? })` | `entry` 默认 `src/capabilities.ts` | `Promise<CapabilityDefinition[]>` |
+| `collectPluginFiles({ root?, outdir?, variant? })` | `outdir` 默认 `dist` | `Promise<{ manifest: BuiltPluginManifest; entries: Map<string, Buffer>; targeted: boolean }>` |
+| `packPlugin({ root?, outdir?, packages?, variant? })` | `outdir='dist'`，`packages='artifacts'` | `Promise<{ packagePath: string; sha256: string; size: number }>` |
+| `publishDevelopmentPlugin({ root?, directory? })` | 同步已有 `dist`；`directory` 默认开发目录 | `Promise<{ id: string; directory: string; ownership: { dev: number; ino: number } }>` |
+| `developmentPluginDirectory()` | 根据当前系统和用户计算路径 | `string` |
+| `developPlugin({ root?, directory?, log?, signal? })` | 构建、同步并持续监听；`log` 接收字符串 | `Promise<{ rebuild(): Promise<void>; stop(): Promise<void> }>` |
 
-源码 `manifest.json` 只维护基本信息、兼容要求和图标／语言资源引用，所有字段位于顶层，不使用 `seed` 外层对象。`apiVersion`、`runtime`、`service` 和资源摘要由构建工具生成到同一顶层，不能在源码 Manifest 中重复填写；运行环境在 `buildPlugin({ runtime: 'native-host', ... })` 中选择，默认是 Node-free 的 `sandboxed-web`。源码 Manifest 不包含 `publisherId`、`labels` 或能力声明。
+---
 
-构建工具从同一份能力代码生成 `metadata.json` 并作为摘要覆盖的资源携带，分类取自插件工程 `package.json` 的 `keywords`。能力入口默认 `src/capabilities.ts`，可通过构建选项 `capabilities` 指定其他源码路径。云端静态读取这个索引，不执行插件，也不要求作者维护第二套声明；客户端仍以服务进程实际注册的能力为准。新客户端查询云端 `/api/v2` 插件目录并传入客户端版本，旧客户端 `/api/v1` 目录不分发新框架插件。
+## 🔗 导出说明
 
-权限声明只适用于确实由宿主检查的接口，例如音频、截屏和受控文件服务；声明不代表用户或系统已经授权。受信任的原生后端可以直接使用 Node，它与界面的进程隔离不等于操作系统权限沙箱，不能靠未受检查的 `process.shell` 字符串限制原生命令。原有来源校验、受控接口权限检查和调用审批保持不变。
+```ts
+// 类和函数
+import { Plugin, PluginSettingTab, Setting, toast } from '@motus-ai/seed-sdk';
 
-安装产物为 manifest.json、main.js、可选 styles.css，以及在 Manifest 中声明并校验的必要资源。.seedpkg 是这些产物的 ZIP 容器，不包含用户配置、凭据或业务数据。
+// 类型
+import type { App, PluginManifest, CapabilityDefinition } from '@motus-ai/seed-sdk';
+```
 
-## 当前迁移状态
+| 入口 | 主要内容 | 使用位置 |
+| --- | --- | --- |
+| `@motus-ai/seed-sdk` | `Plugin`、`PluginService`、`Component`、`Events`、能力 / 数据 / 事件类型；前端还可使用 DOM 控件和 `toast` | 插件运行代码 |
+| `@motus-ai/seed-sdk/react` | `ReactSettingTab`、共享组件、`ComponentProvider`、`usePluginStyleScope` | React 前端 |
+| `@motus-ai/seed-sdk/testing` | 服务挂载、翻译与能力测试辅助 | Node.js 测试 |
+| `@motus-ai/seed-sdk/tools` | 构建、开发同步、打包与工具类型 | Node.js 构建脚本 |
+| `@motus-ai/seed-sdk/theme.css` / `styles.css` | 主题变量 / 组件样式 | 独立页面预览 |
 
-全部 14 个官方插件已采用独立工程、轻量 Manifest、代码注册功能和插件自有 UI。Terminal 可作为最小结构样例；复杂设置参照 Agent Harness 和机器人插件。纯布局组件 Flow/FlowStep 由插件直接组合 JSX，不接收 Renderer 或节点类型声明。
+---
 
-原生与 sandboxed-web 服务均使用独立的 PluginService 实例。私有服务调用可取消；原生进程与沙箱进程退出后，排队中的普通数据写入会被旧实例的生命周期门禁拒绝。
+## 📄 License
 
-客户端与官方插件只加载 Plugin API v2。旧 apply(ctx)、声明式表单／管理视图、对应 IPC 和 Cordis/Cosmokit 生命周期已删除。已有旧安装记录标为不兼容，不执行旧代码；原加密配置、凭据和插件数据原位保留，新插件沿用相同 ID 后继续读取。
-
-## 本地开发
-
-先在 Seed 仓库运行 npm run dev，再在任一插件独立工程运行 npm run dev（官方仓库也可使用 npm run dev --workspace=<plugin_id>）。构建工具调用插件自己的 build.mjs，将完整构建文件原子同步到用户数据目录 plugins/development/<plugin_id>，不用打包、上传或通过云端更新。
-
-开发命令首次同步后持续监听源码，终端显示 Synced 和 Watching，不表示客户端已经加载成功。产品页面与沙箱服务通过 Vite 的随机 nonce 加载开发初始化脚本，只连接配置的 loopback HTTP/WebSocket 开发源；产品页面只允许已声明插件资源读取，沙箱服务禁止外部网络；未授权内联脚本保持禁止。宿主开发链路可通过 `npm run smoke:plugin-development` 验证，附加完整构建目录可同时验证真实插件：`npm run smoke:plugin-development -- /absolute/plugin/dist`。
-
-Seed 仅在未打包且使用开发服务器启动时识别这个固定目录，也支持手动放入符合新规范的完整构建文件。目录中的 manifest.json、main.js、可选 styles.css 和声明资源使用正式插件相同的静态校验器与隔离运行时。运行使用完整产物快照，构建或校验失败不覆盖上一次完整产物；同版本可以反复构建，界面和后端一起重载。源目录移除后卸载开发实例。
-
-同 ID 的开发插件只在开发环境覆盖运行，不修改正式安装记录；移除后恢复已获授权的正式插件。开发实例沿用相同配置、凭据键和私有数据路径。正式云端下载、包摘要、版本不可变、原子安装和授权机制保持独立，不允许开发目录削弱正式校验。SDK 与插件正式云发布链路仍需另外验收。
-
-## 现有通用宿主协议
-
-### 通用音频采集
-
-声明 `device.audio.capture` 后，可调用 `this.app.invokeHost('seed.audio', { operation: 'capture.start', source })`。
-`source` 可选 `microphone`（默认）、`system`、`mixed`，分别采集默认麦克风、系统输出及两者混合。
-音源在会话开始时确定，暂停/继续不更换音源；状态和持久会话记录返回 `source`。
-三种音源共用现有 `capture.segment/stop/consume/read/ack` PCM16 单声道 16 kHz 与持久分段协议。
-麦克风通过隔离 AudioWorklet 按 20 ms 分块采集，由浏览器统一重采样至 16 kHz。混合模式对齐两路音频帧，以固定 1:1 比例混音，只输出一条音轨，不做额外自动增益、音乐压低或活跃判断；它不是语音分离，重叠人声的识别效果仍取决于转写模型。
-系统音频由宿主的原生 Core Audio Tap（macOS 14.2+）或 WASAPI 回环（Windows）采集，不调用屏幕共享 API、不创建视频轨道，也不显示屏幕选择器。麦克风继续使用原有隔离采集窗口；混合模式在宿主合并两路 PCM，复用同一持久分段流程。
-Linux 继续支持麦克风，但当前不支持系统音频；权限拒绝、格式错误、音源断开或混音队列失步会失败，不自动降级为其他音源。
-macOS 使用锁定的 AudioTee 通用二进制，作为应用资源置于 ASAR 外；Windows 使用锁定的 WASAPI 平台 N-API 包。只加载当前平台所需的纯音频后端，Linux 不加载系统音频后端。
-非法音源返回 `audio_source_invalid`，不支持的平台返回 `audio_source_unsupported`，采集失败返回 `audio_capture_failed`。
-macOS 应用包必须声明 `NSAudioCaptureUsageDescription`；首次使用可能请求“系统音频录制”权限，但不需要选择共享屏幕。开发时从终端/IDE 启动 Electron 也受系统权限归属限制。
-宿主在本机用户数据目录 `recordings/latest` 保留最近一次录音的 WAV，下一次录音覆盖，不积累历史。混合模式保存麦克风、系统声音和最终混合音；单音源模式只保存实际输入及最终输出，不复制模型请求或增加转写调用。
-用户主动上传诊断包时，会附带 `recordings/latest` 中存在的 `microphone.wav`、`system.wav` 和 `mixed.wav`，不扫描历史目录。上传前生成独立快照，续传复用同一份诊断包；缺少录音时仍可上传普通诊断记录。
-
-- [插件开发手册](https://github.com/agimx-ai/motusai-seed/blob/main/docs/插件开发手册.md)
-- [插件包规范](https://github.com/agimx-ai/motusai-seed/blob/main/docs/社区插件与插件包规范.md)
-- [官方插件示例](https://github.com/agimx-ai/motusai-seed-official-plugins)
-
-使用新接口前，请确认插件声明的最低 Seed 版本满足要求。
-
-## 本地异步固定计费
-
-在目标方法声明 `billing.settlement: local_relay` 和 `billing.product`，通过 `this.app.invokeHost('seed.local.relay.prepare', { capability_id, method, invocation_id, plugin_version, arguments })` 使用 Cloud 现有的调用准备与价格快照。持久化稳定请求编号和返回的 `call_id`，随后调用 `seed.local.relay`，参数为 `{ capability_id, method, call_id, task_id, outcome }`。`outcome` 依次使用 `started` 和最终的 `succeeded`、`failed` 或 `cancelled`；只有成功终态扣费。
-
-Cloud 负责价格、余额和幂等记账；插件负责业务终态以及重启后的任务查询和待确认结果重试。价格不能由客户端保存或提交来决定实际扣费；相同请求重试必须保留原编号，新业务请求使用新编号。断网、待确认及结算失败不表示免费，也不能为了重试结算重新执行业务。
+UNLICENSED
