@@ -327,7 +327,7 @@ export default function App() {
           onOpenPersonalWallet={() => void run('open-personal-wallet', (api) => api.openPersonalWallet())}
           onToggle={() => setSidebarCollapsed(true)}
         />
-        <section className="col-start-2 grid min-h-0 min-w-0 grid-rows-[58px_minmax(0,1fr)] bg-background">
+        <section className="col-start-2 grid min-h-0 min-w-0 grid-rows-[58px_minmax(0,1fr)] bg-background pb-3">
           <AppHeader
             sidebarCollapsed={sidebarCollapsed}
             view={view}
