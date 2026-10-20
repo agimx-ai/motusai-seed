@@ -14,13 +14,13 @@ export function ToggleSwitch({
 }: ToggleSwitchProps) {
   return <button
     type="button"
-    className={`relative h-[18px] w-8 shrink-0 rounded-full border border-input p-0.5 transition-[background-color,opacity] duration-150 disabled:cursor-default disabled:opacity-50 ${checked ? 'bg-accent' : 'bg-muted'} ${className}`}
+    className={`relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full border border-input p-px transition-[background-color,opacity] duration-150 disabled:cursor-default disabled:opacity-50 ${checked ? 'bg-accent' : 'bg-muted'} ${className}`}
     disabled={disabled}
     role="switch"
     aria-checked={checked}
     aria-label={label}
     {...props}
   >
-    <span className={`block h-3.5 w-3.5 rounded-full bg-card shadow-sm transition-transform duration-150 ease-out ${checked ? 'translate-x-3.5' : ''}`} />
+    <span className={`block h-3.5 w-3.5 shrink-0 rounded-full bg-card shadow-sm transition-transform duration-150 ease-out ${checked ? 'translate-x-3.5' : ''}`} />
   </button>
 }
