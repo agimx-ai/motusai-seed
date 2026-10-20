@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
+import { toast } from '@motus-ai/seed-sdk';
 import { Pencil } from 'lucide-react';
 import type { TerminalUserProfile } from '../../shared/contracts';
 import { userFacingErrorMessage } from '../lib/errors';

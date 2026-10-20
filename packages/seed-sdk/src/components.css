@@ -108,18 +108,6 @@
   .seed-menu-item:hover {
     background: var(--muted);
   }
-  .seed-notice {
-    position: fixed;
-    bottom: 16px;
-    left: 16px;
-    right: 16px;
-    padding: 12px 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card);
-    background: var(--card);
-    box-shadow: var(--overlay-shadow);
-    z-index: 10000;
-  }
   @media (max-width: 440px) {
     .seed-setting {
       align-items: flex-start;

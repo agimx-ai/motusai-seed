@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { toast } from '@motus-ai/seed-sdk'
 import type { PluginInstallProgress, SeedApi, SeedSnapshot, TerminalLogUploadProgress } from '../../shared/contracts'
 import { userFacingErrorMessage } from '../lib/errors'
 

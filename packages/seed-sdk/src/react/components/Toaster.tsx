@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
 import { CircleCheck, CircleHelp, CircleX, LoaderCircle, TriangleAlert } from 'lucide-react';
-import { Toaster as Sonner, type ToasterProps } from 'sonner';
+import { Toaster as Sonner, type ToasterProps as SonnerToasterProps } from 'sonner';
+import './Toaster.css';
 
 type SonnerVariables = CSSProperties & Record<`--${string}`, string>;
-type SeedToasterProps = ToasterProps & { contentInsetLeft?: number };
+export type ToasterProps = SonnerToasterProps & { contentInsetLeft?: number };
 
 const sonnerStyle: SonnerVariables = {
   '--normal-bg': 'var(--card)',
@@ -25,7 +26,7 @@ const sonnerStyle: SonnerVariables = {
 
 const iconProps = { size: 14, strokeWidth: 2.1, 'aria-hidden': true as const };
 
-export function Toaster({ theme = 'system', contentInsetLeft = 0, ...props }: SeedToasterProps) {
+export function Toaster({ theme = 'system', contentInsetLeft = 0, ...props }: ToasterProps) {
   return (
     <Sonner
       theme={theme}

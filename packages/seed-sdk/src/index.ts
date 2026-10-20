@@ -1,5 +1,6 @@
 export { Component, type Disposer } from './component.js';
 export { Events, type EventRef } from './events.js';
+export { toast, type ExternalToast } from 'sonner';
 export {
   createPluginI18n,
   canonicalPluginLocale,
@@ -41,7 +42,6 @@ export {
   View,
   ItemView,
   Modal,
-  Notice,
   Menu,
   MenuItem,
   type ViewHost,

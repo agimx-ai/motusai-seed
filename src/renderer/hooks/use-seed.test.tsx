@@ -6,7 +6,7 @@ import { useSeed } from './use-seed';
 
 const state = vi.hoisted(() => ({ t: (key: string) => key }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: state.t }) }));
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('@motus-ai/seed-sdk', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 function deferred<T>() {

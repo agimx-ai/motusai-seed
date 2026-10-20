@@ -22,6 +22,7 @@ export { Collection, CollectionCard, PreviewDialog } from './components/Collecti
 export { ActionButton } from './components/ActionButton';
 export { IconButton } from './components/IconButton';
 export { Tooltip } from './components/Tooltip';
+export { Toaster, type ToasterProps } from './components/Toaster';
 export { FieldLabel } from './components/FieldLabel';
 export { DisclosureControl } from './components/DisclosureControl';
 export { TextInputControl } from './components/TextInputControl';

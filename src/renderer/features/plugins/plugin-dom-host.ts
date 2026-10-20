@@ -70,7 +70,7 @@ class PluginDomHost {
         if (this.stopped || event.token !== this.token) return;
         if (event.type === 'message') void peer.receive(event.message);
         else if (event.type === 'stop') void this.stop();
-        else void this.controller?.setAppearance(event.appearance).catch((error) => new sdk.Notice(String(error)));
+        else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(String(error)));
       });
       if (configuration.styleUrl) {
         const style = (this.style = document.createElement('link'));
@@ -156,7 +156,7 @@ class PluginDomHost {
     this.lease = undefined;
     this.element.remove();
     void window.motusSeed.unmountPluginView(this.token);
-    void this.controller?.hide().catch((error) => new sdk.Notice(String(error)));
+    void this.controller?.hide().catch((error) => sdk.toast.error(String(error)));
   }
 
   async stop() {
@@ -169,7 +169,7 @@ class PluginDomHost {
     this.style?.remove();
     this.element.remove();
     if (sessions.get(this.pluginId) === this) sessions.delete(this.pluginId);
-    await this.controller?.stop().catch((error) => new sdk.Notice(String(error)));
+    await this.controller?.stop().catch((error) => sdk.toast.error(String(error)));
   }
 }
 

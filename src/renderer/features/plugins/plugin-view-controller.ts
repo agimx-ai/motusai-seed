@@ -2,7 +2,7 @@ import {
   createPluginI18n,
   pluginTranslationLocale,
   Events,
-  Notice,
+  toast,
   type App,
   type Plugin,
   type PluginManifest,
@@ -42,7 +42,7 @@ export class PluginViewController {
     services: Pick<App, 'data' | 'service' | 'resources' | 'files' | 'clipboard' | 'reloadService'>,
     appearance: Pick<App, 'locale' | 'theme'>,
     private readonly report: (error: unknown) => void = (error) => {
-      new Notice(String(error));
+      toast.error(String(error));
     },
   ) {
     const action = (title: string, callback: () => void) => {

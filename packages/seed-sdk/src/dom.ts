@@ -1,4 +1,5 @@
 import { Component, type Disposer } from './component.js';
+import { toast } from 'sonner';
 import type { App, Plugin } from './plugin.js';
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -14,7 +15,7 @@ function element<K extends keyof HTMLElementTagNameMap>(
 
 function report(work: unknown): void {
   if (work && typeof (work as Promise<unknown>).then === 'function') {
-    void Promise.resolve(work).catch((error) => new Notice(error instanceof Error ? error.message : String(error)));
+    void Promise.resolve(work).catch((error) => toast.error(error instanceof Error ? error.message : String(error)));
   }
 }
 
@@ -369,27 +370,6 @@ export class Modal extends Component {
   }
   override onunload(): void {
     this.onClose();
-  }
-}
-
-export class Notice {
-  readonly noticeEl: HTMLElement;
-  private timer?: ReturnType<typeof setTimeout>;
-  constructor(message: string, duration = 5_000) {
-    this.noticeEl = document.createElement('div');
-    this.noticeEl.className = 'seed-notice';
-    this.noticeEl.setAttribute('role', 'status');
-    this.noticeEl.textContent = message;
-    document.body.append(this.noticeEl);
-    if (duration > 0) this.timer = setTimeout(() => this.hide(), duration);
-  }
-  setMessage(message: string): this {
-    this.noticeEl.textContent = message;
-    return this;
-  }
-  hide(): void {
-    if (this.timer) clearTimeout(this.timer);
-    this.noticeEl.remove();
   }
 }
 

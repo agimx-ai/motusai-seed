@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
+import { toast } from '@motus-ai/seed-sdk';
 import type { SeedCatalogPage } from '../shared/contracts';
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest';
 import { AppHeader } from './layouts/AppHeader';
@@ -10,7 +10,7 @@ import { Sidebar } from './layouts/Sidebar';
 import { AppLogo } from './components/AppBrand';
 import { ShimmerIcon } from './components/Shimmer';
 import { SidebarToggleButton } from './components/SidebarToggleButton';
-import { Toaster } from './components/Toaster';
+import { Toaster } from '@motus-ai/seed-sdk/react';
 import { WindowChrome } from './components/WindowChrome';
 import { useSeed } from './hooks/use-seed';
 import { useTheme } from './hooks/use-theme';

@@ -30,13 +30,13 @@ describe('single-file isolated plugin bundle', () => {
     expect(() => require.resolve('@motus-ai/seed-sdk/ui')).toThrow(/not defined by "exports"/);
   });
 
-  it('builds the react import as a host-provided module, without a retired SDK subpath alias', async () => {
+  it('shares SDK toast and React imports with the host instead of bundling independent instances', async () => {
     const project = await fixture();
     await writeFile(
       join(project.root, 'src/main.ts'),
-      `import { Plugin } from '@motus-ai/seed-sdk';
+      `import { Plugin, toast } from '@motus-ai/seed-sdk';
        import { ReactSettingTab } from '@motus-ai/seed-sdk/react';
-       export default class Example extends Plugin { static SettingTab = ReactSettingTab; }`,
+       export default class Example extends Plugin { static SettingTab = ReactSettingTab; static toast = toast; }`,
     );
     const { output } = await project.build();
     const entryUrl = pathToFileURL(join(output, 'main.js')).href;
@@ -50,6 +50,7 @@ describe('single-file isolated plugin bundle', () => {
       entryUrl,
     );
     expect((Constructor as typeof sdk.Plugin & { SettingTab: unknown }).SettingTab).toBe(SettingTab);
+    expect((Constructor as typeof sdk.Plugin & { toast: unknown }).toast).toBe(sdk.toast);
     expect(() => pluginViewConstructor(bundle, { '@motus-ai/seed-sdk': sdk }, entryUrl)).toThrow(
       'Module unavailable in view: @motus-ai/seed-sdk/react',
     );

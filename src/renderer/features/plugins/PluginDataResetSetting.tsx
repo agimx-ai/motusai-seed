@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
+import { toast } from '@motus-ai/seed-sdk';
 import type { SeedCatalogPlugin } from '../../../shared/contracts';
 import { resolveSeedLocalizedText } from '../../../shared/plugin-manifest';
 import { ActionButton } from '@motus-ai/seed-sdk/react';

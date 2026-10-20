@@ -87,6 +87,16 @@ Plugin 与 PluginService 的 loadData/saveData 访问同一个按插件隔离的
 
 `@motus-ai/seed-sdk/react` 也导出原有的 `ActionButton`、`IconButton`、`Tooltip`、`FieldLabel`、`DisclosureControl` 和 `TextInputControl`。客户端与插件复用同一份组件实现，迁移设置页时保留既有尺寸、帮助提示和折叠交互；`StatusBadge` 只负责状态胶囊的展示，`Dialog` 负责模态焦点、关闭和原有面板样式。页面分组、文案、业务状态和调用仍由插件代码组合，不增加声明式表单解释器。单个设置页不额外显示重复的导航按钮；多个设置页或注册视图仍保留导航。
 
+全局短提示统一使用 `@motus-ai/seed-sdk` 导出的 `toast`，支持 `success`、`info`、`warning`、`error`、`loading`、`promise`、`dismiss` 以及描述、操作按钮和同 ID 更新。客户端在应用根挂载一次 `@motus-ai/seed-sdk/react` 的 `Toaster`，负责主题和内容区域居中；插件直接调用 `toast`，共用同一个队列和完整样式，无需再次挂载组件。
+
+```ts
+import { toast } from '@motus-ai/seed-sdk';
+
+const id = toast.loading('正在保存…');
+toast.success('保存成功', { id });
+toast.error('保存失败', { description: '请检查连接后重试。' });
+```
+
 native-host 和 sandboxed-web 后端都支持经 consumes、Schema、审批、审计与计费校验的 capabilities.list/invoke/stream；调用的取消和所属 Component 卸载都会沿 IPC 传到提供方。后台 tasks 在两种环境中均参与平台活动观察。sandboxed-web 不开放 Node、任意网络连接或本地 HTTP handler；后两者仍需 native-host 及对应静态权限，不提供伪成功或静默降级。
 
 UI 的命令、toolbar/ribbon、视图和状态项属于当前插件的 DOM 容器，不是 Obsidian 的全局工作区。toolbar 图标使用 Lucide 名称并随注册清理；页面隐藏不等于卸载后端。SDK 不宣称提供尚不存在的全局命令面板或全局 DOM 状态栏。

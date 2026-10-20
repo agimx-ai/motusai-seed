@@ -17,16 +17,15 @@ async function sources(root: string): Promise<string[]> {
 }
 describe('single plugin framework boundary', () => {
   it('imports shared components directly from the SDK without shell forwarding files', async () => {
-    for (const name of ['ActionButton', 'IconButton', 'MarkdownContent', 'SegmentedControl', 'Tooltip'])
+    for (const name of ['ActionButton', 'IconButton', 'MarkdownContent', 'SegmentedControl', 'Tooltip', 'Toaster'])
       expect(existsSync(`src/renderer/components/${name}.tsx`), name).toBe(false);
     for (const path of await sources('src/renderer'))
       expect(await readFile(path, 'utf8'), path).not.toMatch(
-        /from\s+['"](?:\.\/|(?:\.\.\/)+components\/)(?:ActionButton|IconButton|MarkdownContent|SegmentedControl|Tooltip)['"]/,
+        /from\s+['"](?:\.\/|(?:\.\.\/)+components\/)(?:ActionButton|IconButton|MarkdownContent|SegmentedControl|Tooltip|Toaster)['"]/,
       );
   });
   it('uses view naming across the SDK, build tool and host, with flat shell components', async () => {
     expect(existsSync('src/renderer/components/ui')).toBe(false);
-    expect(existsSync('src/renderer/components/Toaster.tsx')).toBe(true);
     expect(ipcChannels.mountPluginView).toBe('seed:plugins:mount-view');
     expect(ipcChannels.unmountPluginView).toBe('seed:plugins:unmount-view');
     for (const path of [
