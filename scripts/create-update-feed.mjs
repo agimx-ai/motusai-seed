@@ -4,6 +4,7 @@ import { basename, resolve } from 'node:path'
 import { ZipArchive } from 'archiver'
 import { loadEnv } from 'vite'
 import { parse } from 'yaml'
+import { writeLinuxBlockmap } from './linux-update-assets.mjs'
 
 const projectRoot = resolve(import.meta.dirname, '..')
 const releaseDirectory = resolve(projectRoot, 'release')
@@ -42,6 +43,7 @@ for (const file of packageFiles) {
   if (typeof file.url !== 'string' || basename(file.url) !== file.url || !/^[a-z0-9][a-z0-9._+-]*$/i.test(file.url)) {
     throw new Error(`${metadataName} contains an unsafe release asset name.`)
   }
+  if (platform.startsWith('linux-')) await writeLinuxBlockmap(resolve(releaseDirectory, file.url), file)
 }
 
 const entryNames = [

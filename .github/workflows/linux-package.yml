@@ -1,0 +1,63 @@
+name: Validate Ubuntu installer
+
+on:
+  push:
+    branches:
+      - codex/ubuntu-package-validation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seed-linux-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    name: Build and verify Ubuntu DEB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      MOTUSAI_SEED_CLOUD_URL: https://cloud.motusseed.com
+      MOTUSAI_DISTRIBUTION_KEY_ID: motusai-cloud-production-v1
+      MOTUSAI_DISTRIBUTION_PUBLIC_KEY: MCowBQYDK2VwAyEAGhcDBccJ1TtieZrAO1YFMs7sL7s7JuvtKPJFB7BheTc=
+      MOTUSAI_ALLOW_INSECURE_HTTP: 'false'
+      MOTUSAI_RELEASE_PLATFORM: linux-x64
+      MOTUSAI_UPDATE_CHANNEL: stable
+
+    steps:
+      - name: Check out exact source commit
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test on Ubuntu
+        run: npm test
+
+      - name: Build with production packaging configuration
+        run: npm run package:linux
+
+      - name: Verify installer, launcher icons and update bundle
+        run: node scripts/verify-linux-package.mjs | tee release/linux-package-verification.json
+
+      - name: Upload installer for desktop acceptance only
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-installer-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            release/*.deb
+            release/*.deb.blockmap
+            release/latest-linux.yml
+            release/*-linux-x64-update-feed.zip
+            release/linux-package-verification.json

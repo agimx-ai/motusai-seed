@@ -238,12 +238,60 @@ jobs:
             "release/MotusAI-Seed-$env:RELEASE_VERSION-win-x64.exe.blockmap" `
             --clobber
 
+  linux:
+    name: Build Ubuntu Linux x64
+    needs: metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      MOTUSAI_RELEASE_PLATFORM: linux-x64
+      MOTUSAI_UPDATE_CHANNEL: ${{ needs.metadata.outputs.channel }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux packages and update feed
+        run: npm run package:linux
+
+      - name: Verify Linux release assets
+        run: node scripts/verify-linux-package.mjs
+
+      - name: Upload Linux assets to draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata_name="$([ "$MOTUSAI_UPDATE_CHANNEL" = stable ] && echo latest-linux.yml || echo beta-linux.yml)"
+          gh release upload "$RELEASE_VERSION" \
+            "release/$metadata_name" \
+            "release/MotusAI-Seed-${RELEASE_VERSION}-linux-x64.deb" \
+            "release/MotusAI-Seed-${RELEASE_VERSION}-linux-x64.deb.blockmap" \
+            --clobber
+
   publish:
     name: Publish GitHub release
     needs:
       - metadata
       - macos
       - windows
+      - linux
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -263,9 +311,11 @@ jobs:
           if [ '${{ needs.metadata.outputs.channel }}' = stable ]; then
             mac_metadata=latest-mac.yml
             windows_metadata=latest.yml
+            linux_metadata=latest-linux.yml
           else
             mac_metadata=beta-mac.yml
             windows_metadata=beta.yml
+            linux_metadata=beta-linux.yml
           fi
           expected=(
             RELEASE_NOTES.md
@@ -278,6 +328,9 @@ jobs:
             "$windows_metadata"
             "MotusAI-Seed-${RELEASE_VERSION}-win-x64.exe"
             "MotusAI-Seed-${RELEASE_VERSION}-win-x64.exe.blockmap"
+            "$linux_metadata"
+            "MotusAI-Seed-${RELEASE_VERSION}-linux-x64.deb"
+            "MotusAI-Seed-${RELEASE_VERSION}-linux-x64.deb.blockmap"
           )
           release="$(gh release view "$RELEASE_VERSION" --json assets,isDraft)"
           if [ "$(jq -r '.isDraft' <<< "$release")" != true ]; then

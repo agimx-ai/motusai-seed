@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 
 const { ipcMain } = vi.hoisted(() => ({
@@ -28,7 +28,10 @@ type AudioServiceInternals = {
 }
 
 describe('AudioService segmented capture', () => {
+  const hostPlatform = process.platform
+  const setPlatform = (platform: NodeJS.Platform) => Object.defineProperty(process, 'platform', { value: platform })
   beforeEach(() => vi.clearAllMocks())
+  afterEach(() => setPlatform(hostPlatform))
 
   it('exposes only the current stop task and clears its association when capture resets', async () => {
     const status: ReturnType<AudioService['snapshot']>[] = []
@@ -72,6 +75,21 @@ describe('AudioService segmented capture', () => {
   it('rejects invalid audio sources before touching OS capture', async () => {
     const service = new AudioService()
     await expect(service.invoke({ operation: 'capture.start', source: 'screen' }, 'plugin-a')).rejects.toMatchObject({ code: 'audio_source_invalid' })
+    expect(service.snapshot()).toMatchObject({ state: 'idle', source: 'microphone' })
+    await service.destroy()
+  })
+
+  it.each(['system', 'mixed'])('rejects %s capture on Linux without opening capture devices', async (source) => {
+    setPlatform('linux')
+    const factory = vi.fn()
+    const service = new AudioService(undefined, undefined, factory)
+    const internal = service as unknown as { ensureWindow(): Promise<unknown>; ensureMicrophonePermission(): Promise<void> }
+    const window = vi.spyOn(internal, 'ensureWindow')
+    const microphone = vi.spyOn(internal, 'ensureMicrophonePermission')
+    await expect(service.invoke({ operation: 'capture.start', source }, 'plugin-a')).rejects.toMatchObject({ code: 'audio_source_unsupported' })
+    expect(factory).not.toHaveBeenCalled()
+    expect(window).not.toHaveBeenCalled()
+    expect(microphone).not.toHaveBeenCalled()
     expect(service.snapshot()).toMatchObject({ state: 'idle', source: 'microphone' })
     await service.destroy()
   })
@@ -221,6 +239,7 @@ describe('AudioService segmented capture', () => {
   })
 
   it.each(['microphone', 'system', 'mixed'] as const)('forwards %s and preserves segmented PCM, pause/resume and cleanup', async (source) => {
+    if (source !== 'microphone') setPlatform('darwin')
     const recorder = Object.assign(new EventEmitter(), {
       start: vi.fn(async () => {
         recorder.emit('metadata', { sampleRate: 16_000, channelsPerFrame: 1, bitsPerChannel: 16, isFloat: false, encoding: 'pcm_s16le' })
@@ -269,6 +288,7 @@ describe('AudioService segmented capture', () => {
   })
 
   it('does not let another plugin reuse an active capture ID or silently change its source', async () => {
+    setPlatform('darwin')
     const service = new AudioService()
     Object.assign(service, { sessionId: 'active', ownerPackageId: 'plugin-a', source: 'mixed', state: 'recording' })
     await expect(service.invoke({ operation: 'capture.start', session_id: 'active', source: 'mixed' }, 'plugin-b')).rejects.toMatchObject({ code: 'audio_session_busy' })
@@ -279,6 +299,7 @@ describe('AudioService segmented capture', () => {
   })
 
   it('reports native initialization failure without opening a microphone or a display picker', async () => {
+    setPlatform('darwin')
     const service = new AudioService(undefined, undefined, async () => { throw new Error('System audio permission denied') })
     const internal = service as unknown as { ensureWindow(): Promise<unknown>; ensureMicrophonePermission(): Promise<void> }
     const window = vi.spyOn(internal, 'ensureWindow')
@@ -290,6 +311,7 @@ describe('AudioService segmented capture', () => {
   })
 
   it('cancels pending native initialization without letting a late recorder replace a new session', async () => {
+    setPlatform('darwin')
     const recorder = Object.assign(new EventEmitter(), { start: vi.fn(async () => undefined), stop: vi.fn(async () => undefined) })
     let resolve!: (value: typeof recorder) => void
     const service = new AudioService(undefined, undefined, () => new Promise((done) => { resolve = done }))

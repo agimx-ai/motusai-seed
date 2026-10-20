@@ -85,9 +85,15 @@ export default {
     uninstallDisplayName: '${productName} ${version}',
   },
   linux: {
-    icon: appIconPng,
+    // The existing multi-resolution source converts to standard hicolor PNG sizes.
+    // A single 1024px PNG only installs an unindexed 1024x1024 theme directory.
+    icon: appIconIcns,
+    syncDesktopName: true,
     category: 'Utility',
+    maintainer: 'MotusAI <dzj@enrich.ltd>',
     target: ['AppImage', 'deb'],
     artifactName: 'MotusAI-Seed-${version}-linux-${arch}.${ext}',
   },
+  // DEB's ${arch} expands to amd64; keep the shared release target as linux-x64.
+  deb: { artifactName: `MotusAI-Seed-\${version}-${releasePlatform}.\${ext}` },
 };

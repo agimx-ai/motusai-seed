@@ -91,14 +91,14 @@ describe('SeedUpdater macOS manual downloads', () => {
     updater.stop()
   })
 
-  it('keeps the automatic download path on Windows', async () => {
-    const updater = new SeedUpdater(vi.fn(), vi.fn(), { platform: 'win32', openExternal })
-    updater.configure('https://downloads.example.test/stable/mac-arm64')
+  it.each(['win32', 'linux'] as const)('keeps the automatic download path on %s', async (platform) => {
+    const updater = new SeedUpdater(vi.fn(), vi.fn(), { platform, openExternal })
+    updater.configure(`https://downloads.example.test/stable/${platform === 'linux' ? 'linux-x64' : 'win-x64'}`)
     updater.start()
     const available = autoUpdater.on.mock.calls.find(([event]) => event === 'update-available')?.[1]
     available?.({
       version: '0.1.64',
-      files: [{ url: 'MotusAI-Seed-0.1.64-win-x64.exe', sha512: 'exe' }],
+      files: [{ url: platform === 'linux' ? 'MotusAI-Seed-0.1.64-linux-x64.deb' : 'MotusAI-Seed-0.1.64-win-x64.exe', sha512: 'installer' }],
     })
 
     await expect(updater.download()).resolves.toBe(true)
