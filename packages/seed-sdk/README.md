@@ -4,6 +4,12 @@
 
 新插件使用类式生命周期，直接编写 DOM 或 React 界面，不声明表单、管理视图、Renderer 或 presentation。Seed 只提供可信前端 DOM 容器、后端隔离运行环境、通用组件和受控服务。
 
+一个 `@motus-ai/seed-sdk` 包统一提供运行 API、`/react` 共享组件、`/testing` 测试辅助和 `/tools` 开发工具，使用同一个版本与发布流程。构建脚本从 `/tools` 导入，插件前后端源码从运行 API／React 入口导入；运行入口不加载构建工具，`/tools` 只向 Node 环境导出，构建器拒绝将它导入插件产物。工具链依赖也会随 SDK 安装，子入口隔离不改变 npm 的依赖安装范围。
+
+根入口按运行环境加载：浏览器提供基础能力、DOM 控件和 `toast`，Node 只加载基础能力，不加载 React、ReactDOM 或提示组件。插件前端现有的根入口导入方式保持不变；DOM 控件和提示只用于前端。公开类型保留完整的作者接口，前后端的运行环境仍须遵守上述边界。
+
+源码统一位于 `src`，包括 `src/tools` 的构建、打包、开发同步与 CLI；全部参与类型检查并生成到 `dist`。`scripts` 仅构建 SDK 自身，`tests/fixtures` 仅用于测试。发布包只携带 `dist` 和 README，包含工具类型声明，不携带测试样例、源码或无效的 source map。
+
 ## 界面入口
 
 源码入口默认导出 Plugin 子类。设置内容由插件代码直接渲染；下面使用 SDK 的可选 DOM 组件：
@@ -170,7 +176,18 @@ await subscription.closed;
 
 ## 单文件构建
 
-使用 @motus-ai/seed-plugin-tools 的 buildPlugin() 分别编译 UI 与服务依赖图。宿主注入 SDK，浏览器依赖图禁止 Node 导入。最终只生成一个 main.js，内部两个入口分别加载，不共享对象或实例。
+使用 @motus-ai/seed-sdk/tools 的 buildPlugin() 分别编译 UI 与服务依赖图。宿主注入 SDK，浏览器依赖图禁止 Node 导入。最终只生成一个 main.js，内部两个入口分别加载，不共享对象或实例。
+
+```js
+// build.mjs
+import { buildPlugin } from '@motus-ai/seed-sdk/tools';
+
+await buildPlugin({ root: import.meta.dirname, service: 'src/service.ts' });
+```
+
+安装 SDK 后即可在项目脚本使用 `seed-plugin dev` 和 `seed-plugin pack`；Node 工具入口也导出 `developPlugin`、`publishDevelopmentPlugin`、`collectPluginFiles` 和 `packPlugin`。开发同步、构建和打包仍由插件自己的 `build.mjs` 与可选 `package.mjs` 定义，不解释业务。
+
+TypeScript 构建脚本也可从 `/tools` 导入 `BuildPluginOptions`、`PackPluginOptions`、`PluginResource`、`BuiltPluginManifest` 和 `PluginPackageHook` 等类型。
 
 构建选项 `view` 指定界面源码，默认 `src/main.ts`；`service` 指定可选后端源码。产物提供 `loadView` 和可选 `loadService`，由宿主分别加载。ReactSettingTab 提供插件自己的 i18next 实例，以及 `ComponentProvider` 弹层样式作用域；自行挂载 React Root 时也可从 `@motus-ai/seed-sdk/react` 导入该组件。
 
@@ -243,9 +260,8 @@ macOS 应用包必须声明 `NSAudioCaptureUsageDescription`；首次使用可�
 - [插件开发手册](https://github.com/agimx-ai/motusai-seed/blob/main/docs/插件开发手册.md)
 - [插件包规范](https://github.com/agimx-ai/motusai-seed/blob/main/docs/社区插件与插件包规范.md)
 - [官方插件示例](https://github.com/agimx-ai/motusai-seed-official-plugins)
-- [版本变更](https://github.com/agimx-ai/motusai-seed/blob/main/packages/seed-sdk/CHANGELOG.md)
 
-SDK 与 Seed 客户端的兼容要求会随新增接口记录在版本变更中。使用新接口前，请确认插件声明的最低 Seed 版本满足要求。
+使用新接口前，请确认插件声明的最低 Seed 版本满足要求。
 
 ## 本地异步固定计费
 

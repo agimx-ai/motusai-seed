@@ -10,7 +10,6 @@ export {
   type PluginEventSubscription,
   type PluginEventService,
 } from './plugin-events.js';
-export { toast, type ExternalToast } from 'sonner';
 export {
   createPluginI18n,
   canonicalPluginLocale,
@@ -38,24 +37,6 @@ export {
   type PluginDataStore,
   type PluginDataSnapshot,
 } from './plugin.js';
-export {
-  BaseComponent,
-  ValueComponent,
-  TextComponent,
-  TextAreaComponent,
-  ToggleComponent,
-  DropdownComponent,
-  SliderComponent,
-  ButtonComponent,
-  Setting,
-  PluginSettingTab,
-  View,
-  ItemView,
-  Modal,
-  Menu,
-  MenuItem,
-  type ViewHost,
-} from './dom.js';
 export { createSeedDeepLink, seedDeepLinkScheme, type SeedNavigationTarget } from './deep-link.js';
 export {
   SeedLocalEventStream,

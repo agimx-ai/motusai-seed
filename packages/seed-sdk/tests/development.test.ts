@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { inspectPluginDirectory } from './plugin-directory';
-import { verifySeedPackage } from './seed-package';
+import { inspectPluginDirectory } from '../../../src/main/plugin-directory';
+import { verifySeedPackage } from '../../../src/main/seed-package';
 
 const roots: string[] = [],
   watchers: Array<{ stop(): Promise<void> }> = [];
@@ -13,17 +13,14 @@ afterEach(async () => {
   await Promise.all(watchers.splice(0).map((watcher) => watcher.stop()));
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
-const toolsPath = resolve('packages/seed-plugin-tools/index.mjs');
+const toolsPath = resolve('packages/seed-sdk/dist/tools/index.mjs');
 const tools = await import(/* @vite-ignore */ pathToFileURL(toolsPath).href);
-const development = await import(
-  /* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/development.mjs')).href
-);
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'seed-development-tools-'));
   roots.push(root);
   const project = join(root, 'project'),
     directory = join(root, 'plugins/development');
-  await cp(resolve('packages/seed-plugin-tools/fixtures/generic'), project, { recursive: true });
+  await cp(resolve('packages/seed-sdk/tests/fixtures/generic'), project, { recursive: true });
   await writeFile(
     join(project, 'build.mjs'),
     `import { buildPlugin } from ${JSON.stringify(pathToFileURL(toolsPath).href)}; await buildPlugin({ root: import.meta.dirname, runtime: 'native-host', service: 'src/service.ts' });`,
@@ -36,7 +33,7 @@ describe('independent plugin development tools', () => {
       const h = await fixture();
       await writeFile(join(h.project, 'package.json'), JSON.stringify({
         private: true,
-        scripts: { dev: `${JSON.stringify(process.execPath)} ${JSON.stringify(resolve('packages/seed-plugin-tools/cli.mjs'))} dev --directory ${JSON.stringify(h.directory)}` },
+        scripts: { dev: `${JSON.stringify(process.execPath)} ${JSON.stringify(resolve('packages/seed-sdk/dist/tools/cli.mjs'))} dev --directory ${JSON.stringify(h.directory)}` },
       }));
       const child = spawn('npm', ['run', 'dev'], {
         cwd: h.project, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
@@ -62,7 +59,7 @@ describe('independent plugin development tools', () => {
 
   it.each(['SIGINT', 'SIGTERM'] as const)('cleans the synchronized directory when the CLI receives %s', async (signal) => {
     const h = await fixture();
-    const child = spawn(process.execPath, [resolve('packages/seed-plugin-tools/cli.mjs'), 'dev', '--directory', h.directory], {
+    const child = spawn(process.execPath, [resolve('packages/seed-sdk/dist/tools/cli.mjs'), 'dev', '--directory', h.directory], {
       cwd: h.project, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';
@@ -92,7 +89,7 @@ describe('independent plugin development tools', () => {
       await mkdir(directory, { recursive: true });
       await writeFile(join(directory, 'keep.txt'), 'preserved');
     }
-    const watcher = await development.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
+    const watcher = await tools.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
     watchers.push(watcher);
     await inspectPluginDirectory(join(h.directory, 'com.example.generic'));
     await watcher.stop();
@@ -104,16 +101,16 @@ describe('independent plugin development tools', () => {
 
   it('does not remove a replacement deployed by another development process', async () => {
     const h = await fixture();
-    const watcher = await development.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
+    const watcher = await tools.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
     watchers.push(watcher);
-    const replacement = await development.publishDevelopmentPlugin({ root: h.project, directory: h.directory });
+    const replacement = await tools.publishDevelopmentPlugin({ root: h.project, directory: h.directory });
     await watcher.stop();
     expect((await inspectPluginDirectory(replacement.directory)).manifest.id).toBe('com.example.generic');
   });
 
   it('waits for an interrupted rebuild before removing its last synchronized directory', async () => {
     const h = await fixture();
-    const watcher = await development.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
+    const watcher = await tools.developPlugin({ root: h.project, directory: h.directory, log: () => {} });
     watchers.push(watcher);
     await writeFile(join(h.project, 'build.mjs'), 'await new Promise((resolve) => setTimeout(resolve, 5000));');
     const rebuilding = watcher.rebuild();
@@ -128,7 +125,7 @@ describe('independent plugin development tools', () => {
     await mkdir(previous, { recursive: true });
     await writeFile(join(previous, 'keep.txt'), 'not owned by this watcher');
     const controller = new AbortController();
-    const starting = development.developPlugin({ root: h.project, directory: h.directory, signal: controller.signal, log: () => {} });
+    const starting = tools.developPlugin({ root: h.project, directory: h.directory, signal: controller.signal, log: () => {} });
     controller.abort();
     const watcher = await starting;
     watchers.push(watcher);
@@ -173,7 +170,7 @@ describe('independent plugin development tools', () => {
   it('deploys exactly the validated package files, without requiring an upload or changing a version', async () => {
     const h = await fixture();
     await tools.buildPlugin({ root: h.project, runtime: 'native-host', service: 'src/service.ts' });
-    const deployed = await development.publishDevelopmentPlugin({ root: h.project, directory: h.directory });
+    const deployed = await tools.publishDevelopmentPlugin({ root: h.project, directory: h.directory });
     const inspected = await inspectPluginDirectory(deployed.directory);
     const packed = await tools.packPlugin({ root: h.project });
     const verified = await verifySeedPackage(await readFile(packed.packagePath), {
@@ -182,7 +179,7 @@ describe('independent plugin development tools', () => {
     expect(inspected.files).toEqual(verified.files);
     expect(inspected.manifest.version).toBe('1.0.0');
     await writeFile(join(h.project, 'dist/main.js'), 'changed after build');
-    await expect(development.publishDevelopmentPlugin({ root: h.project, directory: h.directory })).rejects.toThrow(
+    await expect(tools.publishDevelopmentPlugin({ root: h.project, directory: h.directory })).rejects.toThrow(
       'changed',
     );
     expect((await inspectPluginDirectory(deployed.directory)).manifestDigest).toBe(inspected.manifestDigest);
@@ -195,7 +192,7 @@ describe('independent plugin development tools', () => {
       join(h.project, 'package.mjs'),
       `export default ({ manifest }) => [{ platform: process.platform, architecture: process.arch, files: [{ source: 'tool.bin', path: 'sidecars/tool' }], manifest: { ...manifest, permissions: ['process.sidecar'], sidecars: [{ id: 'tool', path: 'sidecars/tool', executable: true }] } }];`,
     );
-    const deployed = await development.publishDevelopmentPlugin({ root: h.project, directory: h.directory });
+    const deployed = await tools.publishDevelopmentPlugin({ root: h.project, directory: h.directory });
     const inspected = await inspectPluginDirectory(deployed.directory);
     expect(inspected.manifest.sidecars).toEqual([{ id: 'tool', path: './sidecars/tool', executable: true }]);
     expect(inspected.files.get('sidecars/tool')?.toString()).toBe('native fixture');
@@ -203,7 +200,7 @@ describe('independent plugin development tools', () => {
   it('continuously compiles and deploys successful edits while leaving the last good build after an error', async () => {
     const h = await fixture(),
       log = vi.fn();
-    const watcher = await development.developPlugin({ root: h.project, directory: h.directory, log });
+    const watcher = await tools.developPlugin({ root: h.project, directory: h.directory, log });
     watchers.push(watcher);
     expect(log.mock.calls.some(([message]) => String(message).startsWith('Synced development plugin:'))).toBe(true);
     expect(log).toHaveBeenCalledWith('Watching source changes. Press Ctrl+C to stop. Seed loads the synced directory.');
@@ -225,13 +222,13 @@ describe('independent plugin development tools', () => {
     expect(log.mock.calls.some(([message]) => String(message).includes('build failed'))).toBe(true);
   }, 15_000);
   it('uses the standard app-data folder on each desktop platform', () => {
-    expect(development.developmentPluginDirectory('darwin', {}, '/home/person')).toBe(
+    expect(tools.developmentPluginDirectory('darwin', {}, '/home/person')).toBe(
       join('/home/person', 'Library/Application Support/MotusAI Seed/plugins/development'),
     );
-    expect(development.developmentPluginDirectory('linux', { XDG_CONFIG_HOME: '/custom' }, '/home/person')).toBe(
+    expect(tools.developmentPluginDirectory('linux', { XDG_CONFIG_HOME: '/custom' }, '/home/person')).toBe(
       join('/custom', 'MotusAI Seed/plugins/development'),
     );
-    expect(development.developmentPluginDirectory('win32', { APPDATA: '/roaming' }, '/home/person')).toBe(
+    expect(tools.developmentPluginDirectory('win32', { APPDATA: '/roaming' }, '/home/person')).toBe(
       join('/roaming', 'MotusAI Seed/plugins/development'),
     );
   });

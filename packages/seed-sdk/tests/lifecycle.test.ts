@@ -12,7 +12,7 @@ import {
   createPluginResources,
   type App,
   type PluginManifest,
-} from '../../packages/seed-sdk/src/index';
+} from '@motus-ai/seed-sdk';
 
 const manifest: PluginManifest = {
   id: 'com.example.fixture',
@@ -252,7 +252,7 @@ describe('plugin data and view ownership', () => {
   });
 
   it('stops private service methods and aborts work when its owning instance unloads', async () => {
-    const service = new PluginService({} as import('../../packages/seed-sdk/src/plugin').PluginServices, manifest);
+    const service = new PluginService({} as import('@motus-ai/seed-sdk').PluginServices, manifest);
     let observed: AbortSignal | undefined;
     service.registerMethod('custom', (_args, signal) => {
       observed = signal;
@@ -269,7 +269,7 @@ describe('plugin data and view ownership', () => {
     const cleanup = vi.fn(),
       registerCapability = vi.fn(() => cleanup);
     const service = new PluginService(
-      { registerCapability } as unknown as import('../../packages/seed-sdk/src/plugin').PluginServices,
+      { registerCapability } as unknown as import('@motus-ai/seed-sdk').PluginServices,
       manifest,
     );
     const definition = { id: 'probe', version: 1, methods: [{ name: 'read_probe', risk: 'read' as const }] };
@@ -292,7 +292,7 @@ describe('plugin data and view ownership', () => {
     const service = new PluginService(
       {
         capabilities: { register, list, invoke, stream },
-      } as unknown as import('../../packages/seed-sdk/src/plugin').PluginServices,
+      } as unknown as import('@motus-ai/seed-sdk').PluginServices,
       manifest,
     );
     expect(service.app.capabilities).not.toHaveProperty('register');
@@ -316,7 +316,7 @@ describe('plugin data and view ownership', () => {
           handler = registered;
           return () => undefined;
         },
-      } as unknown as import('../../packages/seed-sdk/src/plugin').PluginServices,
+      } as unknown as import('@motus-ai/seed-sdk').PluginServices,
       manifest,
     );
     let observed: AbortSignal | undefined;
@@ -346,7 +346,7 @@ describe('plugin data and view ownership', () => {
   it('limits private view calls to its own registered methods and propagates cancellation', async () => {
     const registerCapability = vi.fn(() => vi.fn());
     const service = new PluginService(
-      { registerCapability } as unknown as import('../../packages/seed-sdk/src/plugin').PluginServices,
+      { registerCapability } as unknown as import('@motus-ai/seed-sdk').PluginServices,
       manifest,
     );
     let observed: AbortSignal | undefined;

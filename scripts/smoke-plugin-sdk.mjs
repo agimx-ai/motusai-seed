@@ -3,7 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
-import { buildPlugin } from '../packages/seed-plugin-tools/index.mjs';
+import { buildPlugin } from '@motus-ai/seed-sdk/tools';
 import { createPluginPage } from './plugin-page-smoke.mjs';
 import { verifyPluginPage } from './verify-plugin-page.mjs';
 
@@ -27,7 +27,7 @@ const deadline = setTimeout(() => {
 async function run() {
   let failed = false;
   try {
-    await cp(resolve('packages/seed-plugin-tools/fixtures/generic'), join(root, 'plugin'), { recursive: true });
+    await cp(resolve('packages/seed-sdk/tests/fixtures/generic'), join(root, 'plugin'), { recursive: true });
     const source = join(root, 'plugin/src/main.ts');
     await writeFile(
       source,
@@ -205,7 +205,7 @@ async function run() {
     await wait('!document.querySelector("[data-plugin-view-owner]")');
     if ((await native.call(plugin.package_id, { type: 'service-call', method: 'status', arguments: {} })) !== process.platform + '-reloaded')
       throw new Error('Navigation stopped the backend');
-    await cp(resolve('packages/seed-plugin-tools/fixtures/sandbox'), join(root, 'sandbox'), { recursive: true });
+    await cp(resolve('packages/seed-sdk/tests/fixtures/sandbox'), join(root, 'sandbox'), { recursive: true });
     const browserBuild = await buildPlugin({ root: join(root, 'sandbox'), service: 'src/service.ts' });
     const browserPlugin = directoryRuntimePlugin(await inspectPluginDirectory(browserBuild.output), 'official');
     sandbox = new SeedPluginSandboxSupervisor(

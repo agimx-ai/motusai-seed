@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { app, protocol } from 'electron';
-import { buildPlugin } from '../packages/seed-plugin-tools/index.mjs';
+import { buildPlugin } from '@motus-ai/seed-sdk/tools';
 
 const require = createRequire(import.meta.url);
 const { SeedRuntime } = require('../dist/electron/main/runtime.js');

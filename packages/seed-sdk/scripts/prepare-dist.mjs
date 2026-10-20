@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir } from 'node:fs/promises';
+import { chmod, cp, mkdir, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const packageRoot = resolve(import.meta.dirname, '..');
@@ -14,3 +14,4 @@ async function copy(directory, target) {
 await copy(resolve(packageRoot, 'src/react'), resolve(packageRoot, 'dist/react'));
 for (const name of ['theme.css', 'components.css'])
   await cp(resolve(packageRoot, 'src', name), resolve(packageRoot, 'dist', name));
+await chmod(resolve(packageRoot, 'dist/tools/cli.mjs'), 0o755);

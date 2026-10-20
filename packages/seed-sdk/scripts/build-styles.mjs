@@ -15,5 +15,4 @@ const scanner = new Scanner({
     { base: dirname(fileURLToPath(import.meta.resolve('streamdown'))), pattern: '*.js', negated: false },
   ],
 });
-// Publish ready-to-use shared styles; consumers do not need SDK TS sources or a Tailwind compiler.
 await writeFile(resolve(root, 'dist/styles.css'), compiler.build(scanner.scan()));

@@ -1,14 +1,26 @@
 import { createHash } from 'node:crypto';
 import { isUtf8 } from 'node:buffer';
-import { createWriteStream } from 'node:fs';
 import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
-import { build } from 'esbuild';
+import { dirname, extname, relative, resolve } from 'node:path';
+import { build, type BuildOptions } from 'esbuild';
 import { compile } from '@tailwindcss/node';
 import { Scanner } from '@tailwindcss/oxide';
 import { fileURLToPath } from 'node:url';
-import { capabilityPackageMetadata, createPluginI18n, resolvePluginTranslationReferences } from '@motus-ai/seed-sdk';
-import { ZipArchive } from 'archiver';
+import { capabilityPackageMetadata, type CapabilityDefinition } from '../capability.js';
+import { createPluginI18n, resolvePluginTranslationReferences, type PluginTranslations } from '../i18n.js';
+import { safePath, type BuiltPluginManifest, type PluginResource } from './manifest.mjs';
+
+export type BuildPluginOptions = {
+  root?: string;
+  runtime?: BuiltPluginManifest['runtime'];
+  view?: string;
+  service?: string;
+  styles?: string;
+  outdir?: string;
+  resources?: PluginResource[];
+  serviceOptions?: BuildOptions;
+  capabilities?: string;
+};
 
 const sdkPackages = [
   '@motus-ai/seed-sdk',
@@ -36,15 +48,14 @@ const textResourceExtensions = new Set([
   '.yml',
 ]);
 
-/** Author text must hash identically when the same source checkout is packaged on Windows, macOS or Linux. */
-function normalizeResource(path, body) {
+function normalizeResource(path: string, body: Buffer): Buffer {
   if (!textResourceExtensions.has(extname(path).toLowerCase())) return body;
   if (!isUtf8(body)) throw new Error('Text resources must be UTF-8: ' + path);
   return Buffer.from(body.toString('utf8').replace(/\r\n?/g, '\n'));
 }
 
-/** Trusted author-time metadata entry, never loaded by the installed client or a manifest reader. */
-export async function readPluginCapabilities({ root = process.cwd(), entry = 'src/capabilities.ts' } = {}) {
+/** Executes author code; do not use for installed package inspection. */
+export async function readPluginCapabilities({ root = process.cwd(), entry = 'src/capabilities.ts' } = {}): Promise<CapabilityDefinition[]> {
   const compiled = await build({
     absWorkingDir: resolve(root),
     entryPoints: [entry],
@@ -57,7 +68,7 @@ export async function readPluginCapabilities({ root = process.cwd(), entry = 'sr
   });
   const module = await import(
     'data:text/javascript;base64,' + Buffer.from(compiled.outputFiles[0].text).toString('base64')
-  );
+  ) as { capabilities: CapabilityDefinition[] };
   if (
     !Array.isArray(module.capabilities) ||
     new Set(module.capabilities.map((item) => item.id)).size !== module.capabilities.length
@@ -66,43 +77,30 @@ export async function readPluginCapabilities({ root = process.cwd(), entry = 'sr
   return module.capabilities;
 }
 
-function safePath(path) {
-  return (
-    typeof path === 'string' &&
-    path &&
-    !isAbsolute(path) &&
-    !path.includes('\\') &&
-    !path.includes('\0') &&
-    !path.includes(':') &&
-    path
-      .split('/')
-      .every(
-        (part) =>
-          part &&
-          part !== '.' &&
-          part !== '..' &&
-          !/[. ]$/.test(part) &&
-          !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part),
-      )
-  );
-}
-
-async function bundleGraph(root, entry, role, options = {}) {
+async function bundleGraph(root: string, entry: string, role: 'view' | 'service', options: BuildOptions = {}) {
   const result = await build({
     absWorkingDir: root,
     entryPoints: [entry],
     bundle: true,
-    write: false,
     format: 'cjs',
     platform: role === 'view' ? 'browser' : (options.platform ?? 'node'),
     target: role === 'view' ? 'chrome130' : 'node24',
     external: sdkPackages,
     mainFields: ['module', 'main'],
     packages: 'bundle',
-    metafile: true,
     logLevel: 'silent',
     define: { 'import.meta.url': '__seedPluginUrl' },
     ...options,
+    write: false,
+    metafile: true,
+    plugins: [{
+      name: 'seed-runtime-boundary',
+      setup(build) {
+        build.onResolve({ filter: /^@motus-ai\/seed-sdk\/tools(?:\/|$)/ }, () => ({
+          errors: [{ text: 'SDK tools are only available to author build scripts, not plugin runtime entries.' }],
+        }));
+      },
+    }, ...(options.plugins ?? [])],
   });
   const external = Object.values(result.metafile.outputs)
     .flatMap((output) => output.imports)
@@ -114,7 +112,7 @@ async function bundleGraph(root, entry, role, options = {}) {
   return result.outputFiles[0].text;
 }
 
-function factory(name, source, service) {
+function factory(name: string, source: string, service: boolean) {
   return (
     'export function ' +
     name +
@@ -130,8 +128,7 @@ function factory(name, source, service) {
   );
 }
 
-/** Compile only this view graph, never depend on the client's source scan or scan the backend. */
-async function buildStyles(root, viewCode, styles, pluginId) {
+async function buildStyles(root: string, viewCode: string, styles: string | undefined, pluginId: string) {
   const theme = fileURLToPath(import.meta.resolve('@motus-ai/seed-sdk/theme.css'));
   const tailwind = fileURLToPath(import.meta.resolve('tailwindcss/package.json'));
   const imports = [
@@ -146,7 +143,6 @@ async function buildStyles(root, viewCode, styles, pluginId) {
   return Buffer.from(compiler.build(candidates));
 }
 
-/** Source projects have explicit view/service entry graphs; the distribution still has only one main.js. */
 export async function buildPlugin({
   root = process.cwd(),
   runtime = 'sandboxed-web',
@@ -157,7 +153,7 @@ export async function buildPlugin({
   resources = [],
   serviceOptions,
   capabilities,
-}) {
+}: BuildPluginOptions = {}): Promise<{ output: string; manifest: BuiltPluginManifest }> {
   root = resolve(root);
   const sourceManifest = JSON.parse(await readFile(resolve(root, 'manifest.json'), 'utf8'));
   if (!['sandboxed-web', 'native-host'].includes(runtime)) throw new Error('Invalid plugin build runtime.');
@@ -191,8 +187,8 @@ export async function buildPlugin({
   const staging = output + '.building-' + process.pid + '-' + Date.now();
   await mkdir(staging, { recursive: true });
   try {
-    const translations = { defaultLocale: sourceManifest.i18n?.defaultLocale ?? 'en-US', resources: {} };
-    const files = new Map([
+    const translations: PluginTranslations = { defaultLocale: sourceManifest.i18n?.defaultLocale ?? 'en-US', resources: {} };
+    const files = new Map<string, Buffer>([
       [
         'main.js',
         Buffer.from(
@@ -205,7 +201,7 @@ export async function buildPlugin({
     files.set('styles.css', await buildStyles(root, viewCode, styles, sourceManifest.id));
     if (sourceManifest.i18n) {
       const declaration = sourceManifest.i18n;
-      for (const [locale, path] of Object.entries(declaration.resources ?? {})) {
+      for (const [locale, path] of Object.entries(declaration.resources ?? {}) as Array<[string, string]>) {
         if (!safePath(path) || !path.endsWith('.json') || coreFiles.has(path))
           throw new Error('Invalid translation resource path: ' + path);
         const source = resolve(root, path),
@@ -226,7 +222,7 @@ export async function buildPlugin({
     });
     const definitions = hasCapabilities ? await readPluginCapabilities({ root, entry: capabilityEntry }) : [];
     if (definitions.length && !service) throw new Error('Public capabilities require a service entry.');
-    const project = await readFile(resolve(root, 'package.json'), 'utf8').then(JSON.parse, (error) => {
+    const project = await readFile(resolve(root, 'package.json'), 'utf8').then((body) => JSON.parse(body), (error) => {
       if (error.code !== 'ENOENT') throw error;
       return {};
     });
@@ -255,7 +251,7 @@ export async function buildPlugin({
         throw new Error('Resources must be regular files: ' + resource.source);
       files.set(resource.path, normalizeResource(resource.path, await readFile(source)));
     }
-    const manifest = {
+    const manifest: BuiltPluginManifest = {
       ...sourceManifest,
       apiVersion: 2,
       runtime,
@@ -268,7 +264,6 @@ export async function buildPlugin({
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, body);
     }
-    // Publish a complete build last. On compile/resource failure the previous output remains intact.
     const previous = output + '.previous-' + process.pid;
     const exists = await lstat(output).then(
       () => true,
@@ -287,91 +282,4 @@ export async function buildPlugin({
     await rm(staging, { recursive: true, force: true });
     throw error;
   }
-}
-
-/** Package only the built manifest and its declared resources. No business discovery or code execution. */
-export async function collectPluginFiles({ root = process.cwd(), outdir = 'dist', variant } = {}) {
-  const output = resolve(root, outdir);
-  const manifestBody = await readFile(resolve(output, 'manifest.json'));
-  const manifest = JSON.parse(manifestBody);
-  if (
-    !/^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/.test(manifest.id) ||
-    !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(manifest.version)
-  )
-    throw new Error('Invalid package identity.');
-  const entries = new Map([['manifest.json', manifestBody]]);
-  for (const resource of manifest.resources) {
-    if (!safePath(resource.path) || entries.has(resource.path)) throw new Error('Invalid package resource.');
-    const source = resolve(output, resource.path),
-      metadata = await lstat(source);
-    if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('Package resources must be regular files.');
-    const body = await readFile(source);
-    if (createHash('sha256').update(body).digest('hex') !== resource.sha256)
-      throw new Error('Built resource changed: ' + resource.path);
-    entries.set(resource.path, body);
-  }
-  const targeted = variant?.platform !== undefined || variant?.architecture !== undefined;
-  if (
-    targeted &&
-    (!['darwin', 'win32', 'linux'].includes(variant.platform) || !['arm64', 'x64'].includes(variant.architecture))
-  )
-    throw new Error('Invalid package target.');
-  if (variant) {
-    const target = variant.manifest ?? manifest;
-    if (
-      target.id !== manifest.id ||
-      target.version !== manifest.version ||
-      target.apiVersion !== 2 ||
-      target.runtime !== manifest.runtime ||
-      target.service !== manifest.service
-    )
-      throw new Error('Package hook changed the project identity or loading contract.');
-    for (const resource of variant.files ?? []) {
-      if (!safePath(resource.path) || entries.has(resource.path))
-        throw new Error('Invalid or duplicate additional resource.');
-      const source = resolve(root, resource.source),
-        metadata = await lstat(source);
-      if (!metadata.isFile() || metadata.isSymbolicLink())
-        throw new Error('Additional resources must be regular files.');
-      entries.set(resource.path, await readFile(source));
-    }
-    const document = {
-      ...target,
-      resources: [...entries]
-        .filter(([path]) => path !== 'manifest.json')
-        .map(([path, body]) => ({ path, sha256: createHash('sha256').update(body).digest('hex') })),
-    };
-    for (const sidecar of document.sidecars ?? [])
-      if (!entries.has(sidecar.path)) throw new Error('Sidecar is not a declared resource.');
-    entries.set('manifest.json', Buffer.from(JSON.stringify(document, null, 2) + '\n'));
-  }
-  return { manifest: JSON.parse(entries.get('manifest.json')), entries, targeted };
-}
-
-export async function packPlugin({ root = process.cwd(), outdir = 'dist', packages = 'artifacts', variant } = {}) {
-  const { manifest, entries, targeted } = await collectPluginFiles({ root, outdir, variant });
-  const packageRoot = resolve(root, packages);
-  await mkdir(packageRoot, { recursive: true });
-  const suffix = targeted ? `-${variant.platform}-${variant.architecture}` : '';
-  const packagePath = resolve(packageRoot, `${manifest.id}-${manifest.version}${suffix}.seedpkg`);
-  const temporary = packagePath + '.building-' + process.pid;
-  try {
-    await new Promise((done, reject) => {
-      const stream = createWriteStream(temporary, { mode: 0o600 });
-      const archive = new ZipArchive({ zlib: { level: 9 }, forceLocalTime: false });
-      stream.on('close', done);
-      stream.on('error', reject);
-      archive.on('error', reject);
-      archive.pipe(stream);
-      for (const [path, body] of [...entries].sort(([a], [b]) => a.localeCompare(b)))
-        archive.append(body, { name: path, date: new Date('1980-01-01T00:00:00Z'), mode: 0o600 });
-      void archive.finalize().catch(reject);
-    });
-    await rename(temporary, packagePath);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
-  const body = await readFile(packagePath);
-  return { packagePath, sha256: createHash('sha256').update(body).digest('hex'), size: body.length };
 }

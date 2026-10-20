@@ -18,7 +18,7 @@ Seed 是通用插件宿主。当前代码只运行 Plugin API v2：插件以 SDK
 - `src/connector`：能力执行、统一 Local HTTP/SSE、审批、审计与全局任务观察。
 - `src/shared`：跨进程契约和静态校验。
 - `src/renderer`：产品壳和可信插件 DOM 容器。
-- `packages/seed-sdk`：公开 API、生命周期与共享组件；`packages/seed-plugin-tools`：通用构建、打包和开发同步。
+- `packages/seed-sdk`：公开 API、生命周期与共享组件；`packages/seed-sdk/src/tools`：通用构建、打包和开发同步。
 - 官方插件业务源码只在独立的 `motusai-seed-official-plugins` 仓库维护。
 
 按任务读取 [架构与安全边界](docs/插件架构与安全边界.md)、[开发手册](docs/插件开发手册.md)、[包规范](docs/社区插件与插件包规范.md) 或 [SDK 文档](packages/seed-sdk/README.md)，不复制第二套协议说明。

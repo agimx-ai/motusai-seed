@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { app, BrowserWindow, protocol } from 'electron';
-import { buildPlugin } from '../packages/seed-plugin-tools/index.mjs';
+import { buildPlugin } from '@motus-ai/seed-sdk/tools';
 
 const require = createRequire(import.meta.url);
 const { SeedPluginSandboxSupervisor } = require('../dist/electron/main/plugin-sandbox-host.js');
@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
     const plugins = [];
     for (const name of ['one', 'two']) {
       const root = join(temporary, name);
-      await cp(resolve('packages/seed-plugin-tools/fixtures/sandbox'), root, { recursive: true });
+      await cp(resolve('packages/seed-sdk/tests/fixtures/sandbox'), root, { recursive: true });
       const manifest = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'));
       await writeFile(join(root, 'manifest.json'), JSON.stringify({ ...manifest, id: 'com.example.' + name }));
       const { output } = await buildPlugin({ root, service: 'src/service.ts' });

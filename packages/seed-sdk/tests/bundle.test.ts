@@ -1,14 +1,17 @@
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as sdk from '@motus-ai/seed-sdk';
-import { pluginBundle, pluginServiceConstructor, pluginViewConstructor } from './plugin-bundle';
-import { verifySeedPackage } from '../main/seed-package';
+import { pluginBundle, pluginServiceConstructor, pluginViewConstructor } from '../../../src/shared/plugin-bundle';
+import { verifySeedPackage } from '../../../src/main/seed-package';
 
+const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-sdk/dist/tools/index.mjs')).href);
 const directories: string[] = [];
 afterEach(async () => {
   await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
@@ -17,13 +20,47 @@ afterEach(async () => {
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'seed-plugin-project-'));
   directories.push(root);
-  await cp(resolve('packages/seed-plugin-tools/fixtures/generic'), root, { recursive: true });
-  // Tooling is imported as a build-time tool; the project itself has no dependency on the Seed source tree.
-  const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
+  await cp(resolve('packages/seed-sdk/tests/fixtures/generic'), root, { recursive: true });
   return { root, build: () => tools.buildPlugin({ root, runtime: 'native-host', service: 'src/service.ts' }) };
 }
 
 describe('single-file isolated plugin bundle', () => {
+  it('exposes author tools through the SDK without loading them through the runtime entry', async () => {
+    const require = createRequire(import.meta.url);
+    expect(require.resolve('@motus-ai/seed-sdk/tools')).toBe(resolve('packages/seed-sdk/dist/tools/index.mjs'));
+    const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import {createRequire} from 'node:module';
+      const require = createRequire(import.meta.url);
+      const sdk = require('@motus-ai/seed-sdk');
+      assert.equal(typeof sdk.PluginService, 'function');
+      assert(!Object.keys(require.cache).some(path => /node_modules\\/(esbuild|archiver|@tailwindcss)\\//.test(path)));
+      assert(!Object.keys(require.cache).some(path => path.includes('/seed-sdk/dist/tools/')));
+      assert(!Object.keys(require.cache).some(path => /node_modules\\/(react|react-dom|sonner)\\//.test(path)));
+      const tools = await import('@motus-ai/seed-sdk/tools');
+      for(const name of ['buildPlugin','packPlugin','collectPluginFiles','developPlugin','publishDevelopmentPlugin'])
+        assert.equal(typeof tools[name], 'function', name);
+      assert(!Object.keys(require.cache).some(path => /node_modules\\/(react|react-dom|sonner)\\//.test(path)));
+      console.log('separate runtime and author tool entries');
+    `], { cwd: process.cwd() });
+    expect(stdout).toContain('separate runtime and author tool entries');
+  });
+
+  it.each(['view', 'service'])('rejects author tools in a plugin %s graph, including externalization overrides', async (role) => {
+    const project = await fixture();
+    const base = role === 'view' ? 'Plugin' : 'PluginService';
+    await writeFile(join(project.root, role === 'view' ? 'src/main.ts' : 'src/service.ts'),
+      `import {${base}} from '@motus-ai/seed-sdk';
+       import {buildPlugin} from '@motus-ai/seed-sdk/tools';
+       export default class extends ${base} { static authorTool = buildPlugin; }`);
+    await expect(project.build()).rejects.toThrow('SDK tools are only available to author build scripts');
+    if (role === 'service') {
+      await expect(tools.buildPlugin({ root: project.root, runtime: 'native-host', service: 'src/service.ts',
+        serviceOptions: { external: ['@motus-ai/seed-sdk', '@motus-ai/seed-sdk/tools'] },
+      })).rejects.toThrow('SDK tools are only available to author build scripts');
+    }
+  });
+
   it('exports shared React components only through the react entry', () => {
     const require = createRequire(import.meta.url);
     expect(require.resolve('@motus-ai/seed-sdk/react')).toBe(resolve('packages/seed-sdk/dist/react/index.js'));
@@ -92,7 +129,6 @@ describe('single-file isolated plugin bundle', () => {
       `import { Plugin } from '@motus-ai/seed-sdk';
        export default class CustomView extends Plugin { static marker = 'custom-view'; }`,
     );
-    const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
     const { output } = await tools.buildPlugin({ root: project.root, view: 'src/custom-view.ts' });
     const entryUrl = pathToFileURL(join(output, 'main.js')).href;
     const exports = await import(/* @vite-ignore */ entryUrl);
@@ -160,7 +196,6 @@ describe('single-file isolated plugin bundle', () => {
 
   it('supports custom capability source paths, and does not advertise service capabilities on a view-only plugin', async () => {
     const project = await fixture();
-    const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
     await writeFile(
       join(project.root, 'src/metadata.ts'),
       'export const capabilities = [{ id: "probe", version: 1, methods: [] }]',
@@ -174,7 +209,6 @@ describe('single-file isolated plugin bundle', () => {
 
   it('defaults to a Node-free service target and does not allow an esbuild override to bypass it', async () => {
     const project = await fixture();
-    const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
     await expect(
       tools.buildPlugin({ root: project.root, service: 'src/service.ts', serviceOptions: { platform: 'node' } }),
     ).rejects.toThrow();
@@ -202,7 +236,6 @@ describe('single-file isolated plugin bundle', () => {
   it('packs one independent build as a plain seedpkg archive with verified resources', async () => {
     const project = await fixture(),
       { output } = await project.build();
-    const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
     const packed = await tools.packPlugin({ root: project.root });
     const verified = await verifySeedPackage(await readFile(packed.packagePath), {
       expectedPackageSha256: packed.sha256,
@@ -233,7 +266,6 @@ describe('single-file isolated plugin bundle', () => {
     await writeFile(join(project.root, 'assets.svg'), '<svg>\r\n</svg>\r\n');
     const binary = Buffer.from([0, 13, 10, 255]);
     await writeFile(join(project.root, 'asset.bin'), binary);
-    const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
     const { output, manifest } = await tools.buildPlugin({
       root: project.root,
       runtime: 'native-host',
@@ -257,7 +289,6 @@ describe('single-file isolated plugin bundle', () => {
   it('uses the same generic packer for native target resources without changing the loading contract', async () => {
     const project = await fixture(),
       { manifest } = await project.build();
-    const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
     const source = join(project.root, 'native-helper');
     await writeFile(source, 'native fixture');
     const variant = {

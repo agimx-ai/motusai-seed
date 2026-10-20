@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
-import { watch } from 'node:fs';
-import { access, chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { watch, type Stats } from 'node:fs';
+import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { collectPluginFiles } from './index.mjs';
+import process from 'node:process';
+import { collectPluginFiles, readPackageVariants } from './package.mjs';
+import type { BuiltPluginManifest } from './manifest.mjs';
 
-export function developmentPluginDirectory(platform = process.platform, environment = process.env, home = homedir()) {
+export function developmentPluginDirectory(platform: typeof process.platform = process.platform, environment: typeof process.env = process.env, home = homedir()) {
   const appData =
     platform === 'darwin'
       ? join(home, 'Library/Application Support')
@@ -17,19 +18,8 @@ export function developmentPluginDirectory(platform = process.platform, environm
   return join(appData, 'MotusAI Seed/plugins/development');
 }
 
-async function packageVariant(root, manifest) {
-  const hook = join(root, 'package.mjs');
-  if (
-    !(await access(hook).then(
-      () => true,
-      () => false,
-    ))
-  )
-    return undefined;
-  const variants = await (
-    await import(pathToFileURL(hook).href + '?generation=' + randomUUID())
-  ).default({ pluginRoot: root, manifest });
-  if (!Array.isArray(variants)) throw new Error('Package hook must return targets.');
+async function packageVariant(root: string, manifest: BuiltPluginManifest) {
+  const variants = await readPackageVariants(root, manifest, true);
   const matches = variants.filter(
     (variant) =>
       !variant ||
@@ -41,11 +31,10 @@ async function packageVariant(root, manifest) {
   return matches[0];
 }
 
-/** Deploy the same declared files as .seedpkg, without producing or uploading an archive. */
 export async function publishDevelopmentPlugin({
   root = process.cwd(),
   directory = developmentPluginDirectory(),
-} = {}) {
+}: { root?: string; directory?: string } = {}) {
   root = resolve(root);
   directory = resolve(directory);
   const built = JSON.parse(await readFile(join(root, 'dist/manifest.json'), 'utf8'));
@@ -88,7 +77,7 @@ export async function publishDevelopmentPlugin({
   }
 }
 
-async function removeOwnedDevelopmentPlugin(deployed) {
+async function removeOwnedDevelopmentPlugin(deployed: Awaited<ReturnType<typeof publishDevelopmentPlugin>>) {
   const parent = dirname(deployed.directory);
   const parentState = await lstat(parent).catch((error) => {
     if (error.code !== 'ENOENT') throw error;
@@ -98,15 +87,16 @@ async function removeOwnedDevelopmentPlugin(deployed) {
     throw new Error('Development directory must remain a regular directory.');
   const current = await lstat(deployed.directory).catch((error) => {
     if (error.code !== 'ENOENT') throw error;
+    return undefined;
   });
-  const owns = (state) => state?.isDirectory() && !state.isSymbolicLink()
+  const owns = (state: Stats | undefined) => state?.isDirectory() && !state.isSymbolicLink()
     && state.dev === deployed.ownership.dev && state.ino === deployed.ownership.ino;
   if (!owns(current)) return;
   const retiring = join(parent, '.cleanup-' + randomUUID());
   try {
     await rename(deployed.directory, retiring);
   } catch (error) {
-    if (error.code === 'ENOENT') return;
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
     throw error;
   }
   // Recheck after the atomic rename: a concurrent deployment must never be deleted.
@@ -117,28 +107,31 @@ async function removeOwnedDevelopmentPlugin(deployed) {
   await rm(retiring, { recursive: true, force: true });
 }
 
-/** Watch an independent source project; its own build.mjs remains the authoritative build. */
 export async function developPlugin({
   root = process.cwd(),
   directory,
-  log = (message) => process.stdout.write(message + '\n'),
+  log = (message: string) => { process.stdout.write(message + '\n'); },
   signal,
+}: {
+  root?: string;
+  directory?: string;
+  log?: (message: string) => void;
+  signal?: AbortSignal;
 } = {}) {
   root = resolve(root);
   directory = resolve(directory ?? developmentPluginDirectory());
   const ignored = new Set(['node_modules', 'dist', 'artifacts', '.git']);
-  const deployed = new Map();
-  let timer,
-    child,
-    stopped = false,
-    pending = false,
-    running,
-    stopWork;
+  const deployed = new Map<string, Awaited<ReturnType<typeof publishDevelopmentPlugin>>>();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let child: ChildProcess | undefined;
+  let stopped = false, pending = false;
+  let running: Promise<void> | undefined;
+  let stopWork: Promise<void> | undefined;
   const compile = async () => {
     do {
       pending = false;
       try {
-        await new Promise((done, reject) => {
+        await new Promise<void>((done, reject) => {
           child = spawn(process.execPath, [join(root, 'build.mjs')], { cwd: root, stdio: 'inherit' });
           child.once('error', reject);
           child.once('exit', (code) =>

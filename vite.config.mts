@@ -30,13 +30,13 @@ export default defineConfig(({ command }) => ({
     },
   ],
   resolve: {
-    alias: {
-      '@motus-ai/seed-sdk/styles.css': resolve(projectRoot, 'packages/seed-sdk/dist/styles.css'),
-      '@motus-ai/seed-sdk/react': resolve(projectRoot, 'packages/seed-sdk/src/react/index.ts'),
-      '@motus-ai/seed-sdk': resolve(projectRoot, 'packages/seed-sdk/src/index.ts'),
-      '@renderer': resolve(projectRoot, 'src/renderer'),
-      '@shared': resolve(projectRoot, 'src/shared'),
-    },
+    alias: [
+      { find: '@motus-ai/seed-sdk/styles.css', replacement: resolve(projectRoot, 'packages/seed-sdk/dist/styles.css') },
+      { find: '@motus-ai/seed-sdk/react', replacement: resolve(projectRoot, 'packages/seed-sdk/src/react/index.ts') },
+      { find: /^@motus-ai\/seed-sdk$/, replacement: resolve(projectRoot, 'packages/seed-sdk/src/browser.ts') },
+      { find: '@renderer', replacement: resolve(projectRoot, 'src/renderer') },
+      { find: '@shared', replacement: resolve(projectRoot, 'src/shared') },
+    ],
   },
   build: {
     outDir: 'dist/renderer',

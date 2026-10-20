@@ -31,7 +31,6 @@ describe('single plugin framework boundary', () => {
     for (const path of [
       ...(await sources('src')),
       ...(await sources('packages/seed-sdk/src')),
-      'packages/seed-plugin-tools/index.mjs',
     ]) {
       expect(await readFile(path, 'utf8'), path).not.toMatch(
         /\b(?:loadUI|pluginUI\w*|mountPluginUI|unmountPluginUI|UIProvider|UITranslations|uiCode|uiSource|RareUiActivityGrid)\b|seed-plugin-ui|seed-plugin:\/\/ui\/|components\/ui\/|\brole\s*===?\s*['"]ui['"]/,

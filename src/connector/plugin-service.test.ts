@@ -14,7 +14,7 @@ afterEach(async () => {
 async function fixture(fail = false) {
   const root = await mkdtemp(join(tmpdir(), 'seed-service-'));
   directories.push(root);
-  await cp(resolve('packages/seed-plugin-tools/fixtures/generic'), join(root, 'plugin'), { recursive: true });
+  await cp(resolve('packages/seed-sdk/tests/fixtures/generic'), join(root, 'plugin'), { recursive: true });
   const source = `import { PluginService } from '@motus-ai/seed-sdk'
 export default class Service extends PluginService {
   onload() {
@@ -28,7 +28,7 @@ export default class Service extends PluginService {
   }
 }`;
   await writeFile(join(root, 'plugin/src/service.ts'), source);
-  const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-plugin-tools/index.mjs')).href);
+  const tools = await import(/* @vite-ignore */ pathToFileURL(resolve('packages/seed-sdk/dist/tools/index.mjs')).href);
   const { output, manifest } = await tools.buildPlugin({
     root: join(root, 'plugin'),
     runtime: 'native-host',
