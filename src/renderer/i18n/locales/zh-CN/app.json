@@ -132,7 +132,6 @@
     "requiresSeedVersion": "此插件需要 Seed {{version}} 或更高版本，请先更新客户端。",
     "missingSeedVersion": "此插件版本缺少最低 Seed 版本声明，请等待发布新版。",
     "installedVersionIncompatible": "此插件版本与当前 Seed 不兼容",
-    "installedVersionIncompatibleDescription": "该插件不会运行。请先卸载此版本，再从插件目录安装最新版本。",
     "confirmInstallTitle": "安装 {{name}} ？",
     "confirmUpdateTitle": "更新 {{name}} ？",
     "confirmUninstallTitle": "卸载 {{name}}？",

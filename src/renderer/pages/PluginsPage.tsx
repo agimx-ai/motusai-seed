@@ -256,9 +256,6 @@ export function PluginsPage({
               <strong className="block text-[14px] font-medium text-foreground">
                 {t('plugins.installedVersionIncompatible')}
               </strong>
-              <p className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">
-                {selectedInstalledPlugin.incompatibilityReason || t('plugins.installedVersionIncompatibleDescription')}
-              </p>
             </section>
           )}
           {!selectedInstalledPlugin && selectedCatalogPlugin && !selectedCatalogPlugin.compatible && (

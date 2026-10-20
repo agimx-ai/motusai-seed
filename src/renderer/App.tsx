@@ -168,7 +168,17 @@ export default function App() {
       </>
     );
 
-  const plugins = snapshot.plugins ?? [];
+  const catalogById = new Map(snapshot.catalogPlugins.map((plugin) => [plugin.id, plugin]));
+  const plugins = snapshot.plugins.map((plugin) => {
+    const catalog = catalogById.get(plugin.id);
+    if (plugin.status !== 'incompatible' || !catalog) return plugin;
+    return {
+      ...plugin,
+      name: catalog.name,
+      iconDataUrl: catalog.iconUrl ?? plugin.iconDataUrl,
+      iconDarkDataUrl: catalog.iconUrl ? catalog.iconDarkUrl : plugin.iconDarkDataUrl,
+    };
+  });
   const searchQuery = pluginQuery.trim();
   const currentSearch = pluginSearchResults?.query === searchQuery ? pluginSearchResults : undefined;
   const catalogPlugins = searchQuery ? (currentSearch?.page.items ?? []) : (snapshot.catalogPlugins ?? []);

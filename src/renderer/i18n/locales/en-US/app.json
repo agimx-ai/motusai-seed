@@ -132,7 +132,6 @@
     "requiresSeedVersion": "This plugin requires Seed {{version}} or later. Update the client first.",
     "missingSeedVersion": "This plugin version lacks a minimum Seed version. Wait for a new release.",
     "installedVersionIncompatible": "This plugin version is incompatible with the current Seed",
-    "installedVersionIncompatibleDescription": "The plugin will not run. Uninstall this version, then install the latest version from the plugin catalog.",
     "confirmInstallTitle": "Install {{name}}?",
     "confirmUpdateTitle": "Update {{name}}?",
     "confirmUninstallTitle": "Uninstall {{name}}?",
