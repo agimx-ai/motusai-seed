@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { capabilityProtocolDescriptor, pluginCapabilitySchema } from './plugin-capability';
+import { capabilityProtocolDescriptor, pluginCapabilitySchema, pluginConsumesEvent, pluginConsumesMethod } from './plugin-capability';
+import { seedConsumedCapabilitySchema } from './plugin-manifest';
 import type { CapabilityDefinition } from '@motus-ai/seed-sdk';
 
 const capability: CapabilityDefinition = {
@@ -10,6 +11,22 @@ const capability: CapabilityDefinition = {
 };
 
 describe('code-registered capability boundaries', () => {
+  it('registers event-only capabilities in code and keeps event consumption separate from methods', () => {
+    const event = { name: 'changed', version: 1, dataSchema: { type: 'object' } };
+    const definition = { id: 'probe', version: 1, methods: [], events: [event] };
+    const offered = capabilityProtocolDescriptor(pluginCapabilitySchema.parse(definition));
+    expect(offered.events).toEqual([event]);
+    const consumer = { consumes: [seedConsumedCapabilitySchema.parse({ capability: 'probe', events: ['changed'] })] };
+    expect(pluginConsumesEvent(consumer, offered, 'changed')).toBe(true);
+    expect(pluginConsumesMethod(consumer, offered, { name: 'changed', risk: 'read' })).toBe(false);
+    for (const invalid of [
+      { ...definition, events: [] }, { ...definition, events: [event, event] },
+      { ...definition, events: [{ ...event, version: 0 }] },
+      { ...definition, events: [{ ...event, dataSchema: { $async: true } }] },
+    ]) expect(() => pluginCapabilitySchema.parse(invalid)).toThrow();
+    for (const invalid of [{ capability: 'probe' }, { capability: 'probe', events: [] }, { capability: 'probe', events: ['changed', 'changed'] }])
+      expect(() => seedConsumedCapabilitySchema.parse(invalid)).toThrow();
+  });
   it('resolves exposure from the code contract, defaulting to terminal', () => {
     const definition = { id: 'probe', version: 1, methods: [{ name: 'now', risk: 'read' as const }] };
     expect(capabilityProtocolDescriptor(pluginCapabilitySchema.parse(definition)).exposure).toBe('terminal');

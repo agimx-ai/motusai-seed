@@ -5,7 +5,8 @@ import { BrowserWindow, ipcMain, session } from 'electron';
 import type { SeedInvocation } from '@motus-ai/seed-sdk';
 import type { SeedPluginRuntimeDefinition } from '../shared/contracts';
 import { fileBrokerPermissions } from './brokers/files/permissions';
-import type { SandboxPluginConfiguration, SandboxPluginInvocation } from '../shared/sandbox-plugin';
+import type { SandboxPluginConfiguration, SandboxPluginInvocation, SandboxBrokerResult } from '../shared/sandbox-plugin';
+import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error';
 import { pluginHostContentSecurityPolicy } from './plugin-host-policy';
 
 const pluginHostPath = 'src/renderer/hosts/plugin/index.html';
@@ -76,6 +77,7 @@ export function requiredPermissions(service: string, argumentsValue: Record<stri
   if (service === 'seed.plugin-data') return [];
   if (service === 'seed.plugin-settings') return [];
   if (service === 'seed.plugin-event') return [];
+  if (service === 'seed.plugin-events') return [];
   if (service === 'seed.plugin-task') return [];
   if (service === 'seed.plugin-capabilities') return [];
   if (['seed.capabilities.list', 'seed.capabilities.invoke', 'seed.capabilities.cancel'].includes(service)) return [];
@@ -198,8 +200,23 @@ export class SeedPluginSandboxHost {
       );
   };
 
-  private handleBroker = async (event: Electron.IpcMainInvokeEvent, message: Record<string, unknown>) => {
+  private handleBroker = async (event: Electron.IpcMainInvokeEvent, message: Record<string, unknown>): Promise<SandboxBrokerResult> => {
     this.trustedSender(event);
+    try {
+      return { ok: true, result: await this.invokeOwnedBroker(message) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        code: error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+          ? error.code : 'plugin_broker_error',
+        params: pluginErrorParams(error),
+        billing: pluginErrorBilling(error),
+      };
+    }
+  };
+
+  private async invokeOwnedBroker(message: Record<string, unknown>) {
     const packageId = this.brokerTokens.get(String(message.broker_token || '')) || '';
     const service = String(message.service || '');
     const argumentsValue =
@@ -217,7 +234,7 @@ export class SeedPluginSandboxHost {
         throw errorWithCode('Plugin runtime generation changed.', 'plugin_runtime_stopped');
       }
     });
-  };
+  }
 
   private async installProtocol() {
     if (this.protocolReady) return this.protocolReady;

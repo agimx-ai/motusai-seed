@@ -20,6 +20,7 @@ import { createPluginI18n, type PluginTranslations } from './i18n.js';
 import type { i18n } from 'i18next';
 import { SeedPluginError } from './error.js';
 import { PluginSettingsStore } from './settings.js';
+import { createPluginEventClient, type PluginEventService } from './plugin-events.js';
 import type { PluginResources, PluginFilePicker } from './resources.js';
 
 export type PluginManifest = {
@@ -78,7 +79,7 @@ export type PluginServices = {
   registerCapability?: CapabilityRegistration;
 };
 
-export type ServiceApp = PluginServices & { settings: PluginSettingsStore };
+export type ServiceApp = PluginServices & { settings: PluginSettingsStore; events: PluginEventService };
 
 export class Plugin extends Component {
   settings?: unknown;
@@ -166,6 +167,13 @@ export class PluginService extends Component {
           : {}),
       },
       settings: new PluginSettingsStore((service, args) => app.invokeHost(service, args), this.signal),
+      events: createPluginEventClient(
+        (service, args) => app.invokeHost(service, args),
+        this.signal,
+        (error) => {
+          void app.diagnostics.error('plugin.event.subscription.failed', error).catch(() => undefined);
+        },
+      ),
     };
     this.dataAccess = new PluginDataAccess(app.data);
     this.i18n = createPluginI18n(manifest.translations, app.locale ?? manifest.translations?.defaultLocale);
@@ -186,15 +194,17 @@ export class PluginService extends Component {
   }
 
   /** Register the public contract and implementation together during onload. */
-  addCapability(definition: CapabilityDefinition, handler: SeedCapabilityHandler): void {
+  addCapability(definition: CapabilityDefinition, handler?: SeedCapabilityHandler): void {
     if (this.signal.aborted) throw new Error('Cannot register a capability on a stopped plugin.');
     if (!this.app.registerCapability) throw new Error('The host does not support code-registered capabilities.');
     if (this.capabilities.has(definition.id)) throw new Error('Duplicate capability: ' + definition.id);
+    if (definition.methods.length && !handler) throw new Error('Capability implementation is missing.');
     const wrapped: SeedCapabilityHandler = {
       invoke: async (method, invocation) => {
         try {
           const signal = invocation.signal ? AbortSignal.any([this.signal, invocation.signal]) : this.signal;
           if (this.signal.aborted) throw this.signal.reason;
+          if (!handler) throw new Error('This capability only publishes events.');
           return await handler.invoke(method, { ...invocation, signal });
         } catch (error) {
           if (!(error instanceof SeedPluginError) || !/^[a-z][a-z0-9_.-]{0,127}$/.test(error.code)) throw error;

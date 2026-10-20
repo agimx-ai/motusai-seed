@@ -13,8 +13,22 @@ export function pluginConsumesMethod(
     capability.exposure !== 'local' &&
     consumer.consumes.some((declaration) =>
       'capability' in declaration
-        ? declaration.capability === capability.id && declaration.methods.includes(method.name)
+        ? declaration.capability === capability.id && Boolean(declaration.methods?.includes(method.name))
         : method.annotations?.[declaration.match.method_annotation] === declaration.match.equals,
+    )
+  );
+}
+
+export function pluginConsumesEvent(
+  consumer: Pick<SeedPluginRuntimeDefinition, 'consumes'>,
+  capability: CapsPluginDescriptor,
+  event: string,
+) {
+  return (
+    capability.exposure !== 'local' &&
+    consumer.consumes.some(
+      (declaration) => 'capability' in declaration && declaration.capability === capability.id &&
+        declaration.events?.includes(event),
     )
   );
 }
@@ -56,10 +70,21 @@ export const pluginCapabilitySchema = z
     exposure: z.enum(['terminal', 'plugin', 'local']).optional(),
     descriptionKey: translationKey.optional(),
     annotations: z.record(identifier, z.json()).optional(),
-    methods: z.array(method).min(1).max(128),
+    methods: z.array(method).max(128),
+    events: z.array(
+      z.object({
+        name: identifier,
+        version: z.number().int().positive(),
+        dataSchema: schema,
+      }).strict(),
+    ).min(1).max(128).optional(),
   })
   .strict()
   .superRefine((value, context) => {
+    if (!value.methods.length && !value.events?.length)
+      context.addIssue({ code: 'custom', message: 'A capability must offer methods or events.' });
+    if (new Set(value.events?.map((event) => event.name)).size !== (value.events?.length ?? 0))
+      context.addIssue({ code: 'custom', path: ['events'], message: 'Duplicate capability event.' });
     if (JSON.stringify(value).length > 2 * 1024 * 1024)
       context.addIssue({ code: 'custom', message: 'Capability registration exceeds size limit.' });
     const names = new Set<string>();
@@ -127,6 +152,7 @@ export function capabilityProtocolDescriptor(
     exposure: definition.exposure ?? 'terminal',
     ...(definition.descriptionKey ? { description: text(definition.descriptionKey, 1_000) } : {}),
     annotations: definition.annotations ?? {},
+    ...(definition.events ? { events: definition.events } : {}),
     ...(Object.keys(localizedErrors).length
       ? { errors: localizedErrors as Record<string, { en_US: string; zh_Hans: string }> }
       : {}),

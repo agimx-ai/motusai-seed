@@ -1,7 +1,8 @@
 import { createPluginI18n, type PluginTranslations } from './i18n.js';
 import type { SeedCapabilityHandler, SeedCapabilityRisk } from './index.js';
+import type { CapabilityEvent } from './plugin-events.js';
 
-/** A public function registered by plugin code, not a UI declaration. */
+/** A public capability contract registered by plugin code, not a UI declaration. */
 export type CapabilityMethod = {
   name: string;
   displayNameKey?: string;
@@ -20,6 +21,7 @@ export type CapabilityDefinition = {
   descriptionKey?: string;
   annotations?: Record<string, unknown>;
   methods: CapabilityMethod[];
+  events?: CapabilityEvent[];
 };
 
 export type CapabilityRegistration = (

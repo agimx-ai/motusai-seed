@@ -57,6 +57,7 @@ function fixture() {
     sandboxCalls: new Map(),
     sandboxTasks: new Map(),
     pluginCapabilityCatalog: new PluginCapabilityCatalog(),
+    pluginEvents: { closePlugin: vi.fn() },
     pluginViewHosts: new Map([
       [one.package_id, { plugin: one, destroy: destroyOne }],
       [two.package_id, { plugin: two, destroy: destroyTwo }],

@@ -47,15 +47,20 @@ export const seedPluginLabelsSchema = z
 const seedConsumedCapabilityByIdSchema = z
   .object({
     capability: identifier,
-    methods: z.array(identifier).min(1),
+    methods: z.array(identifier).min(1).max(128).optional(),
+    events: z.array(identifier).min(1).max(128).optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    const methods = new Set<string>();
-    for (const [index, method] of value.methods.entries()) {
-      if (methods.has(method))
-        context.addIssue({ code: 'custom', path: ['methods', index], message: `重复的方法：${method}` });
-      methods.add(method);
+    if (!value.methods && !value.events)
+      context.addIssue({ code: 'custom', message: 'A consumed capability must declare methods or events.' });
+    for (const key of ['methods', 'events'] as const) {
+      const names = new Set<string>();
+      for (const [index, name] of (value[key] ?? []).entries()) {
+        if (names.has(name))
+          context.addIssue({ code: 'custom', path: [key, index], message: `Duplicate consumed ${key}: ${name}` });
+        names.add(name);
+      }
     }
   });
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PluginService } from '@motus-ai/seed-sdk';
-import type { SandboxPluginConfiguration, SandboxPluginInvocation } from '../../../shared/sandbox-plugin';
+import type { SandboxPluginConfiguration, SandboxPluginInvocation, SandboxBrokerResult } from '../../../shared/sandbox-plugin';
 
 let configure: (message: SandboxPluginConfiguration) => void;
 let invoke: (message: SandboxPluginInvocation) => void;
@@ -20,6 +20,7 @@ class Service extends PluginService {
       throw new Error('Service failed');
     });
     this.registerMethod('locale', () => this.app.locale);
+    this.registerMethod('broker_failure', () => this.app.invokeHost('seed.plugin-events', { operation: 'list' }));
     this.registerMethod(
       'wait',
       (_args, signal) =>
@@ -40,7 +41,7 @@ const bridge = {
   ready: vi.fn(),
   configured: vi.fn(),
   result: vi.fn(),
-  invokeBroker: vi.fn(async (_token: string, _service: string, _args: Record<string, unknown>) => null),
+  invokeBroker: vi.fn(async (_token: string, _service: string, _args: Record<string, unknown>): Promise<SandboxBrokerResult> => ({ ok: true, result: null })),
   onConfigure: vi.fn((listener: typeof configure) => {
     configure = listener;
   }),
@@ -90,6 +91,12 @@ afterEach(async () => {
 });
 
 describe('sandbox service registrations and ownership', () => {
+  it('restores structured Broker errors after the Electron context boundary', async () => {
+    await configure(configuration());
+    bridge.invokeBroker.mockResolvedValueOnce({ ok: false, error: 'Provider stopped', code: 'plugin_event_provider_stopped', params: { retry: true } });
+    await invoke({ request_id: 'broker-error', package_id: 'com.example.probe', operation: 'service', method: 'broker_failure', arguments: {} });
+    expect(bridge.result).toHaveBeenCalledWith('broker-error', false, undefined, 'Provider stopped', 'plugin_event_provider_stopped', { retry: true });
+  });
   it('registers capabilities from code and attributes failures only to the loaded owner', async () => {
     await configure(configuration());
     expect(bridge.configured).toHaveBeenCalledWith('configuration', true);

@@ -1,5 +1,15 @@
 export { Component, type Disposer } from './component.js';
 export { Events, type EventRef } from './events.js';
+export {
+  createPluginEventClient,
+  type CapabilityEvent,
+  type PluginEvent,
+  type AvailablePluginEvent,
+  type PluginEventPublication,
+  type PluginEventSubscriptionOptions,
+  type PluginEventSubscription,
+  type PluginEventService,
+} from './plugin-events.js';
 export { toast, type ExternalToast } from 'sonner';
 export {
   createPluginI18n,

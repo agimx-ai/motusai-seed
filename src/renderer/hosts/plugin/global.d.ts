@@ -1,4 +1,4 @@
-import type { SandboxPluginConfiguration, SandboxPluginInvocation } from '../../../shared/sandbox-plugin';
+import type { SandboxPluginConfiguration, SandboxPluginInvocation, SandboxBrokerResult } from '../../../shared/sandbox-plugin';
 
 declare global {
   interface Window {
@@ -13,7 +13,7 @@ declare global {
         error_code?: string,
         error_params?: Record<string, string | number | boolean>,
       ): void;
-      invokeBroker(broker_token: string, service: string, arguments_value: Record<string, unknown>): Promise<unknown>;
+      invokeBroker(broker_token: string, service: string, arguments_value: Record<string, unknown>): Promise<SandboxBrokerResult>;
       onConfigure(listener: (message: SandboxPluginConfiguration) => void): void;
       onInvoke(listener: (message: SandboxPluginInvocation) => void): void;
       onCancel(listener: (requestId: string) => void): void;

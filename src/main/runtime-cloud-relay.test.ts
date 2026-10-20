@@ -163,6 +163,7 @@ describe('Runtime Cloud relay', () => {
       runtimePlugins: [plugin],
       pluginCapabilityCatalog: catalog,
       creditBilling: { relay },
+      pluginEvents: { reconcile: vi.fn() },
     });
     const broker = (service: string, args: Record<string, unknown>) =>
       Reflect.get(runtime, 'invokePluginBroker').call(runtime, plugin.package_id, service, args);

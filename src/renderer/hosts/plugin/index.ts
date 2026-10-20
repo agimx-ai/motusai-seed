@@ -10,7 +10,17 @@ type RuntimeRecord = {
   brokerToken?: string;
 };
 const runtimes = new Map<string, RuntimeRecord>();
-const runtimeBridge = window.seedPluginRuntime;
+const runtimeBridge = {
+  ...window.seedPluginRuntime,
+  // Recreate the error after contextBridge, which only copies ordinary Error fields.
+  invokeBroker: async (token: string, service: string, args: Record<string, unknown>) => {
+    const response = await window.seedPluginRuntime.invokeBroker(token, service, args);
+    if (!response.ok) throw Object.assign(new Error(response.error), {
+      code: response.code, params: response.params, billing: response.billing,
+    });
+    return response.result;
+  },
+};
 const calls = new Map<string, AbortController>();
 
 async function clearRuntimes() {

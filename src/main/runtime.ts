@@ -30,7 +30,8 @@ import { resolveSeedLocale } from './i18n/locale';
 import { invokePluginSettings } from './plugin-settings';
 import { pluginCatalogV2Url } from './plugin-catalog-url';
 import { PluginCapabilityCatalog } from './plugin-capability-catalog';
-import { pluginConsumesMethod } from '../shared/plugin-capability';
+import { PluginEventBroker } from './plugin-event-broker';
+import { pluginConsumesEvent, pluginConsumesMethod } from '../shared/plugin-capability';
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation';
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest';
 import { ConnectorManager } from './connector-manager';
@@ -133,6 +134,10 @@ export class SeedRuntime {
   private installedPlugins: SeedInstalledPlugin[] = [];
   private runtimePlugins: SeedPluginRuntimeDefinition[] = [];
   private readonly pluginCapabilityCatalog = new PluginCapabilityCatalog();
+  private readonly pluginEvents = new PluginEventBroker(
+    () => this.stopping ? [] : this.runtimePlugins.filter((plugin) => this.pluginIsAuthorized(plugin.package_id)),
+    this.pluginCapabilityCatalog,
+  );
   private readonly authorizedInstalledPluginIds = new Set<string>();
   private entitlementExpiresAt = 0;
   private entitlementTimer: ReturnType<typeof setInterval> | null = null;
@@ -762,7 +767,10 @@ export class SeedRuntime {
       (packageId, service, args, assertActive, trace) =>
         this.invokePluginBroker(packageId, service, args, assertActive, trace),
       (packageId, snapshot) => {
-        if (!snapshot) this.pluginCapabilityCatalog.remove(packageId);
+        if (!snapshot) {
+          void this.releasePluginWork(packageId, true).catch(() => undefined);
+          this.pluginCapabilityCatalog.remove(packageId);
+        }
         this.connector.send({ type: 'native.runtime.updated', packageId, snapshot });
       },
       (packageId, event, error) => {
@@ -2150,7 +2158,8 @@ export class SeedRuntime {
         (provider) =>
           provider.id !== consumer.package_id &&
           provider.capabilities.some((capability) =>
-            capability.methods.some((method) => pluginConsumesMethod(consumer, capability, method)),
+            capability.methods.some((method) => pluginConsumesMethod(consumer, capability, method)) ||
+            capability.events?.some((event) => pluginConsumesEvent(consumer, capability, event.name)),
           ),
       )
         ? { ...consumer, configuration_revision: randomUUID() }
@@ -2305,6 +2314,7 @@ export class SeedRuntime {
   }
 
   private async releasePluginWork(packageId: string, failed = false) {
+    this.pluginEvents.closePlugin(packageId);
     for (const calls of [this.sandboxCalls, this.capabilityCalls])
       for (const [key, call] of calls) if (key.startsWith(packageId + ':')) call.abort();
     for (const [key, activity] of this.sandboxTasks)
@@ -2322,6 +2332,7 @@ export class SeedRuntime {
     trace?: DiagnosticTraceContext,
   ): Promise<unknown> {
     assertActive?.();
+    if (service === 'seed.plugin-events') return await this.pluginEvents.invoke(packageId, argumentsValue, assertActive);
     if (service === 'seed.plugin-event') {
       if (!this.runtimePlugins.some((plugin) => plugin.package_id === packageId && plugin.api_version === 2))
         throw new Error('Plugin event owner is not running.');
@@ -2339,6 +2350,7 @@ export class SeedRuntime {
       );
       if (!plugin) throw new Error('Code capability owner is not running.');
       this.pluginCapabilityCatalog.publish(plugin, argumentsValue.definitions);
+      this.pluginEvents.reconcile();
       // Sandboxed registrations are code-owned too. Refresh the authoritative router on publication or withdrawal.
       if (plugin.runtime_kind === 'sandboxed-web') this.configureWorker();
       return null;
@@ -2632,6 +2644,7 @@ export class SeedRuntime {
 
   async stop() {
     this.stopping = true;
+    this.pluginEvents.clear();
     for (const calls of [this.capabilityCalls, this.sandboxCalls]) {
       for (const controller of calls.values()) controller.abort();
       calls.clear();

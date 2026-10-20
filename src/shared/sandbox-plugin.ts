@@ -1,4 +1,9 @@
-import type { PluginManifest, SeedInvocation } from '@motus-ai/seed-sdk';
+import type { PluginManifest, SeedInvocation, SeedBillingReceipt } from '@motus-ai/seed-sdk';
+
+/** Electron invoke/contextBridge do not preserve custom Error fields. */
+export type SandboxBrokerResult =
+  | { ok: true; result: unknown }
+  | { ok: false; error: string; code: string; params?: Record<string, string | number | boolean>; billing?: SeedBillingReceipt };
 
 export type SandboxPluginConfiguration = {
   configuration_id: string;

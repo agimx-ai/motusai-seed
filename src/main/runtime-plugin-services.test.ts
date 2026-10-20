@@ -29,6 +29,7 @@ function fixture(kind = 'sandboxed-web') {
     connector: { queryPluginCapabilities: vi.fn(async () => []), invokePluginCapability: vi.fn() },
     handleWorkerEvent: vi.fn(async () => undefined),
     pluginCapabilityCatalog: { publish: vi.fn() },
+    pluginEvents: { reconcile: vi.fn(), closePlugin: vi.fn() },
     configureWorker: vi.fn(),
   });
   const call = (owner: string, service: string, args: Record<string, unknown>) =>

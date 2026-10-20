@@ -473,6 +473,7 @@ export type CapsPluginDescriptor = {
   annotations?: Record<string, unknown>;
   errors?: Record<string, SeedLocalizedText>;
   methods: CapsMethodDescriptor[];
+  events?: import('@motus-ai/seed-sdk').CapabilityEvent[];
   roots?: Array<{
     id: string;
     label: string;

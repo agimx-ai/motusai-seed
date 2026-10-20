@@ -105,6 +105,67 @@ UI 可调用 `app.reloadService()` 重新加载自己的后端；不能重载其
 
 `app.resources.url(path)` / `PluginService.resourceUrl(path)` 返回已声明资源地址；`app.files.pick()` 和 `app.files.path(file)` 复用系统文件选择与拖放路径能力。`PluginService.publish(name,data)` 将通知发给自己的 UI `app.events`，不提供跨插件事件广播或重启回放。
 
+### 跨插件后台事件
+
+后端的 `app.events` 提供 `list()`、`publish()` 和 `subscribe()`。事件属于插件代码注册的公开能力；SDK 与客户端只处理契约、消费声明、宿主分发和生命周期，不定义业务事件名、数据字段或处理策略。前端的 `app.events` 仍是当前插件自己的内存通知，两者边界不同。
+
+提供方通过 `addCapability()` 注册事件名、事件版本和 JSON Schema。仅发布事件的能力使用 `methods: []`，无需方法处理器；提供方法时仍须传入处理器。
+
+```ts
+this.addCapability({
+  id: 'example_updates',
+  version: 1,
+  exposure: 'plugin',
+  methods: [],
+  events: [{
+    name: 'changed',
+    version: 1,
+    dataSchema: {
+      type: 'object',
+      properties: { revision: { type: 'integer' } },
+      required: ['revision'],
+      additionalProperties: false,
+    },
+  }],
+});
+
+await this.app.events.publish({
+  capability: 'example_updates', event: 'changed', version: 1,
+  data: { revision: 2 },
+});
+```
+
+消费方在自己的 Manifest 声明事件边界；声明方法、annotation 匹配不会授予事件订阅权限。
+
+```json
+{ "consumes": [{ "capability": "example_updates", "events": ["changed"] }] }
+```
+
+服务中订阅发现到的提供方，无需打开任何插件页面：
+
+```ts
+const offered = await this.app.events.list();
+const subscription = await this.app.events.subscribe<{ revision: number }>({
+  provider_plugin_id: selectedProvider,
+  capability: 'example_updates', event: 'changed', version: 1,
+}, async (event, signal) => {
+  await handleChange(event.data, signal); // 由消费插件实现
+});
+
+// 可选：主动停止；服务卸载也会自动取消。
+await subscription.unsubscribe();
+await subscription.closed;
+```
+
+- 宿主校验实际提供方身份、公开范围、精确 `consumes.events`、事件版本与数据 Schema。`local` 能力不提供跨插件事件。发布者只能发布自己已注册的事件。
+- 事件信封为 `id / provider_plugin_id / capability / capability_version / event / event_version / published_at / data`。身份、ID 和时间由宿主生成；数据必须为 JSON，单次发布上限 64 KiB。
+- `publish()` 只确认校验及入队，不等待订阅者完成。各订阅独立排队并串行调用处理器，处理器失败记录诊断后继续，不阻塞其他订阅者或发布者。处理器应将收到的 AbortSignal 传到实际工作中。
+- 每个插件最多 64 个订阅，宿主总计最多 256 个。单个订阅队列最多 128 条或 512 KiB；溢出会终止该订阅，`closed` 以 `plugin_event_overflow` 拒绝，不能当作无变化。提供方停止、契约变化、撤权及传输故障也会终止订阅；消费方通过 `closed` 判断恢复，重新发现、补读并订阅由插件决定。
+- `unsubscribe()` 幂等，停止新投递，不等待当前处理器；`closed` 等待投递循环退出。消费服务卸载、重载或进程退出会清理订阅，旧代次无法继续消费。页面隐藏不停止后台服务或订阅。
+- 这是在线内存通知，不提供历史回放、持久队列或恰好一次处理。持久状态、补读接口、游标和业务去重仍由提供方／消费方拥有；框架 Core `/v1/events` 继续只承担框架生命周期。
+
+本节接口属于当前未发布源码。正式分发时须使用包含该接口的 SDK 和客户端，并在插件 `minAppVersion` 中声明对应最低客户端版本；本地构建通过不代表旧客户端支持。
+
 `app.clipboard.writeText(text)` 通过通用平台桥写入文本，复用客户端现有的大小校验，不依赖浏览器剪贴板权限；不提供剪贴板读取。复制按钮、复制内容和反馈由插件自己实现。
 
 ## 单文件构建
