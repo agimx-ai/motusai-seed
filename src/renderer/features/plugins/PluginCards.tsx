@@ -6,6 +6,7 @@ import { ActionButton, Tooltip } from '@motus-ai/seed-sdk/react';
 import { CatalogPluginIcon, InstalledPluginIcon } from '../../components/PluginIcon';
 import { ResourceCard } from '../../components/ResourceCard';
 import verifiedIconUrl from '../../assets/verified-light.svg';
+import developmentIconUrl from '../../assets/development.svg';
 import mcpIconUrl from '../../assets/mcp.svg';
 import { cx } from '../../lib/display';
 import { useSeedI18n } from '../../i18n';
@@ -32,6 +33,29 @@ export function McpMark() {
       </span>
     </Tooltip>
   );
+}
+
+export function PluginDevMark({ plugin, overlay = false }: { plugin?: SeedInstalledPlugin; overlay?: boolean }) {
+  const { t } = useTranslation();
+  if (plugin?.source !== 'development') return null;
+  const label = t('plugins.localDevelopment');
+  const mark = (
+    <span
+      className={cx(
+        'grid h-4 w-4 shrink-0 place-items-center text-muted-foreground',
+        overlay && 'pointer-events-none absolute -bottom-1 -right-1 rounded-full bg-background ring-2 ring-background',
+      )}
+      role="img"
+      aria-label={label}
+    >
+      <span
+        className="h-3.5 w-3.5 bg-current"
+        style={{ mask: `url("${developmentIconUrl}") center / contain no-repeat` }}
+        aria-hidden="true"
+      />
+    </span>
+  );
+  return overlay ? mark : <Tooltip content={label}>{mark}</Tooltip>;
 }
 
 export function CatalogPluginMark({ plugin, large = false }: { plugin: SeedCatalogPlugin; large?: boolean }) {
@@ -86,6 +110,7 @@ export function PluginCard({
           <span className="truncate">{name}</span>
           {plugin.publisherType === 'official' && <OfficialMark appName={appName} />}
           {pluginMcpTools(plugin).length > 0 && <McpMark />}
+          <PluginDevMark plugin={plugin} />
         </>
       }
       description={resolveSeedLocalizedText(plugin.description, locale)}
@@ -147,6 +172,7 @@ export function CatalogPluginCard({
               {t('plugins.organizationName', { name: plugin.organization.name })}
             </span>
           )}
+          <PluginDevMark plugin={installedPlugin} />
         </>
       }
       description={resolveSeedLocalizedText(plugin.description, locale)}

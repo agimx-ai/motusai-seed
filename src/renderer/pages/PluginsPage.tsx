@@ -13,6 +13,7 @@ import {
   CatalogPluginMark,
   McpMark,
   OfficialMark,
+  PluginDevMark,
   PluginMark,
   PluginVersionTransition,
 } from '../features/plugins/PluginCards';
@@ -198,6 +199,7 @@ export function PluginsPage({
                     {t('plugins.organizationName', { name: selectedCatalogPlugin.organization.name })}
                   </span>
                 )}
+                <PluginDevMark plugin={selectedInstalledPlugin} />
                 {selectedVersion && (
                   <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
                     {selectedVersion}
@@ -322,14 +324,16 @@ export function PluginsPage({
               <div className="flex min-h-[52px] flex-wrap items-center justify-start gap-x-2 gap-y-3 px-2 py-2">
                 {installedPlugins.map((plugin) => {
                   const name = resolveSeedLocalizedText(plugin.name, locale);
+                  const label = plugin.source === 'development' ? `${name} (${t('plugins.localDevelopment')})` : name;
                   return (
-                    <Tooltip content={name} key={plugin.id}>
+                    <Tooltip content={label} key={plugin.id}>
                       <button
-                        className="rounded-xl transition hover:-translate-y-0.5"
+                        className="relative rounded-xl transition hover:-translate-y-0.5"
                         onClick={() => onSelectPlugin(plugin.id)}
-                        aria-label={name}
+                        aria-label={label}
                       >
                         <PluginMark plugin={plugin} />
+                        <PluginDevMark plugin={plugin} overlay />
                       </button>
                     </Tooltip>
                   );
