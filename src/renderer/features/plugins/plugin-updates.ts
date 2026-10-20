@@ -19,7 +19,6 @@ export function getAvailablePluginUpdates(
     const installed = installedById.get(plugin.id);
     return Boolean(
       installed &&
-        installed.status !== 'incompatible' &&
         compareSeedVersions(installed.version, plugin.latestVersion) < 0 &&
         isCatalogPluginInstallable(plugin),
     );

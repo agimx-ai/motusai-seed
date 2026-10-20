@@ -131,10 +131,9 @@ export function CatalogPluginCard({
   const current = Boolean(
     installedPlugin && compareSeedVersions(installedPlugin.version, plugin.latestVersion) >= 0,
   );
-  const incompatible = installedPlugin?.status === 'incompatible';
   const updating = Boolean(installedPlugin && !current);
   const installable = isCatalogPluginInstallable(plugin);
-  const updateAvailable = updating && !incompatible && installable;
+  const updateAvailable = updating && installable;
   return (
     <ResourceCard
       icon={installedPlugin ? <PluginMark plugin={installedPlugin} /> : <CatalogPluginMark plugin={plugin} />}
@@ -152,7 +151,7 @@ export function CatalogPluginCard({
       }
       description={resolveSeedLocalizedText(plugin.description, locale)}
       trailing={
-        !installProgress && !installing && !current && (incompatible || !installable) ? (
+        !installProgress && !installing && !current && !installable ? (
           <ActionButton tone="muted" icon={<TriangleAlert size={13} />} disabled>
             {t('plugins.incompatible')}
           </ActionButton>

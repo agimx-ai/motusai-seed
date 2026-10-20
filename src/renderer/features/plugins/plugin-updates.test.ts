@@ -33,10 +33,19 @@ describe('countAvailablePluginUpdates', () => {
     )).toBe(1)
   })
 
-  it('does not count missing, incompatible, or non-installable plugins', () => {
+  it('offers a compatible upgrade for an incompatible installed version', () => {
+    const previous = installed('migrating', '1.0.0', 'incompatible')
+    const next = catalog('migrating', '2.0.0')
+    expect(getAvailablePluginUpdates([previous], [next])).toEqual([next])
+    expect(countAvailablePluginUpdates([previous], [next])).toBe(1)
+    expect(countAvailablePluginUpdates([previous], [catalog('migrating', '1.0.0')])).toBe(0)
+    expect(countAvailablePluginUpdates([previous], [catalog('migrating', '0.9.0')])).toBe(0)
+  })
+
+  it('does not count missing plugins or incompatible/non-installable target releases', () => {
     expect(countAvailablePluginUpdates(
       [installed('incompatible', '1.0.0', 'incompatible'), installed('community-native', '1.0.0')],
-      [catalog('missing', '2.0.0'), catalog('incompatible', '2.0.0'), catalog('community-native', '2.0.0', { publisherType: 'community' })],
+      [catalog('missing', '2.0.0'), catalog('incompatible', '2.0.0', { compatible: false }), catalog('community-native', '2.0.0', { publisherType: 'community' })],
     )).toBe(0)
   })
 
