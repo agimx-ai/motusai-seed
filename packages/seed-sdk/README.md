@@ -303,6 +303,8 @@ export default class GreetingService extends PluginService {
 
 发送系统通知，通过 `this.app.notifications` 使用。需在 `manifest.json` 中声明 `system.notifications` 权限。
 
+需要 Seed SDK 0.3.2 和 MotusAI Seed 0.3.6 或更新版本；使用该接口时，`minAppVersion` 不得低于 `0.3.6`。
+
 | 方法 | 说明 | 返回值 |
 | --- | --- | --- |
 | `isSupported()` | 检查当前系统是否支持通知 | `Promise<boolean>` |
@@ -745,7 +747,7 @@ clock-plugin/
   "id": "com.example.clock",
   "name": "Clock",
   "version": "1.0.0",
-  "minAppVersion": "0.3.5",
+  "minAppVersion": "0.3.6",
   "description": "Read the current time from a plugin service.",
   "author": "Your Name"
 }
@@ -1233,7 +1235,7 @@ export default class UpdateSubscriber extends PluginService {
   "id": "com.example.clock",
   "name": { "$t": "plugin.name" },
   "version": "1.0.0",
-  "minAppVersion": "0.3.5",
+  "minAppVersion": "0.3.6",
   "description": { "$t": "plugin.description" },
   "author": "Your Name",
   "i18n": {
