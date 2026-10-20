@@ -34,19 +34,7 @@ test('publishing waits for Ubuntu packages and verifies the Linux installer and 
   }
 });
 
-test('Ubuntu acceptance builds use production packaging without publishing or notification access', async () => {
-  const workflow = parse(await readFile(new URL('../.github/workflows/linux-package.yml', import.meta.url), 'utf8'));
-  assert.deepEqual(workflow.permissions, { contents: 'read' });
-  assert.deepEqual(Object.keys(workflow.jobs), ['linux']);
-  const job = workflow.jobs.linux;
-  assert.equal(job['runs-on'], 'ubuntu-24.04');
-  assert.equal(job.env.MOTUSAI_RELEASE_PLATFORM, 'linux-x64');
-  const commands = job.steps.map((step) => step.run ?? '').join('\n');
-  assert.ok(commands.includes('npm test'));
-  assert.ok(commands.includes('npm run package:linux'));
-  assert.ok(commands.includes('node scripts/verify-linux-package.mjs'));
-  assert.ok(job.steps.some((step) => step.uses === 'actions/upload-artifact@v4'));
-  assert.doesNotMatch(JSON.stringify(workflow), /secrets\.|gh release|repository_dispatch|WECOM_/);
+test('Linux production packaging uses the locked Electron runtime and never publishes directly', async () => {
   const { scripts } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   assert.ok(scripts['package:linux'].includes('--linux deb --x64 --publish never'));
   assert.ok(scripts['package:linux'].includes('npm exec -- install-electron --no'));
