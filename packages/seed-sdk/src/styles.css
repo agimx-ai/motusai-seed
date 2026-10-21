@@ -2,9 +2,12 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/preflight.css' layer(base);
 @import './theme.css';
+@import 'driver.js/dist/driver.css' layer(components);
 @import './components.css';
+@import './tour.css';
 @source './react/**/*.{ts,tsx}';
 @source './dom.ts';
+@source './button-style.ts';
 
 @layer utilities {
   @tailwind utilities source(none);

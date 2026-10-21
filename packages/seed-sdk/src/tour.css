@@ -1,0 +1,92 @@
+@layer components {
+  .seed-tour.driver-popover {
+    box-sizing: border-box;
+    width: min(340px, calc(100vw - 24px));
+    min-width: 0;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    overflow: visible;
+    padding: 18px;
+    border: 1px solid var(--overlay-border);
+    border-radius: var(--radius-panel);
+    background: var(--card);
+    color: var(--foreground);
+    font-family: var(--app-font-sans);
+    box-shadow: var(--overlay-shadow);
+  }
+  .seed-tour .driver-popover-title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    max-height: 20vh;
+    overflow: auto;
+  }
+  .seed-tour .driver-popover-description {
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: min(40vh, 320px);
+    overflow: auto;
+  }
+  .seed-tour .driver-popover-footer {
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+  }
+  .seed-tour .driver-popover-progress-text {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .seed-tour .driver-popover-navigation-btns {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .seed-tour .seed-action-button {
+    box-sizing: border-box;
+    position: static;
+    width: auto;
+    margin: 0;
+    padding-block: 0;
+    font-family: inherit;
+    font-weight: 400;
+    line-height: inherit;
+    text-align: center;
+    text-shadow: none;
+  }
+  .seed-tour .seed-action-button:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+  .seed-tour .driver-popover-arrow {
+    border-color: var(--card);
+  }
+  .seed-tour .driver-popover-arrow-side-left {
+    border-top-color: transparent;
+    border-right-color: transparent;
+    border-bottom-color: transparent;
+  }
+  .seed-tour .driver-popover-arrow-side-right {
+    border-top-color: transparent;
+    border-left-color: transparent;
+    border-bottom-color: transparent;
+  }
+  .seed-tour .driver-popover-arrow-side-top {
+    border-right-color: transparent;
+    border-left-color: transparent;
+    border-bottom-color: transparent;
+  }
+  .seed-tour .driver-popover-arrow-side-bottom {
+    border-top-color: transparent;
+    border-right-color: transparent;
+    border-left-color: transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .driver-fade .seed-tour,
+    .driver-fade .driver-overlay {
+      animation: none;
+    }
+  }
+}

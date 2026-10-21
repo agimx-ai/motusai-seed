@@ -437,6 +437,61 @@ toast.error('保存失败', { description: '请检查连接后重试。' });
 
 ---
 
+### `createTour`
+
+客户端和插件前端共用的控件引导。通过 `@motus-ai/seed-sdk` 导入；界面使用现有 SDK 的字体、主题、按钮和亮暗模式，Driver.js 及其样式随包分发，不请求 CDN。服务端入口不加载引导库。
+
+```ts
+import { createTour } from '@motus-ai/seed-sdk';
+
+const tour = createTour({
+  root: this.containerEl,
+  owner: this,
+  locale: this.app.locale,
+  steps: [
+    {
+      target: '[data-tour="new-feature"]',
+      title: '新功能',
+      description: '从这里打开新功能。',
+    },
+    {
+      target: '[data-tour="feature-options"]',
+      description: '在这里调整选项。',
+      beforeEnter: async ({ signal }) => {
+        await openFeatureOptions({ signal });
+      },
+    },
+  ],
+});
+
+const result = await tour.start();
+if (result.status === 'completed') {
+  // 是否保存展示记录由调用方决定。
+}
+```
+
+一个步骤即为单点功能提示，多步即为导览。步骤文案一律作为纯文本显示。引导自身不保存记录、不自动首次展示、不执行插件业务。
+
+| 参数 | 说明 |
+| --- | --- |
+| `root` | 当前窗口中所属页面的根元素，必填。选择器只查找此根及同插件的 `data-plugin-view-portal` 弹层；元素和函数目标同样受此范围限制。 |
+| `steps` | 非空步骤数组；每步包含 `target`、`description`，可选 `title`、`side`、`align`。 |
+| `target` | CSS 选择器、HTMLElement，或返回元素／空值的函数。隐藏元素不算就绪。 |
+| `beforeEnter` | 进入该步骤前的异步准备，收到 `{signal, index}`；调用方负责打开自己的页面或弹层，并尊重取消信号。 |
+| `waitForTarget` | 等待目标出现的毫秒数，默认 3000；步骤可覆盖。超时返回 `target-missing`，不改为居中提示，也不匹配其他插件。 |
+| `allowInteraction` | 每步可选，默认 false；启用后可操作高亮控件。引导不会代替用户点击控件。 |
+| `owner` | 绑定 SDK Component；在设置页的 `display()` 中传 `this`，隐藏、重载或卸载时自动清理。 |
+| `signal` | 可选 AbortSignal；React 调用方可在 effect 清理时取消，或调用 `tour.cancel()`。 |
+| `locale` / `labels` | 默认跟随文档语言，内置中英文；可覆盖 `previous`、`next`、`done`、`skip`、`progress`。进度模板支持 `{{current}}` 和 `{{total}}`。 |
+
+`start()` 返回 `Promise<TourResult>`；正在显示时重复调用返回同一个 Promise，结束后可以手动重放。`next()`、`previous()` 支持程序控制；`cancel()` 取消，`active` 表示是否正在等待或显示。
+
+- `completed`：最后一步完成。
+- `skipped`：点击跳过、按 Escape 或点击遮罩；`reason` 区分退出方式。
+- `cancelled`：主动取消、生命周期结束、页面／目标移除、被其他引导替换、目标超时或准备失败。失败详情位于 `error`，是否提示由调用方决定。
+
+同一窗口同时仅显示一个引导，启动新引导会结束旧引导。引导支持键盘、焦点恢复和减弱动态；原生弹窗仍由调用方打开和关闭，引导不会关闭业务弹窗。SDK 不提供跨窗口或跨原生应用的控件定位。
+
 ### `addCapability` 详细说明
 
 注册公开能力和调用处理器。处理器接收方法名和 `SeedInvocation`，返回 `Promise<unknown>`。

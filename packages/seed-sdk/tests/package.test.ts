@@ -17,7 +17,7 @@ describe('published SDK boundary', () => {
     const { stdout } = await run(process.execPath, ['--conditions=browser', '--input-type=module', '-e', `
       import assert from 'node:assert/strict';
       import {createRequire} from 'node:module';
-      import {PluginService,PluginSettingTab,toast} from '@motus-ai/seed-sdk';
+      import {PluginService,PluginSettingTab,toast,createTour} from '@motus-ai/seed-sdk';
       const require = createRequire(import.meta.url);
       const sdk = require('@motus-ai/seed-sdk');
       assert.equal(typeof sdk.PluginService, 'function');
@@ -25,11 +25,18 @@ describe('published SDK boundary', () => {
       assert.equal(PluginService, sdk.PluginService);
       assert.equal(PluginSettingTab, sdk.PluginSettingTab);
       assert.equal(toast, sdk.toast);
+      assert.equal(typeof createTour, 'function');
       assert.equal(sdk.toast, require('sonner').toast);
       assert(!Object.keys(require.cache).some(path => path.includes('/seed-sdk/dist/tools/')));
       console.log('browser API preserved');
     `], { cwd: process.cwd() });
     expect(stdout).toContain('browser API preserved');
+    await run(process.execPath, ['-e', `
+      const assert = require('node:assert/strict');
+      const sdk = require('@motus-ai/seed-sdk');
+      assert.equal(sdk.createTour, undefined);
+      assert(!Object.keys(require.cache).some(path => path.includes('/driver.js/')));
+    `], { cwd: process.cwd() });
   });
 
   it('builds and typechecks an independent consumer using only the published files', async () => {
@@ -56,7 +63,7 @@ describe('published SDK boundary', () => {
     await mkdir(join(project, 'node_modules/@motus-ai'), { recursive: true });
     await symlink(published, join(project, 'node_modules/@motus-ai/seed-sdk'), directoryLink);
     await writeFile(join(project, 'build.mts'), `
-      import {toast, PluginSettingTab} from '@motus-ai/seed-sdk';
+      import {toast, PluginSettingTab, createTour, type TourResult} from '@motus-ai/seed-sdk';
       import {buildPlugin, packPlugin, type BuildPluginOptions, type PluginPackageHook} from '@motus-ai/seed-sdk/tools';
       const options: BuildPluginOptions = {runtime:'native-host',service:'src/service.ts'};
       const hook: PluginPackageHook = ({manifest}) => [{manifest}];
@@ -64,7 +71,12 @@ describe('published SDK boundary', () => {
       const invalid: BuildPluginOptions = {runtime:'legacy'};
       // @ts-expect-error resources require a source
       const resource: BuildPluginOptions = {resources:[{path:'icon.svg'}]};
-      void [toast, PluginSettingTab, buildPlugin, packPlugin, options, hook, invalid, resource];
+      function tour(root: HTMLElement) {
+        const controller = createTour({root,steps:[{target:'#feature',description:'New feature'}]});
+        const result: Promise<TourResult> = controller.start();
+        return result;
+      }
+      void [toast, PluginSettingTab, createTour, tour, buildPlugin, packPlugin, options, hook, invalid, resource];
     `);
     await writeFile(join(project, 'tsconfig.json'), JSON.stringify({
       compilerOptions: {

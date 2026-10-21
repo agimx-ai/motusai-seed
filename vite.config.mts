@@ -26,6 +26,11 @@ export default defineConfig(({ command }) => ({
             'utf8',
           ),
         });
+        this.emitFile({
+          type: 'asset',
+          fileName: 'third-party-notices/driver.js.txt',
+          source: await readFile(resolve(projectRoot, 'node_modules/driver.js/license'), 'utf8'),
+        });
       },
     },
   ],
