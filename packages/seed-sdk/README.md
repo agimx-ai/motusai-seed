@@ -11,6 +11,7 @@ MotusAI Seed 插件开发 SDK —— 提供设置页、前后端通信、数据�
 - 🔌 **公开能力** — 注册公开方法，支持参数、结果校验和跨插件调用
 - 📡 **事件订阅** — 支持前后端通知，以及跨插件后台事件
 - 🔔 **系统通知** — 发送桌面通知，监听显示、点击和关闭事件
+- 🧭 **控件引导** — 创建单步提示或多步导览，支持中英文按钮和异步步骤
 - 🔄 **开发热更新** — 监听源码变化，自动构建并同步到 Seed 开发客户端
 - 📦 **插件打包** — 生成 `.seedpkg` 安装包及 SHA-256 摘要
 
@@ -439,58 +440,59 @@ toast.error('保存失败', { description: '请检查连接后重试。' });
 
 ### `createTour`
 
-客户端和插件前端共用的控件引导。通过 `@motus-ai/seed-sdk` 导入；界面使用现有 SDK 的字体、主题、按钮和亮暗模式，Driver.js 及其样式随包分发，不请求 CDN。服务端入口不加载引导库。
+在前端创建单步提示或多步控件引导。
 
-```ts
-import { createTour } from '@motus-ai/seed-sdk';
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `createTour(options)` | `TourOptions` | `Tour` |
 
-const tour = createTour({
-  root: this.containerEl,
-  owner: this,
-  locale: this.app.locale,
-  steps: [
-    {
-      target: '[data-tour="new-feature"]',
-      title: '新功能',
-      description: '从这里打开新功能。',
-    },
-    {
-      target: '[data-tour="feature-options"]',
-      description: '在这里调整选项。',
-      beforeEnter: async ({ signal }) => {
-        await openFeatureOptions({ signal });
-      },
-    },
-  ],
-});
+#### `TourOptions`
 
-const result = await tour.start();
-if (result.status === 'completed') {
-  // 是否保存展示记录由调用方决定。
-}
-```
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `root` | `HTMLElement` | 是 | — | 引导所在页面的根元素 |
+| `steps` | `readonly TourStep[]` | 是 | — | 引导步骤，至少一项 |
+| `owner` | `Pick<Component, 'register' \| 'signal'>` | 否 | — | 所属组件，释放时结束引导；设置页中传 `this` |
+| `signal` | `AbortSignal` | 否 | — | 取消引导的信号 |
+| `locale` | `string` | 否 | 页面语言 | 按钮语言，内置中英文 |
+| `labels` | `Partial<TourLabels>` | 否 | 内置文案 | 覆盖 `previous`、`next`、`done`、`skip`、`progress`；进度文案支持 `{{current}}` 和 `{{total}}` |
+| `waitForTarget` | `number` | 否 | `3000` | 等待目标显示的时长，单位为毫秒，不小于 0 |
 
-一个步骤即为单点功能提示，多步即为导览。步骤文案一律作为纯文本显示。引导自身不保存记录、不自动首次展示、不执行插件业务。
+#### `TourStep`
 
-| 参数 | 说明 |
-| --- | --- |
-| `root` | 当前窗口中所属页面的根元素，必填。选择器只查找此根及同插件的 `data-plugin-view-portal` 弹层；元素和函数目标同样受此范围限制。 |
-| `steps` | 非空步骤数组；每步包含 `target`、`description`，可选 `title`、`side`、`align`。 |
-| `target` | CSS 选择器、HTMLElement，或返回元素／空值的函数。隐藏元素不算就绪。 |
-| `beforeEnter` | 进入该步骤前的异步准备，收到 `{signal, index}`；调用方负责打开自己的页面或弹层，并尊重取消信号。 |
-| `waitForTarget` | 等待目标出现的毫秒数，默认 3000；步骤可覆盖。超时返回 `target-missing`，不改为居中提示，也不匹配其他插件。 |
-| `allowInteraction` | 每步可选，默认 false；启用后可操作高亮控件。引导不会代替用户点击控件。 |
-| `owner` | 绑定 SDK Component；在设置页的 `display()` 中传 `this`，隐藏、重载或卸载时自动清理。 |
-| `signal` | 可选 AbortSignal；React 调用方可在 effect 清理时取消，或调用 `tour.cancel()`。 |
-| `locale` / `labels` | 默认跟随文档语言，内置中英文；可覆盖 `previous`、`next`、`done`、`skip`、`progress`。进度模板支持 `{{current}}` 和 `{{total}}`。 |
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `target` | `string \| HTMLElement \| (() => HTMLElement \| null \| undefined)` | 是 | 当前根元素及所属弹层中的目标，支持 CSS 选择器、元素或返回元素的函数 |
+| `description` | `string` | 是 | 提示正文，按纯文本显示 |
+| `title` | `string` | 否 | 提示标题，按纯文本显示 |
+| `side` | `'top' \| 'right' \| 'bottom' \| 'left'` | 否 | 提示相对目标的位置 |
+| `align` | `'start' \| 'center' \| 'end'` | 否 | 提示的对齐方式 |
+| `allowInteraction` | `boolean` | 否 | 是否允许操作高亮控件，默认 `false` |
+| `waitForTarget` | `number` | 否 | 当前步骤的目标等待时长，覆盖 `TourOptions.waitForTarget` |
+| `beforeEnter` | `(context: { signal: AbortSignal; index: number }) => void \| Promise<void>` | 否 | 进入步骤前执行，`index` 从 0 开始 |
 
-`start()` 返回 `Promise<TourResult>`；正在显示时重复调用返回同一个 Promise，结束后可以手动重放。`next()`、`previous()` 支持程序控制；`cancel()` 取消，`active` 表示是否正在等待或显示。
+#### `Tour`
 
-- `completed`：最后一步完成。
-- `skipped`：点击跳过、按 Escape 或点击遮罩；`reason` 区分退出方式。
-- `cancelled`：主动取消、生命周期结束、页面／目标移除、被其他引导替换、目标超时或准备失败。失败详情位于 `error`，是否提示由调用方决定。
+| 属性 / 方法 | 说明 | 类型或返回值 |
+| --- | --- | --- |
+| `active` | 是否正在等待目标或显示引导 | `boolean` |
+| `start()` | 开始引导，结束后可再次调用 | `Promise<TourResult>` |
+| `next()` | 进入下一步；最后一步时完成引导 | `Promise<void>` |
+| `previous()` | 返回上一步 | `Promise<void>` |
+| `cancel()` | 取消当前引导 | `void` |
 
-同一窗口同时仅显示一个引导，启动新引导会结束旧引导。引导支持键盘、焦点恢复和减弱动态；原生弹窗仍由调用方打开和关闭，引导不会关闭业务弹窗。SDK 不提供跨窗口或跨原生应用的控件定位。
+运行中重复调用 `start()` 返回同一个 Promise。同一窗口启动新引导时，会结束正在运行的旧引导。
+
+#### `TourResult`
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `status` | `'completed' \| 'skipped' \| 'cancelled'` | 完成、用户跳过或取消 |
+| `reason` | `'done' \| 'skip' \| 'escape' \| 'overlay' \| 'cancelled' \| 'disposed' \| 'aborted' \| 'unmounted' \| 'replaced' \| 'target-missing' \| 'error'` | 结束原因 |
+| `stepIndex` | `number` | 结束时的步骤索引，从 0 开始 |
+| `error` | `unknown`，可选 | `reason` 为 `error` 时的错误信息 |
+
+等待目标超时时，返回 `status: 'cancelled'`、`reason: 'target-missing'`。
 
 ### `addCapability` 详细说明
 
@@ -927,6 +929,62 @@ export default class NotificationService extends PluginService {
     this.registerMethod('closeNotification', async () => {
       await this.notification?.close();
     });
+  }
+}
+```
+
+### 控件引导
+
+`src/main.ts`：
+
+```ts
+import { Plugin, PluginSettingTab, Setting, createTour } from '@motus-ai/seed-sdk';
+
+class TourSettings extends PluginSettingTab {
+  display() {
+    const name = this.addChild(
+      new Setting(this.containerEl).setName('显示名称'),
+    );
+    name.addText((input) => input.setPlaceholder('输入名称'));
+
+    const guide = this.addChild(
+      new Setting(this.containerEl)
+        .setName('功能引导')
+        .setDesc('了解页面上的控件。'),
+    );
+
+    const tour = createTour({
+      root: this.containerEl,
+      owner: this,
+      locale: this.app.locale,
+      steps: [
+        {
+          target: name.settingEl,
+          title: '显示名称',
+          description: '在这里填写要显示的名称。',
+        },
+        {
+          target: guide.settingEl,
+          title: '功能引导',
+          description: '随时从这里重新查看引导。',
+        },
+      ],
+    });
+
+    guide.addButton((button) => {
+      button.setButtonText('查看引导').onClick(async () => {
+        const result = await tour.start();
+        if (result.status === 'completed') {
+          guide.setDesc('已完成引导，可随时重新查看。');
+        }
+      });
+    });
+  }
+}
+
+export default class TourPlugin extends Plugin {
+  onload() {
+    this.addSettingTab(new TourSettings(this.app, this));
   }
 }
 ```
