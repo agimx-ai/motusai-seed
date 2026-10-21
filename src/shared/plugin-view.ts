@@ -8,6 +8,7 @@ export type PluginViewEvent = { token: string } & (
 );
 
 export type PluginViewConfiguration = {
+  installationId?: string;
   generation: string;
   manifest: PluginManifest;
   entryUrl: string;

@@ -42,7 +42,7 @@ async function run() {
   try {
     const inspected = await inspectPluginDirectory(project);
     const { manifest } = inspected;
-    const plugin = directoryRuntimePlugin(inspected, 'official');
+    const plugin = { ...directoryRuntimePlugin(inspected, 'official'), installation_id: scenario?.installationId };
     const catalog = new PluginCapabilityCatalog();
     let definitions = [];
     const secrets = new Map();
@@ -130,8 +130,10 @@ async function run() {
     view = new SeedPluginViewHost(
       plugin,
       {
-        loadData: async () => ({ revision: 0, data: null }),
-        saveData: async () => {
+        loadData: async () => scenario?.loadData ? scenario.loadData() : ({ revision: 0, data: null }),
+        saveData: async (_id, data, revision, assertActive) => {
+          assertActive();
+          if (scenario?.saveData) return scenario.saveData(data, revision);
           throw new Error('The example unexpectedly wrote user data.');
         },
         call: (id, method, args) => {

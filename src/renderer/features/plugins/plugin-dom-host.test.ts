@@ -14,6 +14,7 @@ class TestTab extends PluginSettingTab {
     state.display();
     state.copy.mockImplementation(() => this.app.clipboard?.writeText('Plugin-owned clipboard text'));
     this.containerEl.textContent = 'Plugin-owned content';
+    this.containerEl.dataset.installationId = this.app.installationId;
     this.register(state.hide);
   }
 }
@@ -31,6 +32,7 @@ function fixture(id: string, styleUrl?: string) {
   const container = document.createElement('section');
   document.body.append(container);
   const configuration = {
+    installationId: 'installation-' + id,
     generation: id,
     entryUrl: 'seed-plugin://' + id + '/main.js',
     manifest: { id, name: 'Test', version: '1.0.0', minAppVersion: '0.2.15', author: 'Test', description: 'Test' },
@@ -88,6 +90,7 @@ describe('trusted frontend DOM mounting', () => {
     await vi.waitFor(() => expect(container.textContent).toContain('Plugin-owned content'));
     expect(error).not.toHaveBeenCalled();
     expect(container.querySelector('[data-plugin-view-owner]')?.ownerDocument).toBe(document);
+    expect(container.querySelector('[data-installation-id]')?.getAttribute('data-installation-id')).toBe('installation-com.example.dom');
     expect(container.querySelector('iframe, webview')).toBeNull();
     expect(container.style.height).toBe('');
     expect(window.motusSeed.mountPluginView).toHaveBeenCalledWith({

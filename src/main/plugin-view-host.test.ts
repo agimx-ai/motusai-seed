@@ -27,6 +27,7 @@ async function fixture(id = 'com.example.generic', overrides: Partial<PluginView
   };
   const owner = { isDestroyed: () => false, webContents: { session, send: vi.fn() } } as any;
   const plugin: SeedPluginRuntimeDefinition = {
+    installation_id: 'test-installation',
     api_version: 2,
     sdk_manifest: {
       id,
@@ -91,6 +92,7 @@ describe('trusted DOM plugin service/resource broker', () => {
   it('returns generation-owned module resources without constructing any native rendering surface', async () => {
     const { configuration, resource, host } = await fixture();
     expect(configuration.entryUrl).toBe('seed-plugin://' + host.generation + '/main.js');
+    expect(configuration.installationId).toBe('test-installation');
     expect(await (await resource(configuration.entryUrl)).text()).toContain('export const ready');
     expect(configuration).not.toHaveProperty('bounds');
     expect(host).not.toHaveProperty('view');
@@ -107,6 +109,12 @@ describe('trusted DOM plugin service/resource broker', () => {
     await host.destroy();
     expect((await resource(configuration.entryUrl)).status).toBe(403);
     expect(await readFile(join(root, 'main.js'), 'utf8')).toContain('ready');
+  });
+  it('does not invent an installation identity for a local development source', async () => {
+    const { host, owner, token } = await fixture();
+    host.plugin.source = 'development';
+    delete host.plugin.installation_id;
+    expect(host.mount(owner, token).installationId).toBeUndefined();
   });
   it('binds data and private service calls to the actual plugin and preserves storage revisions', async () => {
     const { client, services } = await fixture();

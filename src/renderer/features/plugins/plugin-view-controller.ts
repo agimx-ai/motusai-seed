@@ -40,7 +40,7 @@ export class PluginViewController {
   constructor(
     private readonly surface: Surface,
     services: Pick<App, 'data' | 'service' | 'resources' | 'files' | 'clipboard' | 'reloadService'>,
-    appearance: Pick<App, 'locale' | 'theme'>,
+    appearance: Pick<App, 'locale' | 'theme' | 'installationId'>,
     private readonly report: (error: unknown) => void = (error) => {
       toast.error(String(error));
     },

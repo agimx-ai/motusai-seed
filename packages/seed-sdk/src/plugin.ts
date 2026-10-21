@@ -42,6 +42,8 @@ export type Command = {
 };
 
 export type App = {
+  /** Stable across package updates; changes after uninstall and reinstall. Undefined for local development sources. */
+  installationId?: string;
   /** View registrations belong to this plugin's DOM container, not a global desktop workspace. */
   reloadService?: () => Promise<void>;
   resources?: PluginResources;

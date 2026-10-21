@@ -109,6 +109,32 @@ function resolvedManifest(version = '1.0.0') {
 }
 
 describe('Seed plugin installer', () => {
+  it('keeps one installation identity across updates and restarts, renews it on reinstall and adopts existing installations', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'seed-installation-id-'));
+    temporaryDirectories.push(directory);
+    const { installer, state } = createInstaller(directory);
+    const install = async (version: string, digest: string) => installer.install({
+      manifest: resolvedManifest(version), packageSha256: digest.repeat(64),
+      files: packageFiles(manifestSource.replace('"version": "1.0.0"', '"version": "' + version + '"')),
+    });
+    await install('1.0.0', 'a');
+    const original = (await installer.listRuntimePlugins())[0].installation_id;
+    expect(original).toBeTruthy();
+    await install('1.0.1', 'b');
+    expect((await installer.listRuntimePlugins())[0].installation_id).toBe(original);
+    const restarted = new SeedPluginInstaller(directory, 'https://example.test', {
+      read: async () => state(), write: async () => { throw new Error('Read must not write'); },
+    }, '0.1.67');
+    expect((await restarted.listRuntimePlugins())[0].installation_id).toBe(original);
+    await installer.uninstall('com.example.seed.clock');
+    await install('1.0.1', 'b');
+    expect((await installer.listRuntimePlugins())[0].installation_id).not.toBe(original);
+    delete (state().plugins[0] as { installation_id?: string }).installation_id;
+    const adopted = (await installer.listRuntimePlugins())[0].installation_id;
+    expect(adopted).toBeTruthy();
+    await install('1.0.2', 'c');
+    expect((await installer.listRuntimePlugins())[0].installation_id).toBe(adopted);
+  });
   it('upgrades the same plugin identity to v2 without moving its private data and anchors installed hashes outside the package', async () => {
     const userData = await mkdtemp(join(tmpdir(), 'seed-v2-upgrade-'));
     temporaryDirectories.push(userData);

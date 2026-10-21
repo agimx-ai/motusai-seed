@@ -134,6 +134,7 @@ await buildPlugin({
 | 属性 / 方法 | 类型或返回值 | 说明 |
 | --- | --- | --- |
 | `locale` | `string` | 当前语言 |
+| `installationId` | `string \| undefined` | 当前插件的安装标识；更新与重启保持不变，卸载重装后改变。本地开发源没有安装记录，值为 `undefined`；插件可据此预览最新引导，不记录已看状态。 |
 | `theme` | `'light' \| 'dark'` | 当前主题 |
 | `i18n` | i18next 实例 | 读取当前语言的文案 |
 | `events` | `Events` | 当前插件前端事件 |
@@ -456,6 +457,7 @@ toast.error('保存失败', { description: '请检查连接后重试。' });
 | `signal` | `AbortSignal` | 否 | — | 取消引导的信号 |
 | `locale` | `string` | 否 | 页面语言 | 按钮语言，内置中英文 |
 | `labels` | `Partial<TourLabels>` | 否 | 内置文案 | 覆盖 `previous`、`next`、`done`、`skip`、`progress`；进度文案支持 `{{current}}` 和 `{{total}}` |
+| `closeOnOverlayClick` | `boolean` | 否 | `false` | 点击空白遮罩是否跳过引导；默认保持当前步骤 |
 | `waitForTarget` | `number` | 否 | `3000` | 等待目标显示的时长，单位为毫秒，不小于 0 |
 
 #### `TourStep`

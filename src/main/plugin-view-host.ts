@@ -169,6 +169,7 @@ export class SeedPluginViewHost {
     const base = 'seed-plugin://' + this.generation + '/';
     return {
       generation: this.generation,
+      installationId: this.plugin.installation_id,
       manifest: this.plugin.sdk_manifest!,
       entryUrl: base + 'main.js',
       resources: this.plugin.resources,

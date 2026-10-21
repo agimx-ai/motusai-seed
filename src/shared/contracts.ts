@@ -510,6 +510,7 @@ export type FilesystemRoot = {
 };
 
 export type SeedPluginRuntimeDefinition = {
+  installation_id?: string;
   source?: 'development';
   api_version: 2;
   has_service: boolean;

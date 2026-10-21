@@ -35,6 +35,7 @@ const stateSchema = z
         z
           .object({
             id: installedPluginIdSchema,
+            installation_id: z.string().min(1).optional(),
             active_version: installedVersionSchema,
             enabled: z.boolean(),
             versions: z.array(
@@ -268,6 +269,7 @@ export class SeedPluginInstaller {
         const record = state.plugins.find((plugin) => plugin.id === verified.manifest.id);
         const current = record?.versions.find((version) => version.version === verified.manifest.version);
         if (current?.package_sha256 === verified.packageSha256 && record) {
+          record.installation_id ??= record.versions[0]?.installed_at ?? randomUUID();
           await inspectPluginDirectory(
             await realpath(finalDirectory),
             createHash('sha256').update(verified.files.get('manifest.json')!).digest('hex'),
@@ -309,12 +311,14 @@ export class SeedPluginInstaller {
       };
       const inactive = await this.stageInactiveVersions(verified.manifest.id, verified.manifest.version);
       if (record) {
+        record.installation_id ??= record.versions[0]?.installed_at ?? randomUUID();
         record.versions = [version];
         record.active_version = version.version;
         record.enabled = options.enabled ?? record.enabled;
       } else {
         state.plugins.push({
           id: verified.manifest.id,
+          installation_id: randomUUID(),
           active_version: version.version,
           enabled: options.enabled ?? true,
           versions: [version],
@@ -475,7 +479,10 @@ export class SeedPluginInstaller {
         const { manifest } = inspected;
         if (compareSeedVersions(this.currentSeedVersion, manifest.minSeedVersion) < 0) continue;
         if (manifest.runtime.kind === 'native-host' && versionState.publisher_type !== 'official') continue;
-        plugins.push(directoryRuntimePlugin(inspected, versionState.publisher_type));
+        plugins.push({
+          ...directoryRuntimePlugin(inspected, versionState.publisher_type),
+          installation_id: pluginState.installation_id ?? pluginState.versions[0]?.installed_at,
+        });
       } catch {
         // Invalid packages never enter either the connector router or sandbox.
       }

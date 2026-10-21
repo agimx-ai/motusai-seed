@@ -33,6 +33,7 @@ export type TourOptions = {
   signal?: AbortSignal;
   locale?: string;
   labels?: Partial<TourLabels>;
+  closeOnOverlayClick?: boolean;
   waitForTarget?: number;
 };
 export type Tour = {
@@ -178,6 +179,7 @@ export function createTour(options: TourOptions): Tour {
       const target = await waitForTarget(steps[index], navigation.signal);
       if (run !== current || navigation.signal.aborted) return;
       if (!target) { finish(current, 'cancelled', 'target-missing'); return; }
+      target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
       current.index = index;
       current.target = target;
       current.busy = false;
@@ -241,6 +243,7 @@ export function createTour(options: TourOptions): Tour {
         popover.footerButtons.prepend(popover.closeButton);
       },
       onHighlighted() {
+        current.driver.refresh();
         const popover = current.driver.getState().popover as PopoverDOM | undefined;
         const overlay = current.overlay ?? document.querySelector<SVGElement>('.driver-overlay');
         const parent = popover?.wrapper.parentElement;
@@ -261,7 +264,7 @@ export function createTour(options: TourOptions): Tour {
       onNextClick: () => { if (!current.busy) void navigate(current, current.index + 1); },
       onPrevClick: () => { if (!current.busy) void navigate(current, current.index - 1); },
       onCloseClick: () => finish(current, 'skipped', 'skip'),
-      overlayClickBehavior: () => finish(current, 'skipped', 'overlay'),
+      overlayClickBehavior: () => { if (options.closeOnOverlayClick) finish(current, 'skipped', 'overlay'); },
       onDestroyed: (_element, _step, { reason }) => finish(current, 'cancelled', reason === 'replaced' ? 'replaced' : 'cancelled'),
     });
     const listen = (target: EventTarget, name: string, callback: EventListener, capture = false) => {
@@ -270,6 +273,7 @@ export function createTour(options: TourOptions): Tour {
     };
     listen(document, startEvent, () => finish(current, 'cancelled', 'replaced'));
     listen(window!, 'pagehide', () => finish(current, 'cancelled', 'unmounted'));
+    listen(document, 'scroll', () => current.driver.refresh(), true);
     listen(document, 'keydown', (event) => {
       const key = event as KeyboardEvent;
       if (key.key === 'Escape') {

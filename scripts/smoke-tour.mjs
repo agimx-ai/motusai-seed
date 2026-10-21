@@ -45,7 +45,7 @@ app.whenReady().then(async () => {
           const start = (hint) => {
             document.body.dataset.tourResult = '';
             const en = document.body.dataset.tourLocale === 'en';
-            const tour = createTour({root:this.containerEl,owner:this,locale:en?'en':'zh-CN',steps:[
+            const tour = createTour({root:this.containerEl,owner:this,locale:en?'en':'zh-CN',closeOnOverlayClick:document.body.dataset.tourOverlayClose==='true',steps:[
               {target:'#tour-feature',title:en?'New feature':'新功能',description:en?'Use this control to open the new feature. Long descriptions stay inside the window and wrap naturally without changing the page layout. '.repeat(8):'从这里打开新功能。引导样式与客户端保持一致。',beforeEnter:closeModal},
               ...hint?[]:[
                 {target:'#tour-options',title:en?'Feature options':'功能选项',description:en?'The page scrolls to the highlighted control.':'页面会滚动到高亮控件。',beforeEnter:closeModal},
@@ -154,6 +154,26 @@ app.whenReady().then(async () => {
       assert.equal(await evaluate('!!document.querySelector(".seed-tour, .driver-overlay, .driver-layer")'), false);
       await evaluate('document.querySelector("#close-tour-dialog").click()');
     }
+    await evaluate('document.querySelector("#start-hint").click()');
+    await wait('!!document.querySelector(".driver-overlay")');
+    owner.setSize(960, 800);
+    await wait('innerWidth === 960 && innerHeight === 800');
+    await settled();
+    await wait('document.querySelector(".driver-overlay")?.getAttribute("viewBox") === "0 0 " + innerWidth + " " + innerHeight');
+    await checkGeometry();
+    contents.sendInputEvent({ type: 'mouseDown', x: 4, y: 4, button: 'left', clickCount: 1 });
+    contents.sendInputEvent({ type: 'mouseUp', x: 4, y: 4, button: 'left', clickCount: 1 });
+    await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    assert.equal(await evaluate('!!document.querySelector(".seed-tour") && !document.body.dataset.tourResult'), true);
+    await evaluate('document.querySelector(".driver-popover-close-btn").click()');
+    await wait('!document.querySelector(".seed-tour, .driver-overlay")');
+    await evaluate('document.body.dataset.tourOverlayClose="true"; document.querySelector("#start-hint").click()');
+    await settled();
+    contents.sendInputEvent({ type: 'mouseDown', x: 4, y: 4, button: 'left', clickCount: 1 });
+    contents.sendInputEvent({ type: 'mouseUp', x: 4, y: 4, button: 'left', clickCount: 1 });
+    await wait('!!document.body.dataset.tourResult');
+    assert.equal(await evaluate('JSON.parse(document.body.dataset.tourResult).reason'), 'overlay');
+    await evaluate('delete document.body.dataset.tourOverlayClose');
     owner.focus(); contents.focus();
     contents.debugger.attach('1.3');
     await contents.debugger.sendCommand('Emulation.setEmulatedMedia', {
