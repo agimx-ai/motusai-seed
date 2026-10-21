@@ -10,8 +10,8 @@ vi.mock('../../../shared/plugin-bundle', async (original) => {
   return { ...actual, loadPluginBundle: async () => ({ seedPluginBundleVersion: 2, loadView: () => TestPlugin }) };
 });
 class TestTab extends PluginSettingTab {
-  display() {
-    state.display();
+  async display() {
+    await state.display();
     state.copy.mockImplementation(() => this.app.clipboard?.writeText('Plugin-owned clipboard text'));
     this.containerEl.textContent = 'Plugin-owned content';
     this.containerEl.dataset.installationId = this.app.installationId;
@@ -54,12 +54,14 @@ function fixture(id: string, styleUrl?: string) {
   } as any;
   window.motusWindow = { getPathForFile: vi.fn(), copyText: vi.fn(async () => {}) } as any;
   const error = vi.fn();
+  const loading = vi.fn();
   return {
     container,
     error,
+    loading,
     configuration,
     show: () => {
-      const release = mountPluginDom(id, container, error);
+      const release = mountPluginDom(id, container, error, loading);
       releases.push(release);
       return release;
     },
@@ -74,6 +76,28 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 describe('trusted frontend DOM mounting', () => {
+  it('keeps loading until the plugin has finished displaying its initial content', async () => {
+    const { container, loading, show } = fixture('com.example.loading');
+    let finish!: () => void;
+    state.display.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    show();
+    expect(loading).toHaveBeenLastCalledWith(true);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    expect(loading).not.toHaveBeenCalledWith(false);
+    finish();
+    await vi.waitFor(() => expect(loading).toHaveBeenLastCalledWith(false));
+    expect(container.textContent).toContain('Plugin-owned content');
+  });
+
+  it('ends loading on a real mount failure instead of spinning indefinitely', async () => {
+    const { error, loading, show } = fixture('com.example.failed');
+    const failure = new Error('Backend activation failed');
+    vi.mocked(window.motusSeed.mountPluginView).mockRejectedValueOnce(failure);
+    show();
+    await vi.waitFor(() => expect(error).toHaveBeenCalledWith(failure));
+    expect(loading.mock.calls.map(([value]) => value)).toEqual([true, false]);
+  });
+
   it('provides generic write-only clipboard access and fences it after runtime withdrawal', async () => {
     const { container, show } = fixture('com.example.clipboard');
     show();
@@ -112,7 +136,7 @@ describe('trusted frontend DOM mounting', () => {
     expect(state.load).toHaveBeenCalledTimes(1);
   });
   it('fences stale async mounting after navigation and does not reinsert detached content', async () => {
-    const { container, error, show } = fixture('com.example.race');
+    const { container, error, loading, show } = fixture('com.example.race');
     let finish!: (value: unknown) => void;
     const mounted = (window.motusSeed.mountPluginView as any).getMockImplementation();
     (window.motusSeed.mountPluginView as any).mockImplementationOnce(
@@ -129,11 +153,12 @@ describe('trusted frontend DOM mounting', () => {
     expect(container.children).toHaveLength(0);
     expect(state.display).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
+    expect(loading).not.toHaveBeenCalledWith(false);
     show();
     await vi.waitFor(() => expect(state.display).toHaveBeenCalledTimes(1));
   });
   it('replaces withdrawn stylesheet loading immediately without waiting for the old timeout', async () => {
-    const { container, configuration, error, show } = fixture('com.example.styles', 'seed-plugin://styles/styles.css');
+    const { container, configuration, error, loading, show } = fixture('com.example.styles', 'seed-plugin://styles/styles.css');
     show();
     await vi.waitFor(() =>
       expect(document.querySelector('link[href="seed-plugin://styles/styles.css"]')).not.toBeNull(),
@@ -142,26 +167,30 @@ describe('trusted frontend DOM mounting', () => {
     configuration.styleUrl = 'seed-plugin://new-styles/styles.css';
     for (const listener of [...listeners]) listener({ token, type: 'stop' });
     await vi.waitFor(() => expect(document.querySelector('link[href="seed-plugin://new-styles/styles.css"]')).not.toBeNull());
+    expect(loading).not.toHaveBeenCalledWith(false);
     document.querySelector('link[href="seed-plugin://new-styles/styles.css"]')!.dispatchEvent(new Event('load'));
     await vi.waitFor(() => expect(container.textContent).toContain('Plugin-owned content'));
     expect(error).not.toHaveBeenCalled();
     expect(document.querySelector('link[href="seed-plugin://styles/styles.css"]')).toBeNull();
     expect(state.load).toHaveBeenCalledOnce();
+    expect(loading).toHaveBeenLastCalledWith(false);
   });
 
   it('remounts an open page after update without navigation or a changed React revision', async () => {
-    const { container, configuration, error, show } = fixture('com.example.visible-update');
+    const { container, configuration, error, loading, show } = fixture('com.example.visible-update');
     show();
     await vi.waitFor(() => expect(state.display).toHaveBeenCalledOnce());
     const previousToken = token;
     configuration.generation = 'updated-generation';
     configuration.entryUrl = 'seed-plugin://updated-generation/main.js';
     for (const listener of [...listeners]) listener({ token: previousToken, type: 'stop' });
+    expect(loading).toHaveBeenLastCalledWith(true);
     await vi.waitFor(() => expect(state.display).toHaveBeenCalledTimes(2));
     expect(container.textContent).toContain('Plugin-owned content');
     expect(token).not.toBe(previousToken);
     expect(state.unload).toHaveBeenCalledOnce();
     expect(error).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(loading).toHaveBeenLastCalledWith(false));
   });
   it('replaces a withdrawn hidden generation without requiring a manual reopen', async () => {
     const { container, error, configuration, show } = fixture('com.example.reload');

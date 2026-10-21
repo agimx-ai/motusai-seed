@@ -96,6 +96,7 @@
     "localDevelopment": "Local development",
     "loadingInstalled": "Loading installed plugins",
     "loadingAvailable": "Loading available plugins",
+    "loadingView": "Loading plugin…",
     "loadFailed": "Unable to load plugins. Use Refresh in the top-right corner to try again.",
     "availableSection": "Available plugins",
     "sourceFilter": "Plugin source",

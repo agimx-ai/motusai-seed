@@ -20,7 +20,7 @@ const modules = {
   'react-dom/client': reactDOMClient,
 };
 
-type ViewLease = { withdrawn(): void };
+type ViewLease = { withdrawn(): void; loading(value: boolean): void };
 
 /** Trusted frontends share the product document; only private services use RPC. */
 class PluginDomHost {
@@ -73,6 +73,7 @@ class PluginDomHost {
         if (event.type === 'message') void peer.receive(event.message);
         else if (event.type === 'stop') {
           const lease = this.lease;
+          lease?.loading(true);
           void this.stop().then(() => lease?.withdrawn());
         } else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(String(error)));
       });
@@ -134,6 +135,7 @@ class PluginDomHost {
 
   async show(container: HTMLElement, lease: ViewLease) {
     this.lease = lease;
+    lease.loading(true);
     const configuration = await window.motusSeed.mountPluginView({ pluginId: this.pluginId, token: this.token });
     if (!configuration || this.lease !== lease || this.stopped) return true;
     if (this.generation && configuration.generation !== this.generation) {
@@ -146,6 +148,7 @@ class PluginDomHost {
       container.append(this.element);
       await this.controller!.setAppearance(configuration);
       await this.controller!.show();
+      if (this.lease === lease && !this.stopped) lease.loading(false);
       return true;
     } catch (error) {
       const withdrawn = this.stopped;
@@ -177,11 +180,19 @@ class PluginDomHost {
   }
 }
 
-export function mountPluginDom(pluginId: string, container: HTMLElement, onError: (error: unknown) => void) {
+export function mountPluginDom(
+  pluginId: string,
+  container: HTMLElement,
+  onError: (error: unknown) => void,
+  onLoadingChange?: (loading: boolean) => void,
+) {
   let host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
   sessions.set(pluginId, host);
   let active = true;
   const lease: ViewLease = {
+    loading(value) {
+      if (active) onLoadingChange?.(value);
+    },
     withdrawn() {
       if (!active) return;
       host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
@@ -202,7 +213,10 @@ export function mountPluginDom(pluginId: string, container: HTMLElement, onError
   };
   const start = () => {
     void show().catch((error) => {
-      if (active) onError(error);
+      if (active) {
+        lease.loading(false);
+        onError(error);
+      }
     });
   };
   start();
