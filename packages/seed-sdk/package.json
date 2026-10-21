@@ -1,6 +1,6 @@
 {
   "name": "@motus-ai/seed-sdk",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Public runtime, shared UI and development tools for MotusAI Seed plugins",
   "type": "commonjs",
   "license": "UNLICENSED",

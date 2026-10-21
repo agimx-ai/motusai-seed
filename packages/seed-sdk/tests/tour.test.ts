@@ -35,6 +35,7 @@ describe('scoped product tours', () => {
     const result = tour.start();
     expect(tour.start()).toBe(result);
     await shown();
+    expect(original.scrollIntoView).toHaveBeenCalledWith({ behavior: 'instant', block: 'center', inline: 'nearest' });
     expect(document.querySelector('.seed-tour')?.getAttribute('data-plugin-view-portal')).toBe('com.example.tour');
     expect(document.querySelector('.driver-popover-description')?.textContent).toBe('<img src=x onerror=alert(1)> & details');
     expect(document.querySelector('.seed-tour img')).toBeNull();
@@ -100,7 +101,7 @@ describe('scoped product tours', () => {
   });
 
   it.each(['skip', 'escape', 'overlay'] as const)('reports user exit through %s', async (reason) => {
-    const tour = createTour({ root, steps: steps() });
+    const tour = createTour({ root, steps: steps(), closeOnOverlayClick: reason === 'overlay' });
     const result = tour.start();
     await shown();
     if (reason === 'escape') document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -110,6 +111,17 @@ describe('scoped product tours', () => {
     }
     expect(await result).toMatchObject({ status: 'skipped', reason });
     expect(document.querySelector('.seed-tour, .driver-overlay')).toBeNull();
+  });
+
+  it('keeps the current step open when the overlay is clicked by default', async () => {
+    const tour = createTour({ root, steps: steps() });
+    const result = tour.start();
+    await shown();
+    document.querySelector('.driver-overlay path')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(tour.active).toBe(true);
+    expect(document.querySelector('.driver-popover-title')?.textContent).toBe('First step');
+    tour.cancel();
+    expect(await result).toMatchObject({ status: 'cancelled', reason: 'cancelled' });
   });
 
   it('cleans up owner unload, root removal and an external abort', async () => {
