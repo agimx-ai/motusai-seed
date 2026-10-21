@@ -18,6 +18,54 @@ function setup() {
 }
 
 describe('Runtime plugin catalog loading', () => {
+  it.each([false, true])('settles installation only after entitlement-triggered activation (failed: %s)', async (failed) => {
+    const runtime = setup()
+    const id = 'com.example.test'
+    const installed = { id, version: '1.1.0', enabled: true, status: 'ready', name: { en_US: 'Test', zh_Hans: 'Test' } }
+    let activate!: () => void
+    let reject!: (error: Error) => void
+    const activation = new Promise<void>((resolve, fail) => { activate = resolve; reject = fail })
+    const emit = vi.fn()
+    const completed = vi.fn()
+    Object.assign(runtime, {
+      pluginInstallOperations: new Map(),
+      installedPlugins: [installed],
+      runtimePlugins: [{ package_id: id, version: '1.1.0' }],
+      pluginReloadWork: Promise.resolve(),
+      pluginServicesReady: activation,
+      authorizedInstalledPluginIds: new Set([id]),
+      entitlementExpiresAt: Date.now() + 60_000,
+      verifiedCatalogPlugins: new Map([[id, {
+        compatible: true, publisherType: 'official', labels: [], visibility: 'public',
+        versions: [{ version: '1.1.0', runtimeKind: 'native-host' }],
+      }]]),
+      pluginInstaller: {
+        downloadAndVerify: vi.fn(async () => ({ manifest: { id, version: '1.1.0' } })),
+        install: vi.fn(async () => {}),
+        listInstalled: vi.fn(async () => [installed]),
+      },
+      store: { auditSystem: vi.fn(async () => {}) },
+      emit,
+    })
+    const work = runtime.installPlugin(id, '1.1.0')
+    void work.then(completed, () => {})
+    await vi.waitFor(() => expect(emit).toHaveBeenCalledWith(expect.objectContaining({
+      progress: expect.objectContaining({ phase: 'activating' }),
+    })))
+    expect(completed).not.toHaveBeenCalled()
+    expect(emit.mock.calls.some(([event]) => event.progress?.phase === 'completed')).toBe(false)
+    if (failed) {
+      const rejected = expect(work).rejects.toThrow('Activation failed')
+      reject(new Error('Activation failed'))
+      await rejected
+      expect(emit.mock.calls.some(([event]) => event.progress?.phase === 'completed')).toBe(false)
+    } else {
+      activate()
+      await expect(work).resolves.toBe(true)
+      expect(emit.mock.calls.some(([event]) => event.progress?.phase === 'completed')).toBe(true)
+    }
+  })
+
   it.each([
     { formalVersion: '1.1.0', developmentVersion: '0.2.0', runtimeVersion: '1.1.0', authorized: true, error: undefined },
     { formalVersion: '1.1.0', developmentVersion: '2.0.0', runtimeVersion: '2.0.0', authorized: true, error: undefined },

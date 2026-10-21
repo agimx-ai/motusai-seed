@@ -29,6 +29,8 @@ function fixture() {
   const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
     stopping: false,
     pluginReloadWork: Promise.resolve(),
+    pluginServicesReady: Promise.resolve(),
+    configureWorker: vi.fn(async () => {}),
     runtimePlugins: [one, two],
     installedPlugins: [],
     developmentPlugins: {
@@ -81,6 +83,43 @@ function fixture() {
   };
 }
 describe('one runtime with distinct plugin sources', () => {
+  it('finishes activation before completing a reload or replacing the next plugin source', async () => {
+    const h = fixture();
+    let activate!: () => void;
+    h.runtime.configureWorker.mockImplementationOnce(() => new Promise<void>((resolve) => { activate = resolve; }));
+    const completed = vi.fn();
+    const first = h.runtime.reloadPlugins().then(completed);
+    await vi.waitFor(() => expect(activate).toBeTypeOf('function'));
+    const second = h.runtime.reloadPlugins();
+    await Promise.resolve();
+    expect(completed).not.toHaveBeenCalled();
+    expect(h.runtime.developmentPlugins.refresh).toHaveBeenCalledTimes(1);
+    activate();
+    await Promise.all([first, second]);
+    expect(completed).toHaveBeenCalledOnce();
+    expect(h.runtime.developmentPlugins.refresh).toHaveBeenCalledTimes(2);
+    expect(h.runtime.configureWorker).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for existing service configuration before withdrawing its plugin sources', async () => {
+    const h = fixture();
+    let activate!: () => void;
+    h.runtime.pluginServicesReady = new Promise<void>((resolve) => { activate = resolve; });
+    const pending = h.runtime.reloadPlugins();
+    await Promise.resolve();
+    expect(h.runtime.developmentPlugins.refresh).not.toHaveBeenCalled();
+    activate();
+    await pending;
+    expect(h.runtime.configureWorker).toHaveBeenCalledOnce();
+  });
+
+  it('can discover startup sources without activating services before account state is restored', async () => {
+    const h = fixture();
+    await h.runtime.reloadPlugins(false);
+    expect(h.runtime.pluginInstaller.listInstalled).toHaveBeenCalledOnce();
+    expect(h.runtime.configureWorker).not.toHaveBeenCalled();
+  });
+
   it('withdraws the old frontend before stopping a changed service', async () => {
     const h = fixture();
     h.setDevelopment([
@@ -178,5 +217,6 @@ describe('one runtime with distinct plugin sources', () => {
     h.runtime.stopping = true;
     await h.runtime.reloadPlugins();
     expect(h.runtime.pluginInstaller.listInstalled).toHaveBeenCalledTimes(2);
+    expect(h.runtime.configureWorker).toHaveBeenCalledTimes(2);
   });
 });

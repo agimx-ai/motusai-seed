@@ -110,9 +110,6 @@ describe('trusted frontend DOM mounting', () => {
     show();
     await vi.waitFor(() => expect(state.display).toHaveBeenCalledTimes(2));
     expect(state.load).toHaveBeenCalledTimes(1);
-    for (const listener of listeners) listener({ token, type: 'stop' });
-    await vi.waitFor(() => expect(state.unload).toHaveBeenCalledTimes(1));
-    expect(container.children).toHaveLength(0);
   });
   it('fences stale async mounting after navigation and does not reinsert detached content', async () => {
     const { container, error, show } = fixture('com.example.race');
@@ -135,19 +132,36 @@ describe('trusted frontend DOM mounting', () => {
     show();
     await vi.waitFor(() => expect(state.display).toHaveBeenCalledTimes(1));
   });
-  it('cancels pending stylesheet loading and removes resources when its generation is withdrawn', async () => {
-    const { container, error, show } = fixture('com.example.styles', 'seed-plugin://styles/styles.css');
+  it('replaces withdrawn stylesheet loading immediately without waiting for the old timeout', async () => {
+    const { container, configuration, error, show } = fixture('com.example.styles', 'seed-plugin://styles/styles.css');
     show();
     await vi.waitFor(() =>
       expect(document.querySelector('link[href="seed-plugin://styles/styles.css"]')).not.toBeNull(),
     );
-    for (const listener of listeners) listener({ token, type: 'stop' });
-    await vi.waitFor(() => expect(listeners.size).toBe(0));
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    configuration.generation = 'new-styles';
+    configuration.styleUrl = 'seed-plugin://new-styles/styles.css';
+    for (const listener of [...listeners]) listener({ token, type: 'stop' });
+    await vi.waitFor(() => expect(document.querySelector('link[href="seed-plugin://new-styles/styles.css"]')).not.toBeNull());
+    document.querySelector('link[href="seed-plugin://new-styles/styles.css"]')!.dispatchEvent(new Event('load'));
+    await vi.waitFor(() => expect(container.textContent).toContain('Plugin-owned content'));
     expect(error).not.toHaveBeenCalled();
     expect(document.querySelector('link[href="seed-plugin://styles/styles.css"]')).toBeNull();
-    expect(container.children).toHaveLength(0);
-    expect(state.load).not.toHaveBeenCalled();
+    expect(state.load).toHaveBeenCalledOnce();
+  });
+
+  it('remounts an open page after update without navigation or a changed React revision', async () => {
+    const { container, configuration, error, show } = fixture('com.example.visible-update');
+    show();
+    await vi.waitFor(() => expect(state.display).toHaveBeenCalledOnce());
+    const previousToken = token;
+    configuration.generation = 'updated-generation';
+    configuration.entryUrl = 'seed-plugin://updated-generation/main.js';
+    for (const listener of [...listeners]) listener({ token: previousToken, type: 'stop' });
+    await vi.waitFor(() => expect(state.display).toHaveBeenCalledTimes(2));
+    expect(container.textContent).toContain('Plugin-owned content');
+    expect(token).not.toBe(previousToken);
+    expect(state.unload).toHaveBeenCalledOnce();
+    expect(error).not.toHaveBeenCalled();
   });
   it('replaces a withdrawn hidden generation without requiring a manual reopen', async () => {
     const { container, error, configuration, show } = fixture('com.example.reload');

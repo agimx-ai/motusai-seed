@@ -20,6 +20,8 @@ const modules = {
   'react-dom/client': reactDOMClient,
 };
 
+type ViewLease = { withdrawn(): void };
+
 /** Trusted frontends share the product document; only private services use RPC. */
 class PluginDomHost {
   readonly token = crypto.randomUUID();
@@ -30,7 +32,7 @@ class PluginDomHost {
   private generation?: string;
   private initializing?: Promise<void>;
   private releaseEvents?: () => void;
-  private lease?: object;
+  private lease?: ViewLease;
   private stopped = false;
   private readonly lifetime = new AbortController();
 
@@ -69,8 +71,10 @@ class PluginDomHost {
       this.releaseEvents = window.motusSeed.onPluginViewEvent((event) => {
         if (this.stopped || event.token !== this.token) return;
         if (event.type === 'message') void peer.receive(event.message);
-        else if (event.type === 'stop') void this.stop();
-        else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(String(error)));
+        else if (event.type === 'stop') {
+          const lease = this.lease;
+          void this.stop().then(() => lease?.withdrawn());
+        } else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(String(error)));
       });
       if (configuration.styleUrl) {
         const style = (this.style = document.createElement('link'));
@@ -128,10 +132,10 @@ class PluginDomHost {
     if (this.stopped) throw new Error('Plugin DOM runtime stopped.');
   }
 
-  async show(container: HTMLElement, lease: object) {
+  async show(container: HTMLElement, lease: ViewLease) {
     this.lease = lease;
     const configuration = await window.motusSeed.mountPluginView({ pluginId: this.pluginId, token: this.token });
-    if (this.lease !== lease || this.stopped) return true;
+    if (!configuration || this.lease !== lease || this.stopped) return true;
     if (this.generation && configuration.generation !== this.generation) {
       await this.stop();
       return false;
@@ -151,7 +155,7 @@ class PluginDomHost {
     }
   }
 
-  hide(lease: object) {
+  hide(lease: ViewLease) {
     if (this.lease !== lease || this.stopped) return;
     this.lease = undefined;
     this.element.remove();
@@ -176,8 +180,15 @@ class PluginDomHost {
 export function mountPluginDom(pluginId: string, container: HTMLElement, onError: (error: unknown) => void) {
   let host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
   sessions.set(pluginId, host);
-  const lease = {};
   let active = true;
+  const lease: ViewLease = {
+    withdrawn() {
+      if (!active) return;
+      host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
+      sessions.set(pluginId, host);
+      start();
+    },
+  };
   const show = async () => {
     // A hidden page may have missed withdrawal before subscribing. Replace that generation,
     // rather than asking the user to reopen or attempting to reuse its unloaded controller.
@@ -189,9 +200,12 @@ export function mountPluginDom(pluginId: string, container: HTMLElement, onError
     }
     if (active) throw new Error('Plugin changed while its page was opening.');
   };
-  void show().catch((error) => {
-    if (active) onError(error);
-  });
+  const start = () => {
+    void show().catch((error) => {
+      if (active) onError(error);
+    });
+  };
+  start();
   return () => {
     active = false;
     host.hide(lease);

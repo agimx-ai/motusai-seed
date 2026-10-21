@@ -157,7 +157,11 @@ export class SeedRuntime {
   private readonly sandboxHost: SeedPluginSandboxSupervisor;
   private readonly nativeHost: NativePluginManager;
   private readonly pluginViewHosts = new Map<string, SeedPluginViewHost>();
-  private readonly pluginViewMounts = new Map<BrowserWindow, { token: string; pluginId: string }>();
+  private readonly pluginViewMounts = new Map<BrowserWindow, {
+    token: string;
+    pluginId: string;
+    controller: AbortController;
+  }>();
   private stopping = false;
   private pluginReloadWork: Promise<void> = Promise.resolve();
   private pluginServicesReady: Promise<void> = Promise.resolve();
@@ -168,10 +172,7 @@ export class SeedRuntime {
           app.getVersion(),
           () => {
             void this.reloadPlugins()
-              .then(async () => {
-                this.configureWorker();
-                await this.publishSnapshot();
-              })
+              .then(() => this.publishSnapshot())
               .catch((error) => this.reportPluginViewFailure('', error));
           },
           (id, error) =>
@@ -906,7 +907,7 @@ export class SeedRuntime {
     this.localClients = await this.store.localClients();
     this.languagePreferenceChanged(this.store.languagePreference());
     this.syncPreventSystemSleep();
-    await this.reloadPlugins();
+    await this.reloadPlugins(false);
     const storedCloudSession = this.store.cloudSession();
     if (storedCloudSession && Date.parse(storedCloudSession.refreshExpiresAt) > Date.now()) {
       this.user = storedCloudSession.user;
@@ -1334,8 +1335,7 @@ export class SeedRuntime {
     this.installedPluginsStatus = 'loading';
     this.verifiedCatalogPlugins.clear();
     await pluginUpdatesStopped;
-    await this.reloadPlugins();
-    if (this.developmentPlugins) this.configureWorker();
+    await this.reloadPlugins(Boolean(this.developmentPlugins));
     this.authStatus = { status: 'signed_out' };
     this.activeTasks.clear();
     this.activeTaskIds.clear();
@@ -1687,7 +1687,6 @@ export class SeedRuntime {
       if (plugin.visibility === 'organization') this.verifiedCatalogPlugins.delete(id);
     }
     await this.reloadPlugins();
-    this.configureWorker();
     await this.publishSnapshot();
   }
 
@@ -1753,7 +1752,6 @@ export class SeedRuntime {
     // A routine renewal must not restart plugins or abort their active Cloud streams.
     if (runtimeChanged) {
       await this.reloadPlugins();
-      this.configureWorker();
     }
   }
 
@@ -2017,8 +2015,8 @@ export class SeedRuntime {
           )
         ) {
           await this.reloadPlugins();
-          this.configureWorker();
         }
+        await this.waitForPluginServices();
         const installed = (await this.pluginInstaller.listInstalled()).find(
           (candidate) => candidate.id === verified.manifest.id,
         );
@@ -2110,7 +2108,6 @@ export class SeedRuntime {
       await this.store.removePluginLocalClientAuthorizations(plugin.id);
       this.localClients = await this.store.localClients();
       await this.reloadPlugins();
-      this.configureWorker();
       uninstalledSummary = `已卸载 ${plugin.name.zh_Hans}（${plugin.version}）。`;
       uninstalledMetadata = {
         plugin_id: plugin.id,
@@ -2171,14 +2168,18 @@ export class SeedRuntime {
       this.resettingPluginData = false;
       if (this.developmentPlugins) {
         await this.reloadPlugins();
-        this.configureWorker();
       }
       await this.publishSnapshot();
     }
   }
 
-  private reloadPlugins(): Promise<void> {
-    const work = this.pluginReloadWork.catch(() => undefined).then(() => this.reloadPluginSources());
+  private reloadPlugins(activate = true): Promise<void> {
+    const work = this.pluginReloadWork.catch(() => undefined).then(async () => {
+      await this.pluginServicesReady.catch(() => undefined);
+      if (this.stopping || this.resettingPluginData) return;
+      await this.reloadPluginSources();
+      if (activate && !this.stopping) await this.configureWorker();
+    });
     this.pluginReloadWork = work;
     return work;
   }
@@ -2290,6 +2291,7 @@ export class SeedRuntime {
           loadData: (id) => this.store.loadPluginData(id),
           saveData: (id, data, revision, assertActive) => this.store.savePluginData(id, data, revision, assertActive),
           reloadService: async (id) => {
+            await this.waitForPluginServices();
             const current = this.runtimePlugins.find(
               (candidate) => candidate.package_id === id && candidate.api_version === 2 && candidate.has_service,
             );
@@ -2344,14 +2346,23 @@ export class SeedRuntime {
 
   async mountPluginView(owner: BrowserWindow, input: { pluginId: string; token: string }) {
     const previous = this.pluginViewMounts.get(owner);
+    previous?.controller.abort();
     if (previous && previous.pluginId !== input.pluginId) this.pluginViewHosts.get(previous.pluginId)?.unmount();
-    const request = { token: input.token, pluginId: input.pluginId };
+    const controller = new AbortController();
+    const request = { token: input.token, pluginId: input.pluginId, controller };
     this.pluginViewMounts.set(owner, request);
+    let cancel!: () => void;
+    const cancelled = new Promise<void>((resolve) => {
+      cancel = resolve;
+      controller.signal.addEventListener('abort', cancel, { once: true });
+    });
     try {
       // A snapshot may reach the renderer before the Connector has started the replacement services.
-      await this.waitForPluginServices();
-      if (this.stopping || owner.isDestroyed() || this.pluginViewMounts.get(owner) !== request)
-        throw new Error('Plugin view owner is no longer active.');
+      await Promise.race([this.waitForPluginServices(), cancelled]);
+      if (this.stopping || owner.isDestroyed() || this.pluginViewMounts.get(owner) !== request) {
+        if (this.pluginViewMounts.get(owner) === request) this.pluginViewMounts.delete(owner);
+        return null;
+      }
       const plugin = this.runtimePlugins.find(
         (candidate) => candidate.package_id === input.pluginId && candidate.api_version === 2,
       );
@@ -2359,8 +2370,11 @@ export class SeedRuntime {
       const host = this.ensurePluginView(plugin);
       return host.mount(owner, input.token);
     } catch (error) {
+      if (controller.signal.aborted) return null;
       if (this.pluginViewMounts.get(owner) === request) this.pluginViewMounts.delete(owner);
       throw error;
+    } finally {
+      controller.signal.removeEventListener('abort', cancel);
     }
   }
 
@@ -2374,6 +2388,7 @@ export class SeedRuntime {
     const request = this.pluginViewMounts.get(owner);
     if (!request || request.token !== token) return;
     this.pluginViewMounts.delete(owner);
+    request.controller.abort();
     this.pluginViewHosts.get(request.pluginId)?.unmount();
   }
 
@@ -2742,6 +2757,7 @@ export class SeedRuntime {
 
   async stop() {
     this.stopping = true;
+    for (const request of this.pluginViewMounts.values()) request.controller.abort();
     this.systemNotifications.clear();
     await this.pluginUpdates.stop();
     this.pluginEvents.clear();

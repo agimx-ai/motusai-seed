@@ -148,8 +148,35 @@ describe('product page DOM mounting', () => {
     runtime.pluginServicesReady = new Promise<void>((resolve) => { finish = resolve; });
     const pending = runtime.mountPluginView(owner, input);
     runtime.unmountPluginView(owner, input.token);
+    await expect(pending).resolves.toBeNull();
     finish();
-    await expect(pending).rejects.toThrow('no longer active');
+    expect(host.mount).not.toHaveBeenCalled();
+    expect(runtime.pluginViewMounts.size).toBe(0);
+  });
+
+  it('cancels superseded page requests immediately and keeps the latest owner waiting for activation', async () => {
+    const { runtime, host, owner, input, configuration } = fixture();
+    let finish!: () => void;
+    runtime.pluginServicesReady = new Promise<void>((resolve) => { finish = resolve; });
+    const first = runtime.mountPluginView(owner, input);
+    const second = runtime.mountPluginView(owner, { ...input, token: 'mount-two' });
+    await expect(first).resolves.toBeNull();
+    expect(host.mount).not.toHaveBeenCalled();
+    finish();
+    await expect(second).resolves.toEqual(configuration);
+    expect(host.mount).toHaveBeenCalledExactlyOnceWith(owner, 'mount-two');
+  });
+
+  it('reports real activation failures only to the page that still owns the mount', async () => {
+    const { runtime, host, owner, input } = fixture();
+    let fail!: (error: Error) => void;
+    runtime.pluginServicesReady = new Promise<void>((_resolve, reject) => { fail = reject; });
+    const first = runtime.mountPluginView(owner, input);
+    const second = runtime.mountPluginView(owner, { ...input, token: 'mount-two' });
+    await expect(first).resolves.toBeNull();
+    const rejected = expect(second).rejects.toThrow('Activation failed');
+    fail(new Error('Activation failed'));
+    await rejected;
     expect(host.mount).not.toHaveBeenCalled();
     expect(runtime.pluginViewMounts.size).toBe(0);
   });
