@@ -38,5 +38,6 @@ Seed 是通用插件宿主。当前代码只运行 Plugin API v2：插件以 SDK
 - 开始前检查工作区并保留已有改动；说明源码检查、自动化测试、构建、原生验收、打包和发布各自的证据。
 - 本地提交不代表正式发布；只有明确授权版本准备／发布时才升版。未经授权不打包、提交、推送、上传、部署或发布。
 - 应用名称、ID 和发现身份保持统一。构建配置来自 `MOTUSAI_*`，云服务、OAuth 回调和目录来源于签名发现文档；客户端不持有 OAuth Client Secret。
-- 发布或官网内容先读本地官网 checkout 的 `docs/release-process.md`，教程再读 `docs/guide-authoring.md`；无本地文件时使用官网仓库同名文档。本库发布记录入口为 `release-notes/README.md`。代码交付、生产发布、官网同步和频道通知分别授权、验收。
+- 客户端与 SDK 必须同版本、同次发布，SDK 未改也同步发布。版本准备与发布前完整阅读并执行 [发布说明维护](release-notes/README.md)；具体流程、配置、失败重跑与验收只在该文档维护。
+- 发布或官网内容先读本地官网 checkout 的 `docs/release-process.md`，教程再读 `docs/guide-authoring.md`；无本地文件时使用官网仓库同名文档。代码交付、生产发布、官网同步和频道通知分别授权、验收。
 - 文件末尾只保留一个换行符。Workflow YAML 使用两空格缩进和块式列表；格式化不改变语义。

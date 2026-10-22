@@ -34,6 +34,36 @@ test('publishing waits for Ubuntu packages and verifies the Linux installer and 
   }
 });
 
+test('client and SDK release gates run before drafting and publish the same SDK artifact before GitHub', async () => {
+  const workflow = parse(await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'));
+  const { scripts } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(scripts['version:check'], 'node scripts/update-client-version.mjs --check');
+  assert.equal(scripts['publish:sdk'], undefined);
+  const metadata = workflow.jobs.metadata.steps;
+  const versionCheck = metadata.findIndex((step) => step.run?.includes('npm run version:check'));
+  assert.ok(versionCheck >= 0 && versionCheck < metadata.findIndex((step) => step.name === 'Create or resume draft Release'));
+  const sdk = workflow.jobs.sdk;
+  assert.equal(sdk.needs, 'metadata');
+  assert.equal(sdk.permissions['id-token'], undefined);
+  assert.ok(sdk.steps.some((step) => step.run?.includes('npm pack --workspace @motus-ai/seed-sdk')));
+  assert.ok(!sdk.steps.some((step) => step.run?.includes('npm publish')));
+  assert.ok(sdk.steps.some((step) => step.run?.includes('sdk-release/motus-ai-seed-sdk-${RELEASE_VERSION}.tgz')));
+  const publish = workflow.jobs.publish;
+  for (const prerequisite of ['metadata', 'sdk', 'macos', 'windows', 'linux']) {
+    assert.ok(publish.needs.includes(prerequisite));
+  }
+  assert.equal(publish.permissions['id-token'], 'write');
+  const verify = publish.steps.findIndex((step) => step.name === 'Verify draft Release assets');
+  const npm = publish.steps.findIndex((step) => step.run?.includes('node scripts/publish-sdk.mjs'));
+  const github = publish.steps.findIndex((step) => step.run?.includes('--draft=false'));
+  assert.ok(verify >= 0 && npm > verify && github > npm);
+  assert.ok(publish.steps[verify].run.includes('motus-ai-seed-sdk-${RELEASE_VERSION}.tgz'));
+  assert.ok(publish.steps[npm].run.includes('gh release download'));
+  assert.ok(publish.steps[npm].run.includes('sdk-release/motus-ai-seed-sdk-${RELEASE_VERSION}.tgz'));
+  assert.equal(publish.steps[github].id, 'publication');
+  assert.equal(workflow.jobs['notify-website'].needs, 'publish');
+});
+
 test('Linux production packaging uses the locked Electron runtime and never publishes directly', async () => {
   const { scripts } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   assert.ok(scripts['package:linux'].includes('--linux deb --x64 --publish never'));

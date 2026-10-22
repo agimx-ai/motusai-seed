@@ -2,6 +2,11 @@
   "name": "@motus-ai/seed-sdk",
   "version": "0.3.3",
   "description": "Public runtime, shared UI and development tools for MotusAI Seed plugins",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agimx-ai/motusai-seed.git",
+    "directory": "packages/seed-sdk"
+  },
   "type": "commonjs",
   "license": "UNLICENSED",
   "files": [

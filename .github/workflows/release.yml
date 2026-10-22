@@ -1,4 +1,4 @@
-name: Release desktop clients
+name: Release desktop clients and SDK
 
 on:
   push:
@@ -46,11 +46,12 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate tag and package version
+      - name: Validate tag, client and SDK versions
         id: release
         shell: bash
         run: |
-          node --test scripts/verify-semver.mjs
+          node --test scripts/verify-semver.mjs scripts/verify-release-version.mjs scripts/verify-sdk-publication.mjs
+          npm run version:check
           version="$(node -p "require('./package.json').version")"
           tag="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           if [ "$tag" != "$version" ]; then
@@ -106,6 +107,39 @@ jobs:
               --notes-file website-release-notes/RELEASE_NOTES.md \
               --verify-tag
           fi
+
+  sdk:
+    name: Build SDK package
+    needs: metadata
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and pack SDK
+        run: |
+          mkdir -p sdk-release
+          npm pack --workspace @motus-ai/seed-sdk --pack-destination sdk-release
+
+      - name: Upload SDK to draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: gh release upload "$RELEASE_VERSION" "sdk-release/motus-ai-seed-sdk-${RELEASE_VERSION}.tgz" --clobber
 
   macos:
     name: Build macOS ARM64
@@ -286,21 +320,36 @@ jobs:
             --clobber
 
   publish:
-    name: Publish GitHub release
+    name: Publish SDK and GitHub release
     needs:
       - metadata
+      - sdk
       - macos
       - windows
       - linux
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      id-token: write
     outputs:
       tag: ${{ steps.publication.outputs.tag }}
 
     steps:
-      - name: Verify and publish draft Release
-        id: publication
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+      - name: Set up Node.js for npm trusted publishing
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Update npm for OIDC support
+        run: npm install --global npm@11
+
+      - name: Verify draft Release assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -320,6 +369,7 @@ jobs:
           expected=(
             RELEASE_NOTES.md
             website-release-notes.json
+            "motus-ai-seed-sdk-${RELEASE_VERSION}.tgz"
             "$mac_metadata"
             "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg"
             "MotusAI-Seed-${RELEASE_VERSION}-mac-arm64.dmg.blockmap"
@@ -345,6 +395,23 @@ jobs:
                 exit 1
               }
           done
+
+      - name: Publish the verified SDK tarball to npm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          gh release download "$RELEASE_VERSION" --pattern "motus-ai-seed-sdk-${RELEASE_VERSION}.tgz" --dir sdk-release
+          node scripts/publish-sdk.mjs "sdk-release/motus-ai-seed-sdk-${RELEASE_VERSION}.tgz"
+
+      - name: Publish GitHub Release
+        id: publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
           gh release edit "$RELEASE_VERSION" \
             --draft=false \
             --prerelease='${{ needs.metadata.outputs.prerelease }}' \
