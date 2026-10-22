@@ -1,7 +1,8 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { CircleCheck, CircleHelp, CircleX, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { Toaster as Sonner, type ToasterProps as SonnerToasterProps } from 'sonner';
 import './Toaster.css';
+import { observeToastLayout } from './toast-layout';
 
 type SonnerVariables = CSSProperties & Record<`--${string}`, string>;
 export type ToasterProps = SonnerToasterProps & { contentInsetLeft?: number };
@@ -27,8 +28,13 @@ const sonnerStyle: SonnerVariables = {
 const iconProps = { size: 14, strokeWidth: 2.1, 'aria-hidden': true as const };
 
 export function Toaster({ theme = 'system', contentInsetLeft = 0, ...props }: ToasterProps) {
+  const root = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (root.current && typeof ResizeObserver !== 'undefined') return observeToastLayout(root.current);
+  }, []);
   return (
     <Sonner
+      ref={root}
       theme={theme}
       position="top-center"
       richColors
@@ -49,18 +55,18 @@ export function Toaster({ theme = 'system', contentInsetLeft = 0, ...props }: To
           left: `calc(50% + ${contentInsetLeft / 2}px)`,
           width: 'max-content',
           maxWidth: `min(520px, calc(100vw - ${contentInsetLeft + 36}px))`,
-          height: '40px',
+          minHeight: '40px',
           padding: '6px 10px 6px 15px',
           borderRadius: '12px',
           boxShadow: 'none',
           translate: '-50% 0',
         },
         classNames: {
-          toast: 'seed-toast border font-sans',
+          toast: 'seed-toast font-sans',
           icon: 'seed-toast-icon',
           content: 'seed-toast-content max-h-[160px] overflow-y-auto overscroll-contain text-left',
-          title: 'text-[14px] font-semibold leading-5',
-          description: 'text-[12px] leading-[18px] opacity-80',
+          title: 'text-[14px]',
+          description: 'text-[12px] opacity-80',
           actionButton: 'seed-toast-action',
           cancelButton: 'seed-toast-cancel',
           closeButton: 'seed-toast-close',

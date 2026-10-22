@@ -1,58 +1,58 @@
-.seed-toast[data-styled='true'] {
+.seed-toast[data-sonner-toast][data-styled='true'] {
   gap: 0;
 }
 
 .seed-toast[data-styled='true'] .seed-toast-icon[data-icon] {
+  align-self: flex-start;
   width: 14px;
   height: 14px;
-  margin: 0 10px 0 0;
+  margin: 7px 10px 0 0;
 }
 
 .seed-toast .seed-toast-content {
   margin-right: 13px;
-  padding: 0;
 }
 
-.seed-toast .seed-toast-action,
-.seed-toast .seed-toast-cancel {
-  height: 26px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
+.seed-toast[data-styled='true'] button:is(.seed-toast-action, .seed-toast-cancel)[data-button] {
+  align-self: flex-end;
+  justify-self: end;
+  margin: 0 0 2px;
+  color: color-mix(in srgb, currentColor 70%, var(--foreground));
+  border-radius: 7px;
   line-height: 1;
 }
 
-.seed-toast[data-styled='true'] .seed-toast-action[data-button] {
+.seed-toast[data-styled='true'] button.seed-toast-action[data-button] {
   order: 3;
-  color: var(--seed-toast-action-text);
-  background: var(--seed-toast-action-bg);
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
-.seed-toast[data-styled='true'] .seed-toast-cancel[data-cancel] {
+/* Outrank Sonner's dark-theme cancel style as well as its default button style. */
+[data-sonner-toaster] .seed-toast[data-styled='true'] button.seed-toast-cancel[data-cancel] {
   order: 2;
-  margin-right: 8px;
-  color: var(--seed-toast-secondary-text);
+  margin-right: 4px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.seed-toast[data-styled='true'] .seed-toast-action[data-button]:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+[data-sonner-toaster] .seed-toast[data-styled='true'] button.seed-toast-cancel[data-cancel]:hover {
   background: color-mix(in srgb, currentColor 14%, transparent);
 }
 
-.seed-toast[data-styled='true'] .seed-toast-cancel[data-cancel],
-.seed-toast[data-styled='true'] .seed-toast-action[data-button] {
-  border-radius: 7px;
-}
-
 .seed-toast[data-styled='true'] .seed-toast-close[data-close-button] {
+  align-self: flex-start;
   position: static;
   order: 4;
   width: 28px;
   height: 28px;
   margin: 0 -4px 0 0;
-  padding: 0;
   color: currentColor;
   background: transparent !important;
   border: 0 !important;
-  border-radius: 0;
+  border-radius: 7px;
   opacity: 0.78;
   transform: none;
 }
@@ -62,12 +62,59 @@
   height: 14px;
 }
 
+.seed-toast[data-sonner-toast][data-styled='true'][data-multiline='true'] {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) max-content max-content;
+  row-gap: 8px;
+}
+
+.seed-toast[data-sonner-toast][data-styled='true'][data-multiline='true']:not(:has(.seed-toast-icon)) {
+  grid-template-columns: 0 minmax(0, 1fr) max-content max-content;
+}
+
+.seed-toast[data-multiline='true'] .seed-toast-icon {
+  grid-area: 1 / 1;
+}
+
+.seed-toast[data-multiline='true'] .seed-toast-content {
+  grid-area: 1 / 2 / 2 / -1;
+  align-self: start;
+  margin-right: 34px;
+}
+
+.seed-toast[data-multiline='true']:not(:has(.seed-toast-close)) .seed-toast-content {
+  margin-right: 0;
+}
+
+.seed-toast[data-multiline='true'] .seed-toast-close {
+  grid-area: 1 / 4;
+  justify-self: end;
+}
+
+.seed-toast[data-styled='true'][data-multiline='true'] button.seed-toast-action[data-button] {
+  grid-area: 2 / 4;
+  margin-right: -4px;
+}
+
+.seed-toast[data-multiline='true'] .seed-toast-cancel {
+  grid-area: 2 / 3;
+}
+
+.seed-toast[data-styled='true'][data-multiline='true'] button:is(.seed-toast-action, .seed-toast-cancel)[data-button] {
+  margin-bottom: 0;
+}
+
+.seed-toast[data-styled='true'][data-multiline='true']:not(:has(.seed-toast-action)) button.seed-toast-cancel[data-cancel] {
+  grid-column: 4;
+  margin-right: -4px;
+}
+
 .seed-toast[data-styled='true'] .seed-toast-close[data-close-button]:hover {
   opacity: 1;
 }
 
-.seed-toast[data-styled='true'] .seed-toast-close[data-close-button]:focus-visible,
-.seed-toast .seed-toast-action:focus-visible,
-.seed-toast .seed-toast-cancel:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 28%, transparent);
+.seed-toast[data-styled='true'] button:is(.seed-toast-action, .seed-toast-cancel, .seed-toast-close):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  box-shadow: none;
 }

@@ -21,7 +21,7 @@ describe('shared SDK notifications', () => {
     expect(document.querySelectorAll('[data-sonner-toaster]')).toHaveLength(1);
     expect(saved.getAttribute('data-type')).toBe('success');
     expect(saved.classList.contains('seed-toast')).toBe(true);
-    expect(saved.style.height).toBe('40px');
+    expect(saved.style.minHeight).toBe('40px');
 
     act(() => {
       toast.error('Plugin failed', { id: 'shared-update', description: 'Try again', duration: Infinity });
