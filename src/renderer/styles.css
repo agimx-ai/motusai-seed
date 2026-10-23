@@ -217,6 +217,46 @@
   padding-left: 48px;
 }
 
+.seed-header-breadcrumbs {
+  max-width: 100%;
+}
+
+.seed-header-breadcrumbs button {
+  position: relative;
+  isolation: isolate;
+}
+
+.seed-header-breadcrumbs button::before {
+  content: '';
+  position: absolute;
+  inset: 6px 0;
+  z-index: -1;
+  border-radius: inherit;
+  transition: inherit;
+}
+
+.seed-header-breadcrumbs button:hover::before {
+  background-color: var(--color-muted);
+}
+
+.seed-header-breadcrumb {
+  flex-shrink: 1;
+}
+
+.seed-header-breadcrumb--middle {
+  flex-shrink: 1000;
+}
+
+/* Let the browser redistribute the same header width, including for keyboard focus. */
+.seed-header-breadcrumbs:has(.seed-header-breadcrumb--middle:is(:hover, :focus-visible)) .seed-header-breadcrumb--tail {
+  flex-shrink: 1000;
+}
+
+.seed-header-breadcrumb--middle:is(:hover, :focus-visible) {
+  flex-shrink: 0;
+  max-width: calc(100% - 120px);
+}
+
 :root[data-platform='win32'] .seed-sidebar {
   padding-top: 16px;
 }

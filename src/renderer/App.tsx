@@ -24,6 +24,7 @@ import { PluginSettingsPage } from './pages/PluginSettingsPage';
 import { UsagePage } from './pages/UsagePage';
 import { countAvailablePluginUpdates } from '../shared/plugin-updates';
 import { pluginDataCleanupFeedback } from './features/plugins/plugin-data-cleanup-feedback';
+import type { PluginHeaderNavigation } from './features/plugins/plugin-navigation';
 import { userFacingErrorMessage } from './lib/errors';
 import { useSeedI18n } from './i18n';
 
@@ -51,6 +52,7 @@ export default function App() {
   const currentPluginQuery = useRef('');
   currentPluginQuery.current = pluginQuery.trim();
   const [selectedPluginId, setSelectedPluginId] = useState('');
+  const [pluginNavigation, setPluginNavigation] = useState<PluginHeaderNavigation>();
   const updatingAllPlugins = snapshot?.pluginUpdates?.running ?? false;
   const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -288,6 +290,7 @@ export default function App() {
             sidebarCollapsed={sidebarCollapsed}
             view={view}
             selectedPlugin={selectedPlugin}
+            pluginNavigation={pluginNavigation}
             refreshing={busy === 'plugin-catalog-refresh'}
             onBackToPlugins={backToPlugins}
             onRefreshPlugins={() => void refreshPlugins(true)}
@@ -326,6 +329,8 @@ export default function App() {
                 catalogLoading={catalogLoading}
                 catalogError={catalogError}
                 selectedPlugin={selectedPlugin}
+                pluginNavigation={pluginNavigation}
+                onNavigationChange={setPluginNavigation}
                 query={pluginQuery}
                 searchRef={pluginSearchRef}
                 busy={busy}

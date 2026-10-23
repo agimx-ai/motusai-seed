@@ -2,6 +2,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Plugin, PluginSettingTab, View } from '@motus-ai/seed-sdk';
 import { PluginViewController } from './plugin-view-controller';
+import type { PluginBreadcrumbState } from './plugin-navigation';
+import type { PluginNavigationHandle } from '@motus-ai/seed-sdk';
 
 const manifest = {
   id: 'com.example.custom',
@@ -18,6 +20,7 @@ function fixture() {
     status: document.createElement('footer'),
   };
   const report = vi.fn();
+  const navigation = vi.fn<(state: PluginBreadcrumbState | undefined) => void>();
   const controller = new PluginViewController(
     surface,
     {
@@ -29,11 +32,56 @@ function fixture() {
     },
     { locale: 'en-US', theme: 'light' },
     report,
+    navigation,
   );
-  return { surface, report, controller };
+  return { surface, report, controller, navigation };
 }
 
 describe('plugin view controller lifecycle', () => {
+  it('clears page navigation on settings redisplay, view switching, hide and stop', async () => {
+    const { controller, surface, navigation } = fixture();
+    const handles: PluginNavigationHandle[] = [];
+    let tab!: Tab;
+    class Tab extends PluginSettingTab {
+      display() {
+        const handle = this.app.navigation!.create({ signal: this.signal, onNavigate: vi.fn() });
+        this.register(handle.dispose);
+        handle.setPath([{ id: 'settings-detail', label: 'Settings detail' }]);
+        handles.push(handle);
+      }
+    }
+    class Extra extends View {
+      getViewType() { return 'extra'; }
+      getDisplayText() { return 'Extra'; }
+      async onOpen() {
+        const handle = this.app.navigation!.create({ signal: this.signal, onNavigate: vi.fn() });
+        handle.setPath([{ id: 'view-detail', label: 'View detail' }]);
+        handles.push(handle);
+      }
+    }
+    class Custom extends Plugin {
+      onload() {
+        this.addSettingTab(tab = new Tab(this.app, this));
+        this.registerView('extra', (host) => new Extra(this.app, host));
+      }
+    }
+    await controller.start(Custom, manifest);
+    expect(() => controller.app.navigation!.create({ signal: new AbortController().signal, onNavigate: vi.fn() })).toThrow('visible page');
+    await controller.show();
+    await tab.update();
+    expect(() => handles[0].setPath([])).toThrow('no longer active');
+    surface.toolbar.querySelectorAll('button')[1].click();
+    await vi.waitFor(() => expect(handles).toHaveLength(3));
+    expect(navigation.mock.lastCall?.[0]?.path[0].id).toBe('view-detail');
+    expect(() => handles[1].setPath([])).toThrow('no longer active');
+    await controller.hide();
+    expect(navigation).toHaveBeenLastCalledWith(undefined);
+    expect(() => handles[2].setPath([])).toThrow('no longer active');
+    await controller.show();
+    await controller.stop();
+    expect(navigation).toHaveBeenLastCalledWith(undefined);
+    expect(() => handles[3].setPath([])).toThrow('no longer active');
+  });
   it('omits redundant navigation for one settings page while preserving view choices and commands', async () => {
     const { controller, surface } = fixture();
     let plugin!: Custom;

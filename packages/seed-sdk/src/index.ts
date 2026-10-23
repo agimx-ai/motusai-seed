@@ -1,5 +1,6 @@
 export { Component, type Disposer } from './component.js';
 export { Events, type EventRef } from './events.js';
+export type { PluginBreadcrumb, PluginNavigation, PluginNavigationHandle, PluginNavigationOptions } from './navigation.js';
 export type {
   SystemNotificationOptions,
   SystemNotificationResult,

@@ -13,6 +13,7 @@ import {
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { icons } from 'lucide-react';
+import { PluginNavigationController, type PluginBreadcrumbState } from './plugin-navigation';
 
 type Surface = { toolbar: HTMLElement; content: HTMLElement; status: HTMLElement };
 type Active = { key: object; hide(): Promise<void> };
@@ -29,6 +30,7 @@ export class PluginViewController {
   private stoppingWork?: Promise<void>;
   private visible = false;
   private readonly tabButtons = new Map<PluginSettingTab, HTMLButtonElement>();
+  private readonly breadcrumbs: PluginNavigationController;
 
   private refreshTabNavigation() {
     // A sole settings page is already the active page, not an extra navigation choice.
@@ -44,7 +46,13 @@ export class PluginViewController {
     private readonly report: (error: unknown) => void = (error) => {
       toast.error(String(error));
     },
+    onNavigationChange: (state: PluginBreadcrumbState | undefined) => void = () => {},
   ) {
+    this.breadcrumbs = new PluginNavigationController(
+      () => this.visible && !!this.active && !this.stopping,
+      onNavigationChange,
+      this.report,
+    );
     const action = (title: string, callback: () => void) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -63,6 +71,7 @@ export class PluginViewController {
       };
     };
     this.app = {
+      navigation: this.breadcrumbs.api,
       ...appearance,
       ...services,
       events: new Events(),
@@ -92,6 +101,7 @@ export class PluginViewController {
             surface.content.append(containerEl);
             let view: View | undefined;
             const close = async () => {
+              if (this.active?.key === creator) this.breadcrumbs.clear();
               try {
                 await view?.unload();
               } finally {
@@ -189,6 +199,7 @@ export class PluginViewController {
     return next;
   }
   private async closeActive() {
+    this.breadcrumbs.clear();
     const active = this.active;
     this.active = undefined;
     try {
@@ -238,6 +249,7 @@ export class PluginViewController {
   }
 
   hide(): Promise<void> {
+    this.breadcrumbs.clear();
     return this.enqueue(async () => {
       this.visible = false;
       await this.closeActive();
@@ -256,6 +268,7 @@ export class PluginViewController {
   stop(): Promise<void> {
     if (this.stoppingWork) return this.stoppingWork;
     this.stopping = true;
+    this.breadcrumbs.clear();
     this.stoppingWork = (async () => {
       await this.navigation.catch(this.report);
       try {

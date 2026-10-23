@@ -4,7 +4,7 @@ import { Plugin, PluginSettingTab } from '@motus-ai/seed-sdk';
 import type { PluginViewEvent } from '../../../shared/plugin-view';
 import { mountPluginDom } from './plugin-dom-host';
 
-const state = vi.hoisted(() => ({ load: vi.fn(), unload: vi.fn(), display: vi.fn(), hide: vi.fn(), copy: vi.fn() }));
+const state = vi.hoisted(() => ({ load: vi.fn(), unload: vi.fn(), display: vi.fn(), hide: vi.fn(), copy: vi.fn(), navigation: vi.fn() }));
 vi.mock('../../../shared/plugin-bundle', async (original) => {
   const actual = await original<typeof import('../../../shared/plugin-bundle')>();
   return { ...actual, loadPluginBundle: async () => ({ seedPluginBundleVersion: 2, loadView: () => TestPlugin }) };
@@ -15,6 +15,10 @@ class TestTab extends PluginSettingTab {
     state.copy.mockImplementation(() => this.app.clipboard?.writeText('Plugin-owned clipboard text'));
     this.containerEl.textContent = 'Plugin-owned content';
     this.containerEl.dataset.installationId = this.app.installationId;
+    const navigation = this.app.navigation!.create({ signal: this.signal, onNavigate: vi.fn() });
+    navigation.setPath([{ id: 'detail', label: 'Detail' }]);
+    this.register(navigation.dispose);
+    state.navigation(navigation);
     this.register(state.hide);
   }
 }
@@ -55,13 +59,15 @@ function fixture(id: string, styleUrl?: string) {
   window.motusWindow = { getPathForFile: vi.fn(), copyText: vi.fn(async () => {}) } as any;
   const error = vi.fn();
   const loading = vi.fn();
+  const navigation = vi.fn();
   return {
     container,
     error,
     loading,
     configuration,
+    navigation,
     show: () => {
-      const release = mountPluginDom(id, container, error, loading);
+      const release = mountPluginDom(id, container, error, loading, navigation);
       releases.push(release);
       return release;
     },
@@ -76,6 +82,28 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 describe('trusted frontend DOM mounting', () => {
+  it('publishes only the visible lease navigation and fences hidden and reloaded generations', async () => {
+    const { show, navigation, configuration } = fixture('com.example.navigation');
+    const hide = show();
+    await vi.waitFor(() => expect(navigation.mock.lastCall?.[0]?.path[0]?.id).toBe('detail'));
+    expect(navigation.mock.lastCall?.[0]?.pluginId).toBe('com.example.navigation');
+    const first = state.navigation.mock.lastCall![0];
+    hide();
+    expect(navigation).toHaveBeenLastCalledWith(undefined);
+    await vi.waitFor(() => expect(state.hide).toHaveBeenCalledOnce());
+    expect(() => first.setPath([])).toThrow('no longer active');
+    show();
+    await vi.waitFor(() => expect(state.navigation).toHaveBeenCalledTimes(2));
+    const second = state.navigation.mock.lastCall![0];
+    configuration.generation = 'reloaded-navigation';
+    for (const listener of [...listeners]) listener({ token, type: 'stop' });
+    expect(navigation).toHaveBeenLastCalledWith(undefined);
+    await vi.waitFor(() => expect(state.navigation).toHaveBeenCalledTimes(3));
+    const current = navigation.mock.lastCall![0];
+    expect(() => second.setPath([])).toThrow('no longer active');
+    second.dispose();
+    expect(navigation.mock.lastCall![0]).toBe(current);
+  });
   it('keeps loading until the plugin has finished displaying its initial content', async () => {
     const { container, loading, show } = fixture('com.example.loading');
     let finish!: () => void;

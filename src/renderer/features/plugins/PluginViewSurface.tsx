@@ -2,9 +2,14 @@ import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { mountPluginDom } from './plugin-dom-host';
+import type { PluginHeaderNavigation } from './plugin-navigation';
 
 /** A normal document child: the browser owns its height, clipping and scrolling. */
-export function PluginViewSurface({ pluginId, revision }: { pluginId: string; revision?: string }) {
+export function PluginViewSurface({ pluginId, revision, onNavigationChange }: {
+  pluginId: string;
+  revision?: string;
+  onNavigationChange?: (navigation: PluginHeaderNavigation | undefined) => void;
+}) {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
@@ -19,8 +24,9 @@ export function PluginViewSurface({ pluginId, revision }: { pluginId: string; re
         setLoading(value);
         if (value) setError('');
       },
+      onNavigationChange,
     );
-  }, [pluginId, revision]);
+  }, [pluginId, revision, onNavigationChange]);
   return (
     <div data-plugin-view-surface aria-busy={loading} className="min-w-0 shrink-0">
       {loading && (

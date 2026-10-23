@@ -16,6 +16,7 @@ import type {
 } from './index.js';
 import type { CapabilityDefinition, CapabilityRegistration } from './capability.js';
 import type { PluginSettingTab, View, ViewHost } from './dom.js';
+import type { PluginNavigation } from './navigation.js';
 import { createPluginI18n, type PluginTranslations } from './i18n.js';
 import type { i18n } from 'i18next';
 import { SeedPluginError } from './error.js';
@@ -42,6 +43,8 @@ export type Command = {
 };
 
 export type App = {
+  /** Available in clients supporting plugin-owned header breadcrumbs. Feature-detect on older clients. */
+  navigation?: PluginNavigation;
   /** Stable across package updates; changes after uninstall and reinstall. Undefined for local development sources. */
   installationId?: string;
   /** View registrations belong to this plugin's DOM container, not a global desktop workspace. */

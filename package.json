@@ -33,6 +33,7 @@
     "smoke:plugin-host": "npm run build && electron scripts/smoke-plugin-host.mjs",
     "smoke:native-isolation": "npm run build && electron scripts/smoke-native-isolation.mjs",
     "smoke:plugin-sdk": "npm run build && electron scripts/smoke-plugin-sdk.mjs",
+    "smoke:plugin-navigation": "npm run build && electron scripts/smoke-plugin-navigation.mjs",
     "smoke:tour": "npm run build && electron scripts/smoke-tour.mjs",
     "smoke:plugin-events": "npm run build && electron scripts/smoke-plugin-events.mjs",
     "smoke:plugin-development": "npm run build && node scripts/smoke-plugin-development.mjs",

@@ -144,6 +144,7 @@ await buildPlugin({
 | `files?.pick(options?)` | `Promise<string[]>` | 选择文件，取消返回 `[]` |
 | `files?.path(file)` | `string` | 获取 `File` 的本地路径 |
 | `clipboard?.writeText(text)` | `Promise<void>` | 写入剪贴板 |
+| `navigation?.create(options)` | `PluginNavigationHandle` | 为当前显示页面创建头部多级面包屑和返回句柄 |
 
 ### `PluginService`
 
@@ -283,6 +284,39 @@ export default class GreetingService extends PluginService {
 | `DropdownComponent` | `addOption(value, label)`、`addOptions(record)`、`setValue(string)` | `this`；`getValue()` 返回 `string` |
 | `SliderComponent` | `setLimits(min, max, step)`、`setValue(number)`、`onChange(callback)` | `this`；`getValue()` 返回 `number` |
 | `ButtonComponent` | `setButtonText(text)`、`setTooltip(text)`、`setCta()`、`setWarning()`、`onClick(callback)` | `this` |
+
+---
+
+### `navigation`
+
+设置当前插件页面的头部面包屑，通过 `this.app.navigation` 使用。不支持该接口的客户端中，`navigation` 为 `undefined`。
+
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `create(options)` | `PluginNavigationOptions`，在页面显示时创建 | `PluginNavigationHandle` |
+
+#### `PluginNavigationOptions`
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `signal` | `AbortSignal` | 是 | 页面或组件的取消信号，取消时释放导航句柄 |
+| `onNavigate` | `(id: string \| null, signal: AbortSignal) => void \| boolean \| Promise<void \| boolean>` | 是 | 切换到指定上级页面；`null` 表示插件首页，返回 `false` 取消本次导航 |
+
+#### `PluginNavigationHandle`
+
+| 方法 | 参数 | 返回值 |
+| --- | --- | --- |
+| `setPath(path)` | `readonly PluginBreadcrumb[]`，空数组表示插件首页 | `void` |
+| `back()` | 无，返回上一级 | `Promise<boolean>` |
+| `dispose()` | 无，释放句柄，可重复调用 | `void` |
+
+路径不包含头部已有的「插件」和插件名称。上级层级可点击，最后一项表示当前页面；页面切换由 `onNavigate` 回调处理。
+
+路径非空时收起插件信息区，显示当前子页面；返回插件首页或调用 `setPath([])` 时恢复插件信息。
+
+导航成功后，路径保留到目标层级；回调中调用 `setPath()` 时使用新的路径。回调执行期间忽略重复导航，失败时保留当前路径；`back()` 在插件首页、忙碌、句柄已释放或回调返回 `false` 时返回 `false`，回调异常时拒绝 Promise。
+
+新句柄替换旧句柄。页面隐藏、切换视图或插件重新加载后，原句柄失效。设置页中通过 `this.register(navigation.dispose)` 注册清理；React 页面在 effect 清理时调用 `dispose()`。回调中的异步操作应传递或检查取消信号。
 
 ---
 
@@ -732,6 +766,15 @@ export type PluginEvent<T = unknown> = {
 };
 ```
 
+### `PluginBreadcrumb`
+
+```ts
+export type PluginBreadcrumb = {
+  readonly id: string;    // 层级 ID，非空且在当前路径中唯一
+  readonly label: string; // 显示名称，不能为空
+};
+```
+
 ### `SelectControlOption<Value>`
 
 ```ts
@@ -987,6 +1030,47 @@ class TourSettings extends PluginSettingTab {
 export default class TourPlugin extends Plugin {
   onload() {
     this.addSettingTab(new TourSettings(this.app, this));
+  }
+}
+```
+
+### 头部面包屑与返回
+
+```ts
+import { Plugin, PluginSettingTab, Setting } from '@motus-ai/seed-sdk';
+
+class NavigationSettings extends PluginSettingTab {
+  display() {
+    const output = document.createElement('p');
+    output.textContent = '条目详情';
+    this.containerEl.append(output);
+
+    const navigation = this.app.navigation?.create({
+      signal: this.signal,
+      onNavigate: (id, signal) => {
+        signal.throwIfAborted();
+        output.textContent = id === null ? '插件首页' : '条目列表';
+      },
+    });
+    if (navigation) this.register(navigation.dispose);
+
+    navigation?.setPath([
+      { id: 'items', label: '条目列表' },
+      { id: 'detail', label: '条目详情' },
+    ]);
+
+    this.addChild(new Setting(this.containerEl).setName('页面导航'))
+      .addButton((button) => {
+        button.setButtonText('返回上一级').setDisabled(!navigation).onClick(async () => {
+          await navigation?.back();
+        });
+      });
+  }
+}
+
+export default class NavigationPlugin extends Plugin {
+  onload() {
+    this.addSettingTab(new NavigationSettings(this.app, this));
   }
 }
 ```

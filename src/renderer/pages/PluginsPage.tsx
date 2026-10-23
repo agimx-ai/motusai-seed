@@ -24,6 +24,7 @@ import { pluginMcpTools } from '../features/plugins/mcp-tools';
 import { isCatalogPluginInstallable } from '../../shared/plugin-updates';
 import { compareSeedVersions } from '../../shared/seed-version';
 import { PluginViewSurface } from '../features/plugins/PluginViewSurface';
+import type { PluginHeaderNavigation } from '../features/plugins/plugin-navigation';
 import { useSeedI18n } from '../i18n';
 
 function searchableText(value: SeedLocalizedText) {
@@ -39,6 +40,7 @@ type PluginsPageProps = {
   catalogLoading: boolean;
   catalogError?: string;
   selectedPlugin?: SeedInstalledPlugin | SeedCatalogPlugin;
+  pluginNavigation?: PluginHeaderNavigation;
   query: string;
   searchRef: RefObject<HTMLInputElement | null>;
   busy: string;
@@ -54,6 +56,7 @@ type PluginsPageProps = {
   onInstall: (id: string, version: string) => void;
   onCancelInstall: (id: string) => void;
   onUninstall: (id: string) => void;
+  onNavigationChange?: (navigation: PluginHeaderNavigation | undefined) => void;
 };
 
 export function PluginsPage({
@@ -65,6 +68,7 @@ export function PluginsPage({
   catalogLoading,
   catalogError,
   selectedPlugin,
+  pluginNavigation,
   query,
   searchRef,
   busy,
@@ -80,6 +84,7 @@ export function PluginsPage({
   onInstall,
   onCancelInstall,
   onUninstall,
+  onNavigationChange,
 }: PluginsPageProps) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
@@ -114,6 +119,9 @@ export function PluginsPage({
   }, [hasOrganizationPlugins, sourceFilter]);
   const visiblePlugins = sourcePlugins.filter(matches);
   const selectedInstalledPlugin = selectedPlugin && 'source' in selectedPlugin ? selectedPlugin : undefined;
+  const isPluginSubpage = selectedInstalledPlugin?.status === 'ready'
+    && pluginNavigation?.pluginId === selectedInstalledPlugin.id
+    && pluginNavigation.path.length > 0;
   const selectedCatalogPlugin = selectedPlugin
     ? (catalogPlugins.find((plugin) => plugin.id === selectedPlugin.id) ??
       (!('source' in selectedPlugin) ? selectedPlugin : undefined))
@@ -183,7 +191,7 @@ export function PluginsPage({
     return (
       <>
         <section className="mx-auto flex min-h-full w-full max-w-[730px] flex-col animate-[rise_.25s_ease_both]">
-          <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-4 bg-background pb-6 pt-4">
+          <div data-plugin-information hidden={isPluginSubpage} className="sticky top-0 z-10 grid shrink-0 grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-4 bg-background pb-6 pt-4">
             {selectedInstalledPlugin ? (
               <PluginMark plugin={selectedInstalledPlugin} large />
             ) : selectedCatalogPlugin ? (
@@ -276,10 +284,11 @@ export function PluginsPage({
             <PluginViewSurface
               revision={selectedInstalledPlugin.manifestDigest}
               pluginId={selectedInstalledPlugin.id}
+              onNavigationChange={onNavigationChange}
             />
           )}
           {selectedLatestRelease?.releaseNotes && (
-            <section className="mt-8">
+            <section hidden={isPluginSubpage} className="mt-8">
               <div>
                 <h3 className="m-0 text-[17px] font-medium">{t('plugins.releaseNotes')}</h3>
                 <p className="mb-0 mt-1 text-[12px] leading-5 text-muted-foreground">

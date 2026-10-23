@@ -8,6 +8,7 @@ import * as reactDOMClient from 'react-dom/client';
 import { loadPluginBundle, pluginViewConstructor } from '../../../shared/plugin-bundle';
 import type { PluginViewConfiguration } from '../../../shared/plugin-view';
 import { PluginViewController } from './plugin-view-controller';
+import type { PluginHeaderNavigation } from './plugin-navigation';
 
 const sessions = new Map<string, PluginDomHost>();
 const modules = {
@@ -20,7 +21,11 @@ const modules = {
   'react-dom/client': reactDOMClient,
 };
 
-type ViewLease = { withdrawn(): void; loading(value: boolean): void };
+type ViewLease = {
+  withdrawn(): void;
+  loading(value: boolean): void;
+  navigation(value: PluginHeaderNavigation | undefined): void;
+};
 
 /** Trusted frontends share the product document; only private services use RPC. */
 class PluginDomHost {
@@ -120,6 +125,8 @@ class PluginDomHost {
           service: { call: (method, args, signal) => peer.call('service.' + method, args, signal) },
         },
         configuration,
+        undefined,
+        (state) => this.lease?.navigation(state ? { ...state, pluginId: this.pluginId } : undefined),
       ));
       const bundle = await loadPluginBundle(configuration.entryUrl);
       this.assertActive();
@@ -160,6 +167,7 @@ class PluginDomHost {
 
   hide(lease: ViewLease) {
     if (this.lease !== lease || this.stopped) return;
+    lease.navigation(undefined);
     this.lease = undefined;
     this.element.remove();
     void window.motusSeed.unmountPluginView(this.token);
@@ -169,6 +177,7 @@ class PluginDomHost {
   async stop() {
     if (this.stopped) return;
     this.stopped = true;
+    this.lease?.navigation(undefined);
     this.lifetime.abort(new Error('Plugin DOM runtime stopped.'));
     this.lease = undefined;
     this.releaseEvents?.();
@@ -185,11 +194,15 @@ export function mountPluginDom(
   container: HTMLElement,
   onError: (error: unknown) => void,
   onLoadingChange?: (loading: boolean) => void,
+  onNavigationChange?: (navigation: PluginHeaderNavigation | undefined) => void,
 ) {
   let host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
   sessions.set(pluginId, host);
   let active = true;
   const lease: ViewLease = {
+    navigation(value) {
+      if (active) onNavigationChange?.(value);
+    },
     loading(value) {
       if (active) onLoadingChange?.(value);
     },
@@ -221,6 +234,7 @@ export function mountPluginDom(
   };
   start();
   return () => {
+    lease.navigation(undefined);
     active = false;
     host.hide(lease);
   };
