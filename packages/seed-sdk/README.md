@@ -289,7 +289,7 @@ export default class GreetingService extends PluginService {
 
 ### `navigation`
 
-设置当前插件页面的头部面包屑，通过 `this.app.navigation` 使用。不支持该接口的客户端中，`navigation` 为 `undefined`。
+设置当前插件页面的头部面包屑，通过 `this.app.navigation` 使用。需要 MotusAI Seed 和 Seed SDK `0.3.10` 或更新版本；不支持该接口的客户端中，`navigation` 为 `undefined`。
 
 | 方法 | 参数 | 返回值 |
 | --- | --- | --- |
