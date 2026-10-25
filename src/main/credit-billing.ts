@@ -18,6 +18,7 @@ const invocationSchema = z.discriminatedUnion('billable', [
 export type BillingPreparation = z.infer<typeof invocationSchema>;
 const personalWalletSchema = z.object({
   available: z.number().refine(isCreditAmount),
+  total: z.number().nonnegative().refine(isCreditAmount).optional(),
 });
 export type PersonalCreditWallet = z.infer<typeof personalWalletSchema>;
 const personalCreditGrantPageSchema = z.object({

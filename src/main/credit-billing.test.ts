@@ -43,6 +43,18 @@ describe('Cloud relay request limits', () => {
 })
 
 describe('personal credit wallet', () => {
+  it('preserves the authoritative total returned with the existing wallet response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ available: 75.25, total: 100 })));
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token');
+    await expect(client.personalWallet()).resolves.toEqual({ available: 75.25, total: 100 });
+  });
+
+  it('rejects an invalid total instead of displaying a fabricated percentage', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ available: 75, total: -10 })));
+    const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token');
+    await expect(client.personalWallet()).rejects.toThrow();
+  });
+
   it('accepts a wallet balance with two decimal places', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ available: 999.99 })))
     const client = new CreditBillingClient('https://cloud.example.com', async () => 'access-token')

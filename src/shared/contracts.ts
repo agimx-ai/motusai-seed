@@ -370,7 +370,7 @@ export type SeedApi = {
   listOrphanedPluginData(): Promise<string[]>;
   resetOrphanedPluginData(pluginIds: string[]): Promise<PluginDataResetResult>;
   snapshot(): Promise<SeedSnapshot>;
-  personalCreditWallet(): Promise<{ available: number }>;
+  personalCreditWallet(): Promise<{ available: number; total?: number }>;
   personalCreditGrants(cursor?: string): Promise<PersonalCreditGrantPage>;
   signIn(): Promise<void>;
   cancelSignIn(): Promise<void>;

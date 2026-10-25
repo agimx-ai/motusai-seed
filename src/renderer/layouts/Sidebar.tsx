@@ -1,21 +1,11 @@
-import {
-  Bell,
-  Blocks,
-  CircleGauge,
-  CircleHelp,
-  History,
-  LoaderCircle,
-  LogOut,
-  Settings,
-  Sprout,
-  X,
-} from 'lucide-react';
+import { Bell, Blocks, CircleGauge, History, LoaderCircle, LogOut, Settings, Sprout, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SeedSnapshot } from '../../shared/contracts';
 import { NavItem } from '../components/NavItem';
 import { UserAvatar } from '../components/UserAvatar';
 import { SidebarToggleButton } from '../components/SidebarToggleButton';
+import { CreditUsageButton } from '../components/CreditUsageButton';
 import { Tooltip } from '@motus-ai/seed-sdk/react';
 import { cx, isSettingsView, type View } from '../lib/display';
 import { SettingsNavigation } from './SettingsNavigation';
@@ -34,7 +24,6 @@ type SidebarProps = {
   onLogout: () => void;
   onDownloadUpdate: () => void;
   onInstallUpdate: () => void;
-  onOpenWebsite: () => void;
   onOpenPersonalWallet: () => void;
   onToggle: () => void;
 };
@@ -50,7 +39,6 @@ export function Sidebar({
   onLogout,
   onDownloadUpdate,
   onInstallUpdate,
-  onOpenWebsite,
   onOpenPersonalWallet,
   onToggle,
 }: SidebarProps) {
@@ -59,6 +47,7 @@ export function Sidebar({
   const [personalWallet, setPersonalWallet] = useState<{
     userId: string;
     available: number | null;
+    total: number | null;
     unavailable: boolean;
   } | null>(null);
   const [dismissedLowCredits, setDismissedLowCredits] = useState<{ userId: string; balance: number } | null>(null);
@@ -94,10 +83,11 @@ export function Sidebar({
         .personalCreditWallet()
         .then((wallet) => {
           if (active && request === requestNumber)
-            setPersonalWallet({ userId, available: wallet.available, unavailable: false });
+            setPersonalWallet({ userId, available: wallet.available, total: wallet.total ?? null, unavailable: false });
         })
         .catch(() => {
-          if (active && request === requestNumber) setPersonalWallet({ userId, available: null, unavailable: true });
+          if (active && request === requestNumber)
+            setPersonalWallet({ userId, available: null, total: null, unavailable: true });
         });
     };
     const refreshWhenVisible = () => {
@@ -351,10 +341,9 @@ export function Sidebar({
                   snapshot={snapshot}
                   onDownload={onDownloadUpdate}
                   onInstall={onInstallUpdate}
-                  onWebsite={() => {
-                    setAccountMenuOpen(false);
-                    onOpenWebsite();
-                  }}
+                  available={personalBalance}
+                  total={currentWallet?.total ?? null}
+                  onUsage={() => navigate('usage')}
                 />
               </div>
             </div>
@@ -369,12 +358,16 @@ function UpdateControl({
   snapshot,
   onDownload,
   onInstall,
-  onWebsite,
+  available,
+  total,
+  onUsage,
 }: {
   snapshot: SeedSnapshot;
   onDownload: () => void;
   onInstall: () => void;
-  onWebsite: () => void;
+  available: number | null;
+  total: number | null;
+  onUsage: () => void;
 }) {
   const { t } = useTranslation();
   const update = snapshot.update;
@@ -425,16 +418,5 @@ function UpdateControl({
       </Tooltip>
     );
   }
-  return (
-    <Tooltip content={t('common.help')}>
-      <button
-        className="grid h-8 w-8 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-[var(--sidebar-item-active)] hover:text-foreground focus-visible:bg-[var(--sidebar-item-active)] focus-visible:text-foreground focus-visible:outline-none"
-        type="button"
-        onClick={onWebsite}
-        aria-label={t('common.help')}
-      >
-        <CircleHelp size={16} />
-      </button>
-    </Tooltip>
-  );
+  return <CreditUsageButton available={available} total={total} onClick={onUsage} />;
 }

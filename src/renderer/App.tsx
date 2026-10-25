@@ -281,7 +281,6 @@ export default function App() {
           onLogout={() => void run('logout', (api) => api.logout())}
           onDownloadUpdate={() => void run('update-download', (api) => api.downloadUpdate())}
           onInstallUpdate={() => void run('update-install', (api) => api.installUpdate())}
-          onOpenWebsite={() => void run('open-website', (api) => api.openWebsite())}
           onOpenPersonalWallet={() => void run('open-personal-wallet', (api) => api.openPersonalWallet())}
           onToggle={() => setSidebarCollapsed(true)}
         />
