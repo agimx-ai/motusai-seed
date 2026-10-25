@@ -57,6 +57,7 @@ async function call(operation: NativePluginOperation, signal: AbortSignal) {
           { ...operation.invocation, signal },
           operation.chain,
           operation.trace,
+          operation.invocation_scope_id,
         );
       return await (operation.include_billing ? host.withBillingReceipt(invoke) : invoke());
     }

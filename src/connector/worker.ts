@@ -142,6 +142,7 @@ async function handleCommand(command: WorkerCommand) {
                 command.packageId,
                 { ...command.invocation, signal: controller.signal },
                 command.chain,
+                command.invocation_scope_id,
               ),
             );
       emit({ type: 'plugin.capability.result', requestId: command.requestId, ok: true, result });

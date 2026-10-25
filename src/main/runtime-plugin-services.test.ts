@@ -10,10 +10,11 @@ vi.mock('electron', () => ({
   powerSaveBlocker: {},
   shell: {},
   ipcMain: {},
-  session: {},
+  session: { defaultSession: { resolveProxy: vi.fn(async () => 'PROXY 127.0.0.1:7890') } },
 }));
 vi.mock('./updater', () => ({ SeedUpdater: class {} }));
 import { SeedRuntime } from './runtime';
+import { session } from 'electron';
 
 function fixture(kind = 'sandboxed-web') {
   const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
@@ -44,6 +45,15 @@ function fixture(kind = 'sandboxed-web') {
   return { runtime, call };
 }
 describe('generic plugin SDK brokers', () => {
+  it('resolves OS proxy routes only for active plugins with network permission, without forwarding URL secrets', async () => {
+    const { runtime, call } = fixture('native-host');
+    await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://example.com' })).rejects.toMatchObject({ code: 'broker_permission_denied' });
+    runtime.runtimePlugins[0].permissions = ['network.connect.internet'];
+    await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://example.com/path?token=private' })).resolves.toEqual({ proxy: 'PROXY 127.0.0.1:7890' });
+    expect(session.defaultSession.resolveProxy).toHaveBeenCalledWith('https://example.com');
+    await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://user:secret@example.com' })).rejects.toThrow('without credentials');
+    await expect(call('one', 'seed.network.resolve-proxy', { url: 'file:///tmp/private' })).rejects.toThrow('HTTP(S)');
+  });
   it.each(['native-host', 'sandboxed-web'])('routes notification identity, permission and optional navigation for %s', async (kind) => {
     const { runtime, call } = fixture(kind);
     runtime.runtimePlugins[0].permissions = ['system.notifications'];
@@ -156,6 +166,7 @@ describe('generic plugin SDK brokers', () => {
   it('keeps the originating trace when the native broker routes a consumed capability', async () => {
     const { runtime } = fixture('native-host');
     const trace = { trace_id: 'request-trace', span_id: 'broker-span' };
+    const scopeId = crypto.randomUUID();
     await Reflect.get(runtime, 'invokePluginBroker').call(
       runtime,
       'com.example.one',
@@ -163,6 +174,7 @@ describe('generic plugin SDK brokers', () => {
       {
         call_id: crypto.randomUUID(),
         invocation: { capability: 'probe', method: 'read', arguments: {} },
+        invocation_scope_id: scopeId,
       },
       undefined,
       trace,
@@ -173,6 +185,7 @@ describe('generic plugin SDK brokers', () => {
       [],
       expect.any(AbortSignal),
       trace,
+      scopeId,
     );
   });
   it('reports owned tasks once and cleans only that plugin on reload or process loss', async () => {

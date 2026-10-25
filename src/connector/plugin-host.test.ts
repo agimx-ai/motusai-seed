@@ -98,6 +98,34 @@ function runtime(
 }
 const request = (value: unknown = 'ok') => ({ request_id: crypto.randomUUID(), arguments: { value } });
 
+async function routedRuntime(plugins: SeedPluginRuntimeDefinition[], broker: (service: string, args: any) => Promise<unknown>) {
+  const locals = new Map<string, SeedPluginHost>();
+  let central!: SeedPluginHost;
+  for (const plugin of plugins) {
+    const local = new SeedPluginHost({
+      configuration: () => ({ locale: 'en-US', pluginDataRoot: roots[0], plugins: [plugin] }) as never,
+      invoke_host: async (service, args) => {
+        if (service === 'seed.capabilities.invoke') return central.invokeConsumedByPackage(plugin.package_id, args.invocation as never, args.chain as string[], args.invocation_scope_id as string | undefined);
+        if (service === 'seed.capabilities.list') return central.consumedCapabilitiesByPackage(plugin.package_id);
+        return broker(service, args);
+      },
+    }, undefined, 'local', () => {});
+    hosts.push(local);
+    await local.start([plugin]);
+    locals.set(plugin.package_id, local);
+  }
+  central = new SeedPluginHost({ configuration: () => ({ plugins }) as never, invoke_host: async (service, args) => {
+    const local = locals.get(String(args.package_id));
+    if (service === 'seed.native.start') return local!.runtimeSnapshot(String(args.package_id));
+    if (service === 'seed.native.invoke') return local!.invokeNativeWithChain(String(args.capability), String(args.method), args.invocation as never, args.chain as string[], args.trace as never, args.invocation_scope_id as string | undefined);
+    if (service === 'seed.native.stop') return null;
+    return broker(service, args);
+  } }, undefined, 'remote');
+  hosts.push(central);
+  await central.start(plugins);
+  return central;
+}
+
 describe('class-only service lifecycle', () => {
   it('correlates capture with the actual invocation task and ignores plugin-authored activity IDs', async () => {
     const plugin = await fixture('capture', `
@@ -141,7 +169,7 @@ describe('class-only service lifecycle', () => {
       ),
     ).resolves.toEqual({ value: 'ready' });
   });
-  it('blocks cross-process consumption cycles even when callers have independent async contexts, then releases the edge', async () => {
+  it('keeps independent concurrent requests separate from genuine cross-process call cycles', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -153,12 +181,11 @@ describe('class-only service lifecycle', () => {
       [capability('b')],
       { consumes: [{ capability: 'a', methods: ['echo'] }] },
     );
-    const broker = vi.fn(async (service: string) => {
+    const broker = vi.fn(async (service: string, _args: any) => {
       if (service === 'probe.wait') await gate;
       return null;
     });
-    const { host } = runtime(broker);
-    await host.start([a, b]);
+    const host = await routedRuntime([a, b], broker);
     const pending = host.invokeConsumedByPackage(
       a.package_id,
       { capability: 'b', method: 'echo', arguments: { value: 'ok' } },
@@ -167,7 +194,7 @@ describe('class-only service lifecycle', () => {
     await vi.waitFor(() => expect(broker).toHaveBeenCalledWith('probe.wait', expect.any(Object)));
     await expect(
       host.invokeConsumedByPackage(b.package_id, { capability: 'a', method: 'echo', arguments: { value: 'ok' } }, []),
-    ).rejects.toMatchObject({ code: 'capability_cycle' });
+    ).resolves.toEqual({ value: 'ok' });
     release();
     expect(await pending).toEqual({ value: 'ok' });
     expect(
@@ -177,6 +204,46 @@ describe('class-only service lifecycle', () => {
         [],
       ),
     ).toEqual({ value: 'ok' });
+  });
+
+  it('blocks an awaited cross-process A -> B -> A call and audits the rejection', async () => {
+    const a = await fixture('a', undefined, [capability('a')], { consumes: [{ capability: 'b', methods: ['echo'] }] });
+    const b = await fixture('b', `this.addCapability(definitions[0], { invoke: async (_method, request) => this.app.capabilities.invoke({ capability: 'a', method: 'echo', arguments: request.arguments }) });`, [capability('b')], { consumes: [{ capability: 'a', methods: ['echo'] }] });
+    const audit = vi.fn(async (_service: string, _args: any): Promise<unknown> => null);
+    const host = await routedRuntime([a, b], audit);
+    await expect(host.invokeConsumedByPackage(a.package_id, { capability: 'b', method: 'echo', arguments: { value: 'cycle' } }, [])).rejects.toMatchObject({ code: 'capability_cycle' });
+    expect(audit.mock.calls.some(([service, args]) => service === 'seed.plugin.audit' && args.entry.outcome === 'denied' && args.entry.error_code === 'capability_cycle')).toBe(true);
+  });
+
+  it('expires returned invocation ancestry for background work while a separate progress read is pending', async () => {
+    let releaseBackground!: () => void, releaseProgress!: () => void;
+    const background = new Promise<void>((resolve) => { releaseBackground = resolve; });
+    const progress = new Promise<void>((resolve) => { releaseProgress = resolve; });
+    const a = await fixture('a', undefined, [capability('a')], { consumes: [{ capability: 'b', methods: ['echo'] }] });
+    const b = await fixture('b', `this.addCapability(definitions[0], { invoke: async (_method, request) => {
+      if (request.arguments.value === 'start') {
+        void (async () => { await this.app.invokeHost('probe.background', {});
+          try { const result = await this.app.capabilities.invoke({ capability: 'a', method: 'echo', arguments: { value: 'background result' } }); await this.app.invokeHost('probe.result', { result }); }
+          catch (error) { await this.app.invokeHost('probe.error', { message: String(error) }); }
+        })();
+        return { value: 'accepted' };
+      }
+      await this.app.invokeHost('probe.progress', {}); return { value: 'done' };
+    } });`, [capability('b')], { consumes: [{ capability: 'a', methods: ['echo'] }] });
+    const broker = vi.fn(async (service: string, _args: any): Promise<unknown> => {
+      if (service === 'probe.background') await background;
+      if (service === 'probe.progress') await progress;
+      return null;
+    });
+    const host = await routedRuntime([a, b], broker);
+    await expect(host.invokeConsumedByPackage(a.package_id, { capability: 'b', method: 'echo', arguments: { value: 'start' } }, [])).resolves.toEqual({ value: 'accepted' });
+    const pending = host.invokeConsumedByPackage(a.package_id, { capability: 'b', method: 'echo', arguments: { value: 'progress' }, activity: 'background' }, []);
+    try {
+      await vi.waitFor(() => expect(broker.mock.calls.some(([service]) => service === 'probe.progress')).toBe(true));
+      releaseBackground();
+      await vi.waitFor(() => expect(broker).toHaveBeenCalledWith('probe.result', expect.objectContaining({ result: { value: 'background result' } })));
+      expect(broker.mock.calls.some(([service]) => service === 'probe.error')).toBe(false);
+    } finally { releaseBackground(); releaseProgress(); await pending; }
   });
   it('rejects old exports without executing them', async () => {
     const plugin = await fixture(),
@@ -429,7 +496,7 @@ describe('code-registered public contracts', () => {
       ),
     ).rejects.toThrow();
   });
-  it('supports annotation discovery and refreshes dependent consumers only', async () => {
+  it('discovers replaced and removed providers without restarting their consumers', async () => {
     const definition = capability();
     definition.methods[0]!.annotations = { 'agent.tool': true };
     const provider = await fixture('probe', undefined, [definition]);
@@ -444,7 +511,14 @@ describe('code-registered public contracts', () => {
     const identity = await host.callService(consumer.package_id, 'identity', {});
     expect(host.consumedCapabilitiesByPackage(consumer.package_id)).toHaveLength(1);
     await host.start([{ ...provider, configuration_revision: 'changed' }, consumer]);
-    expect(await host.callService(consumer.package_id, 'identity', {})).not.toBe(identity);
+    expect(await host.callService(consumer.package_id, 'identity', {})).toBe(identity);
+    expect(host.consumedCapabilitiesByPackage(consumer.package_id)).toHaveLength(1);
+    await host.start([consumer]);
+    expect(await host.callService(consumer.package_id, 'identity', {})).toBe(identity);
+    expect(host.consumedCapabilitiesByPackage(consumer.package_id)).toEqual([]);
+    await host.start([provider, consumer]);
+    expect(await host.callService(consumer.package_id, 'identity', {})).toBe(identity);
+    expect(host.consumedCapabilitiesByPackage(consumer.package_id)).toHaveLength(1);
   });
   it('exposes explicit MCP tools and rejects duplicate names from a second provider', async () => {
     const definition = capability();

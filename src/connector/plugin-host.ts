@@ -155,27 +155,6 @@ function isMethodAvailableOnThisPlatform(method: CapsPluginDescriptor['methods']
   return !method.platforms || method.platforms.some((platform) => platform === process.platform);
 }
 
-function dependsOnChangedCapability(
-  consumer: SeedPluginRuntimeDefinition,
-  capabilityId: string,
-  providers: SeedPluginRuntimeDefinition[],
-  capabilitiesFor: (plugin: SeedPluginRuntimeDefinition) => CapsPluginDescriptor[],
-) {
-  const capabilities = providers.flatMap((provider) =>
-    provider.package_id === consumer.package_id
-      ? []
-      : capabilitiesFor(provider).filter(
-          (capability) => capability.id === capabilityId && isPluginConsumable(capability),
-        ),
-  );
-  if (!capabilities.length) return false;
-  if (consumer.consumes.some((declaration) => 'capability' in declaration && declaration.capability === capabilityId))
-    return true;
-  return capabilities.some((capability) =>
-    capability.methods.some((method) => canConsume(consumer, capability, method)),
-  );
-}
-
 function pluginError(error: unknown, capability: CapsPluginDescriptor, locale: string) {
   const source = error instanceof Error ? error : new Error(String(error));
   const code =
@@ -219,16 +198,34 @@ export class SeedPluginHost {
   private readonly serviceOwners = new Map<string, pluginSdk.Component>();
   private readonly nativeCapabilities = new Map<string, Map<string, SeedCapabilityHandler>>();
   private readonly localApis = new Map<string, SeedLocalApiRegistration>();
-  private readonly invocationChain = new AsyncLocalStorage<string[]>();
+  private readonly invocationChain = new AsyncLocalStorage<{ id: string; chain: string[]; active: boolean; signal?: AbortSignal }>();
+  private readonly activeInvocationScopes = new Map<string, { id: string; chain: string[]; active: boolean; signal?: AbortSignal }>();
+  // Node-free services cannot propagate AsyncLocalStorage ancestry. Retain the
+  // conservative wait-graph guard for calls without a traced native lineage.
   private readonly consumptionEdges = new Map<string, Map<string, number>>();
 
   private reachesConsumer(from: string, target: string, seen = new Set<string>()): boolean {
     if (from === target) return true;
     if (seen.has(from)) return false;
     seen.add(from);
-    return [...(this.consumptionEdges.get(from)?.keys() ?? [])].some((next) =>
-      this.reachesConsumer(next, target, seen),
-    );
+    return [...(this.consumptionEdges.get(from)?.keys() ?? [])].some((next) => this.reachesConsumer(next, target, seen));
+  }
+
+  private currentInvocationScope() {
+    const scope = this.invocationChain.getStore();
+    if (scope?.active) scope.signal?.throwIfAborted();
+    return scope?.active ? scope : undefined;
+  }
+
+  private async withInvocationScope<T>(chain: string[], work: () => Promise<T>, id: string = randomUUID(), signal?: AbortSignal): Promise<T> {
+    const scope = { id, chain, active: true, signal };
+    this.activeInvocationScopes.set(id, scope);
+    try { return await this.invocationChain.run(scope, work); }
+    finally {
+      // Async descendants retain the object, but cease to inherit this call after it returns.
+      scope.active = false;
+      this.activeInvocationScopes.delete(id);
+    }
   }
   private readonly diagnosticTrace = new AsyncLocalStorage<DiagnosticTraceContext>();
   private readonly invocationTasks = new AsyncLocalStorage<InvocationTaskScope>();
@@ -465,7 +462,8 @@ export class SeedPluginHost {
                 capability: id,
                 method,
                 invocation: { ...context, signal: undefined },
-                chain: this.invocationChain.getStore() || [],
+                chain: this.currentInvocationScope()?.chain || [],
+                invocation_scope_id: this.currentInvocationScope()?.id,
                 trace: this.activeDiagnosticTrace(),
                 include_billing: includeBilling,
               });
@@ -601,36 +599,13 @@ export class SeedPluginHost {
     }
     const previousPlugins = new Map(this.plugins.map((plugin) => [plugin.package_id, plugin]));
     const nextPlugins = new Map(plugins.map((plugin) => [plugin.package_id, plugin]));
-    const dependencyProviders = [...previousPlugins.values(), ...nextPlugins.values()];
-    const dependencyContracts = new Map(
-      dependencyProviders.map((provider) => [provider.package_id, this.capabilitiesFor(provider)]),
-    );
-    const changedCapabilities = new Set<string>();
-    for (const packageId of new Set([...previousPlugins.keys(), ...nextPlugins.keys()])) {
-      const previous = previousPlugins.get(packageId);
-      const next = nextPlugins.get(packageId);
-      if (previous && next && pluginFingerprint(previous) === pluginFingerprint(next)) continue;
-      for (const capability of previous ? this.capabilitiesFor(previous) : []) changedCapabilities.add(capability.id);
-      for (const capability of next ? this.capabilitiesFor(next) : []) changedCapabilities.add(capability.id);
-    }
     for (const packageId of new Set([...this.serviceOwners.keys(), ...this.remoteSnapshots.keys()])) {
       const previous = previousPlugins.get(packageId);
       const next = nextPlugins.get(packageId);
       const unchanged = Boolean(
         previous && next && pluginFingerprint(previous) === pluginFingerprint(next) && !remoteConfigurationChanged,
       );
-      const dependencyChanged = Boolean(
-        next &&
-          [...changedCapabilities].some((capabilityId) =>
-            dependsOnChangedCapability(
-              next,
-              capabilityId,
-              dependencyProviders,
-              (provider) => dependencyContracts.get(provider.package_id) ?? [],
-            ),
-          ),
-      );
-      if (unchanged && !dependencyChanged) continue;
+      if (unchanged) continue;
       const registry = this.serviceOwners.get(packageId);
       try {
         await registry?.unload();
@@ -1004,7 +979,8 @@ export class SeedPluginHost {
       };
     };
     const remoteCapabilities = pluginSdk.createCapabilityClient(
-      (service, args) => invokeRuntimeHost(service, { ...args, chain: this.invocationChain.getStore() || [] }),
+      (service, args) => invokeRuntimeHost(service, { ...args,
+        chain: this.currentInvocationScope()?.chain || [], invocation_scope_id: this.currentInvocationScope()?.id }),
       owner.signal,
     );
     const listCapabilities = async () =>
@@ -1313,15 +1289,18 @@ export class SeedPluginHost {
     return this.consumedCapabilities(plugin);
   }
 
-  invokeConsumedByPackage(packageId: string, invocation: SeedPluginCapabilityInvocation, chain: string[]) {
+  invokeConsumedByPackage(packageId: string, invocation: SeedPluginCapabilityInvocation, _chain: string[], scopeId?: string) {
     const plugin =
       this.plugins.find((candidate) => candidate.package_id === packageId) ??
       this.runtime.configuration()?.plugins.find((candidate) => candidate.package_id === packageId);
     if (!plugin) throw new Error(`插件 ${packageId} 当前不可用。`);
-    const work = () =>
-      this.invocationChain.run(chain.length ? chain : [packageId], () =>
-        this.invokeConsumedCapability(plugin, invocation),
-      );
+    // The central host owns lineage validity; a serialized chain alone cannot
+    // keep a completed request alive or merge independent concurrent requests.
+    const parent = scopeId ? this.activeInvocationScopes.get(scopeId) : undefined;
+    if (parent && parent.chain.at(-1) !== packageId) throw new Error('Invalid capability invocation scope owner.');
+    const work = () => parent?.active
+      ? this.invocationChain.run(parent, () => this.invokeConsumedCapability(plugin, invocation))
+      : this.withInvocationScope([packageId], () => this.invokeConsumedCapability(plugin, invocation), undefined, invocation.signal);
     return invocation.include_billing === true ? this.withBillingReceipt(work) : work();
   }
 
@@ -1331,8 +1310,9 @@ export class SeedPluginHost {
     context: PluginInvokeContext,
     chain: string[],
     trace?: DiagnosticTraceContext,
+    scopeId?: string,
   ) {
-    const work = () => this.invocationChain.run(chain, () => this.invoke(capability, method, context));
+    const work = () => this.withInvocationScope(chain, () => this.invoke(capability, method, context), scopeId, context.signal);
     return trace ? this.diagnosticTrace.run(trace, work) : work();
   }
 
@@ -1374,17 +1354,19 @@ export class SeedPluginHost {
       );
     }
     const providerId = declared.plugin.package_id;
-    const chain = this.invocationChain.getStore() || [consumer.package_id];
+    const chain = this.currentInvocationScope()?.chain || [consumer.package_id];
+    const requestId = invocation.request_id || randomUUID();
     if (
       providerId === consumer.package_id ||
       chain.includes(providerId) ||
-      this.reachesConsumer(providerId, consumer.package_id)
+      (consumer.runtime_kind === 'sandboxed-web' && this.reachesConsumer(providerId, consumer.package_id))
     ) {
-      throw Object.assign(new Error(`已阻止插件能力循环调用：${[...chain, providerId].join(' -> ')}`), {
+      const error = Object.assign(new Error(`已阻止插件能力循环调用：${[...chain, providerId].join(' -> ')}`), {
         code: 'capability_cycle',
       });
+      await this.recordCapabilityAudit(consumer, providerId, invocation.capability, invocation.method, declared.method.risk, requestId, 'denied', error);
+      throw error;
     }
-    const requestId = invocation.request_id || randomUUID();
     const invocationContext =
       invocation.context && typeof invocation.context === 'object' && !Array.isArray(invocation.context)
         ? (invocation.context as Record<string, unknown>)
@@ -1445,7 +1427,7 @@ export class SeedPluginHost {
     edges.set(providerId, (edges.get(providerId) ?? 0) + 1);
     this.consumptionEdges.set(consumer.package_id, edges);
     try {
-      const result = await this.invocationChain.run([...chain, providerId], () =>
+      const result = await this.withInvocationScope([...chain, providerId], () =>
         this.invoke(invocation.capability, invocation.method, {
           request_id: requestId,
           provider_plugin_id: providerId,
@@ -1458,6 +1440,8 @@ export class SeedPluginHost {
           principal: { kind: 'plugin', plugin_id: consumer.package_id },
           signal: invocation.signal,
         }),
+        undefined,
+        invocation.signal,
       );
       await this.recordCapabilityAudit(
         consumer,
@@ -1647,7 +1631,7 @@ export class SeedPluginHost {
               capability_id: capability,
               method,
               arguments_sha256: createHash('sha256').update(stableBillingJson(context.arguments)).digest('hex'),
-              source_plugin_ids: [...new Set(this.invocationChain.getStore() || [])].filter(
+              source_plugin_ids: [...new Set(this.currentInvocationScope()?.chain || [])].filter(
                 (pluginId) => pluginId !== declared.plugin.package_id,
               ),
             })) as { billable: boolean; call_id?: string; amount?: number; price_revision?: number })

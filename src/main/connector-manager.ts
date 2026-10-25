@@ -80,8 +80,9 @@ export class ConnectorManager {
     chain: string[],
     signal?: AbortSignal,
     trace?: DiagnosticTraceContext,
+    invocationScopeId?: string,
   ) {
-    return this.requestPluginCommand({ type: 'plugin.capability.invoke', packageId, invocation, chain, trace }, signal);
+    return this.requestPluginCommand({ type: 'plugin.capability.invoke', packageId, invocation, chain, trace, invocation_scope_id: invocationScopeId }, signal);
   }
 
   private requestPluginCommand(
@@ -93,6 +94,7 @@ export class ConnectorManager {
           packageId: string;
           invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation;
           chain: string[];
+          invocation_scope_id?: string;
           trace?: DiagnosticTraceContext;
         },
     signal?: AbortSignal,

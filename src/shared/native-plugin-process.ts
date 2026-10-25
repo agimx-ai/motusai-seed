@@ -10,6 +10,7 @@ export type NativePluginOperation =
       method: string;
       invocation: SeedInvocation;
       chain: string[];
+      invocation_scope_id?: string;
       trace?: DiagnosticTraceContext;
       include_billing?: boolean;
     }

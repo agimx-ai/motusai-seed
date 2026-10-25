@@ -78,6 +78,8 @@ export function requiredPermissions(service: string, argumentsValue: Record<stri
   if (service === 'seed.plugin-settings') return [];
   if (service === 'seed.plugin-event') return [];
   if (service === 'seed.plugin-events') return [];
+  // The shared broker checks the caller's declared network permissions.
+  if (service === 'seed.network.resolve-proxy') return [];
   if (service === 'seed.plugin-task') return [];
   if (service === 'seed.plugin-capabilities') return [];
   if (['seed.capabilities.list', 'seed.capabilities.invoke', 'seed.capabilities.cancel'].includes(service)) return [];

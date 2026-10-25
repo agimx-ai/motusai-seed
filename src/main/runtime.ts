@@ -1,7 +1,7 @@
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
-import { app, BrowserWindow, nativeTheme, powerSaveBlocker, shell } from 'electron';
+import { app, BrowserWindow, nativeTheme, powerSaveBlocker, shell, session } from 'electron';
 import { z } from 'zod';
 import { buildConfig } from '../shared/build-config.generated';
 import type {
@@ -31,7 +31,6 @@ import { invokePluginSettings } from './plugin-settings';
 import { pluginCatalogV2Url } from './plugin-catalog-url';
 import { PluginCapabilityCatalog } from './plugin-capability-catalog';
 import { PluginEventBroker } from './plugin-event-broker';
-import { pluginConsumesEvent, pluginConsumesMethod } from '../shared/plugin-capability';
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation';
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest';
 import { ConnectorManager } from './connector-manager';
@@ -859,6 +858,7 @@ export class SeedRuntime {
           method: String(args.method || ''),
           invocation,
           chain: Array.isArray(args.chain) ? args.chain.filter((x): x is string => typeof x === 'string') : [],
+          invocation_scope_id: typeof args.invocation_scope_id === 'string' ? args.invocation_scope_id : undefined,
           trace: args.trace as import('../shared/diagnostic-trace').DiagnosticTraceContext | undefined,
           include_billing: args.include_billing === true,
         },
@@ -2201,7 +2201,7 @@ export class SeedRuntime {
       const { configuration_revision: _configurationRevision, ...source } = plugin;
       return JSON.stringify(source);
     };
-    let next = [
+    const next = [
       ...downloadedRuntime.filter(
         (plugin) => !developmentIds.has(plugin.package_id) && this.pluginIsAuthorized(plugin.package_id),
       ),
@@ -2213,23 +2213,8 @@ export class SeedRuntime {
     const changed = this.runtimePlugins.filter(
       (previous) => !next.some((plugin) => JSON.stringify(plugin) === JSON.stringify(previous)),
     );
-    // Read provider contracts before stopping their old generation. Consumers may cache discovered tools.
-    const changedProviders = changed.map((plugin) => ({
-      id: plugin.package_id,
-      capabilities: this.pluginCapabilityCatalog.capabilities(plugin),
-    }));
-    next = next.map((consumer) =>
-      changedProviders.some(
-        (provider) =>
-          provider.id !== consumer.package_id &&
-          provider.capabilities.some((capability) =>
-            capability.methods.some((method) => pluginConsumesMethod(consumer, capability, method)) ||
-            capability.events?.some((event) => pluginConsumesEvent(consumer, capability, event.name)),
-          ),
-      )
-        ? { ...consumer, configuration_revision: randomUUID() }
-        : consumer,
-    );
+    // Provider replacement changes the routing catalog, not a consumer's service identity.
+    // Consumers discover the current contracts through the capability service.
     // Revoke frontend RPC before backend shutdown can reject its in-flight reads or writes.
     for (const [id, host] of this.pluginViewHosts) {
       const current = next.find((plugin) => plugin.package_id === id);
@@ -2412,6 +2397,18 @@ export class SeedRuntime {
     trace?: DiagnosticTraceContext,
   ): Promise<unknown> {
     assertActive?.();
+    if (service === 'seed.network.resolve-proxy') {
+      const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId && candidate.has_service);
+      if (!plugin || !this.pluginIsAuthorized(packageId) || !plugin.permissions.some((permission) => ['network.connect.internet', 'network.connect.lan', 'network.connect.loopback'].includes(permission)))
+        throw Object.assign(new Error('Plugin network permission is unavailable.'), { code: 'broker_permission_denied' });
+      const url = new URL(z.string().max(2048).parse(argumentsValue.url));
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+        throw new Error('Proxy resolution requires an HTTP(S) URL without credentials.');
+      const proxy = await session.defaultSession.resolveProxy(url.origin);
+      assertActive?.();
+      if (!this.runtimePlugins.includes(plugin)) throw new Error('Proxy resolution owner is no longer active.');
+      return { proxy };
+    }
     if (service === 'seed.plugin-events') return await this.pluginEvents.invoke(packageId, argumentsValue, assertActive);
     if (service === 'seed.plugin-event') {
       if (!this.runtimePlugins.some((plugin) => plugin.package_id === packageId && plugin.api_version === 2))
@@ -2576,6 +2573,7 @@ export class SeedRuntime {
             : [],
           controller.signal,
           trace,
+          typeof argumentsValue.invocation_scope_id === 'string' ? argumentsValue.invocation_scope_id : undefined,
         );
       } finally {
         this.capabilityCalls.delete(key);

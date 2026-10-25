@@ -189,7 +189,7 @@ describe('one runtime with distinct plugin sources', () => {
     expect(h.destroyOne).not.toHaveBeenCalled();
   });
 
-  it('refreshes dependent service generations from the old provider contract before it is withdrawn', async () => {
+  it('preserves dependent service generations when a provider is replaced', async () => {
     const h = fixture();
     h.two.consumes = [{ match: { method_annotation: 'agent.tool', equals: true } }] as any;
     h.runtime.pluginCapabilityCatalog.publish(h.one, [
@@ -204,8 +204,8 @@ describe('one runtime with distinct plugin sources', () => {
     await h.runtime.reloadPlugins();
     expect(
       h.runtime.runtimePlugins.find((plugin: any) => plugin.package_id === h.two.package_id).configuration_revision,
-    ).toEqual(expect.any(String));
-    // Code is unchanged, so its view is preserved; only the service discovers the new provider contracts.
+    ).toBeUndefined();
+    // Both consumer identities stay unchanged; capability discovery reads the live catalog.
     expect(h.destroyTwo).not.toHaveBeenCalled();
     expect(h.stop).toHaveBeenCalledExactlyOnceWith(h.one.package_id);
   });

@@ -562,6 +562,7 @@ export type WorkerCommand =
       packageId: string;
       invocation: import('@motus-ai/seed-sdk').SeedPluginCapabilityInvocation;
       chain: string[];
+      invocation_scope_id?: string;
       trace?: DiagnosticTraceContext;
     }
   | { type: 'local-gateway.event'; event: import('@motus-ai/seed-sdk').SeedLocalGatewayEvent }
