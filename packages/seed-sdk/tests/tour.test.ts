@@ -21,7 +21,10 @@ afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });
-const shown = () => vi.waitFor(() => expect(document.querySelector('.seed-tour')).not.toBeNull());
+const shown = () => vi.waitFor(() => {
+  expect(document.querySelector('.seed-tour')).not.toBeNull();
+  expect(document.querySelector('.driver-overlay path')).not.toBeNull();
+});
 const steps = () => [
   { target: '#first', title: 'First step', description: '<img src=x onerror=alert(1)> & details' },
   { target: '#second', title: 'Second step', description: 'Second details' },
