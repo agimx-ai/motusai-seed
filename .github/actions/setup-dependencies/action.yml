@@ -1,6 +1,9 @@
 name: Prepare release dependencies
 description: Install locked dependencies and restore platform-specific download caches
 inputs:
+  sdk-only:
+    description: Install only the SDK workspace and its build dependencies
+    default: 'false'
   packaging:
     description: Restore Electron and electron-builder downloads for desktop packaging
     default: 'false'
@@ -74,7 +77,17 @@ runs:
 
     - name: Install locked dependencies
       shell: bash
-      run: npm ci --prefer-offline --no-fund
+      env:
+        SDK_ONLY: ${{ inputs.sdk-only }}
+      run: |
+        set -euo pipefail
+        args=(ci --prefer-offline --no-fund --timing)
+        case "$SDK_ONLY" in
+          true) args+=(--workspace=@motus-ai/seed-sdk --include-workspace-root=false --include=dev --include=optional) ;;
+          false) ;;
+          *) echo "Invalid sdk-only input: $SDK_ONLY" >&2; exit 1 ;;
+        esac
+        npm "${args[@]}"
 
     # Save immediately, before compilation, tests, packaging or uploads can fail.
     - name: Save npm download cache

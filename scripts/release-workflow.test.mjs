@@ -142,7 +142,8 @@ test('npm cache falls back only within a platform, always installs the lockfile 
   assert.equal(restore.with.path, '${{ steps.npm.outputs.path }}');
   assert.ok(steps.find((step) => step.id === 'npm').run.includes('npm config get cache'));
   assert.equal(steps[0].with['package-manager-cache'], false);
-  assert.equal(install.run, 'npm ci --prefer-offline --no-fund');
+  assert.equal(install.env.SDK_ONLY, '${{ inputs.sdk-only }}');
+  assert.ok(install.run.includes('--timing'));
   assert.equal(install.if, undefined);
   assert.ok(steps.indexOf(save) > steps.indexOf(install));
   assert.equal(save.with.key, '${{ steps.npm-cache.outputs.cache-primary-key }}');
@@ -179,7 +180,33 @@ test('desktop jobs cache Electron and packaging tools separately from npm and pr
     assert.equal(steps[save].with.path, '${{ steps.dependencies.outputs.packaging-paths }}');
     assert.equal(steps[save].with.key, '${{ steps.dependencies.outputs.packaging-key }}');
   }
-  assert.equal(workflow.jobs.sdk.steps.find((step) => step.id === 'dependencies').with, undefined);
+  assert.deepEqual(workflow.jobs.sdk.steps.find((step) => step.id === 'dependencies').with, { 'sdk-only': 'true' });
+});
+
+test('SDK-only installation excludes desktop dependencies while desktop jobs keep full installation and npm timing', async () => {
+  const workflow = parse(await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'));
+  const action = parse(await readFile(new URL('../.github/actions/setup-dependencies/action.yml', import.meta.url), 'utf8'));
+  assert.equal(action.inputs['sdk-only'].default, 'false');
+  for (const name of ['macos', 'windows', 'linux']) {
+    assert.equal(workflow.jobs[name].steps.find((step) => step.id === 'dependencies').with['sdk-only'], undefined);
+  }
+  const run = action.runs.steps.find((step) => step.name === 'Install locked dependencies').run;
+  const root = await mkdtemp(join(tmpdir(), 'seed-install-args-'));
+  try {
+    await writeFile(join(root, 'npm'), '#!/usr/bin/env bash\nprintf "%s\\n" "$@"\nexit "${MOCK_NPM_EXIT:-0}"\n', { mode: 0o755 });
+    const execute = (sdkOnly, exit = '0') => promisify(execFile)('bash', ['-e', '-c', run], {
+      env: { ...process.env, PATH: `${root}:${process.env.PATH}`, SDK_ONLY: sdkOnly, MOCK_NPM_EXIT: exit },
+    });
+    const base = ['ci', '--prefer-offline', '--no-fund', '--timing'];
+    assert.deepEqual((await execute('false')).stdout.trim().split('\n'), base);
+    assert.deepEqual((await execute('true')).stdout.trim().split('\n'), [
+      ...base, '--workspace=@motus-ai/seed-sdk', '--include-workspace-root=false', '--include=dev', '--include=optional',
+    ]);
+    await assert.rejects(execute('invalid'), (error) => error.code === 1 && error.stdout === '');
+    await assert.rejects(execute('true', '23'), (error) => error.code === 23);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 

@@ -141,6 +141,8 @@ jobs:
       - name: Prepare release dependencies
         id: dependencies
         uses: ./.github/actions/setup-dependencies
+        with:
+          sdk-only: 'true'
 
       - name: Build and pack SDK
         run: |
