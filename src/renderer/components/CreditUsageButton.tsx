@@ -13,14 +13,12 @@ export function CreditUsageButton({
   const { t, i18n } = useTranslation();
   const known = available !== null && total !== null && total >= 0 && total >= available;
   const remainingRatio = known ? (total > 0 ? Math.max(0, available / total) : 0) : null;
-  const number = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 });
   const percentage = new Intl.NumberFormat(i18n.language, { style: 'percent', maximumFractionDigits: 2 });
   const remaining =
     remainingRatio === null
       ? t('nav.creditUsageUnavailable')
       : t('nav.creditRemainingPercent', { percent: percentage.format(remainingRatio) });
-  const creditTotal = t('nav.creditTotal', { count: total === null ? '—' : number.format(total) });
-  const label = `${t('nav.creditUsage')} · ${remaining} · ${creditTotal}`;
+  const label = `${t('nav.creditUsage')} · ${remaining}`;
   const progress = remainingRatio === null ? null : Math.max(0, Math.min(1, remainingRatio)) * 100;
   const color =
     progress === null
@@ -32,14 +30,7 @@ export function CreditUsageButton({
           : 'text-red-500';
 
   return (
-    <Tooltip
-      content={
-        <div className="grid gap-1">
-          <span>{remaining}</span>
-          <span>{creditTotal}</span>
-        </div>
-      }
-    >
+    <Tooltip content={remaining}>
       <button
         className="grid h-8 w-8 place-items-center rounded-[10px] text-muted-foreground transition-colors hover:bg-[var(--sidebar-item-active)] hover:text-foreground focus-visible:bg-[var(--sidebar-item-active)] focus-visible:text-foreground focus-visible:outline-none"
         type="button"

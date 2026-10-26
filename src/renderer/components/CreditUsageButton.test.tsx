@@ -22,9 +22,9 @@ async function fixture(available: number | null, total: number | null, locale = 
 }
 
 describe('credit usage shortcut', () => {
-  it('shows the remaining allowance and opens existing usage details', async () => {
+  it('shows only the remaining percentage and opens existing usage details', async () => {
     const onClick = await fixture(75, 100);
-    const button = screen.getByRole('button', { name: '积分用量 · 剩余：75% · 额度：100 积分' });
+    const button = screen.getByRole('button', { name: '积分用量 · 剩余：75%' });
     expect(screen.getByRole('meter').getAttribute('aria-valuenow')).toBe('75');
     fireEvent.click(button);
     expect(onClick).toHaveBeenCalledOnce();
@@ -32,7 +32,7 @@ describe('credit usage shortcut', () => {
 
   it('keeps two decimal places for the remaining percentage', async () => {
     await fixture(93.29, 100);
-    expect(screen.getByRole('button').getAttribute('aria-label')).toBe('积分用量 · 剩余：93.29% · 额度：100 积分');
+    expect(screen.getByRole('button').getAttribute('aria-label')).toBe('积分用量 · 剩余：93.29%');
   });
 
   it.each([
@@ -44,10 +44,9 @@ describe('credit usage shortcut', () => {
     expect(screen.getByRole('meter').getAttribute('aria-valuenow')).toBe(String(percent));
   });
 
-  it('does not fabricate a percentage or total when totals are unavailable', async () => {
+  it('does not fabricate a percentage when totals are unavailable', async () => {
     await fixture(23.45, null);
-    expect(screen.getByRole('button').getAttribute('aria-label')).toContain('额度：— 积分');
-    expect(screen.getByRole('button').getAttribute('aria-label')).toContain('剩余比例暂不可用');
+    expect(screen.getByRole('button').getAttribute('aria-label')).toBe('积分用量 · 剩余比例暂不可用');
     expect(screen.queryByRole('meter')).toBeNull();
   });
 
