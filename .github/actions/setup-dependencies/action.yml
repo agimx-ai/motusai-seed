@@ -1,0 +1,85 @@
+name: Prepare release dependencies
+description: Install locked dependencies and restore platform-specific download caches
+inputs:
+  packaging:
+    description: Restore Electron and electron-builder downloads for desktop packaging
+    default: 'false'
+outputs:
+  packaging-key:
+    description: Primary key for saving desktop packaging downloads
+    value: ${{ steps.packaging.outputs.cache-primary-key }}
+  packaging-hit:
+    description: Whether the desktop packaging cache matched the current lockfile
+    value: ${{ steps.packaging.outputs.cache-hit }}
+  packaging-paths:
+    description: Electron and electron-builder download directories
+    value: |
+      ${{ steps.paths.outputs.electron }}
+      ${{ steps.paths.outputs.builder }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v5
+      with:
+        node-version: 22
+        package-manager-cache: false
+
+    - name: Locate npm download cache
+      id: npm
+      shell: bash
+      run: |
+        set -euo pipefail
+        cache_path="$(npm config get cache | tr -d '\r')"
+        echo "path=$cache_path" >> "$GITHUB_OUTPUT"
+        echo "arch=$(node -p 'process.arch')" >> "$GITHUB_OUTPUT"
+
+    - name: Prepare packaging download directories
+      if: inputs.packaging == 'true'
+      id: paths
+      shell: bash
+      run: |
+        node --input-type=module <<'JS'
+        import { appendFileSync, mkdirSync } from 'node:fs';
+        import { join } from 'node:path';
+        for (const [name, variable] of [['electron', 'electron_config_cache'], ['builder', 'ELECTRON_BUILDER_CACHE']]) {
+          const directory = join(process.env.RUNNER_TEMP, `seed-${name}-downloads`);
+          mkdirSync(directory, { recursive: true });
+          appendFileSync(process.env.GITHUB_ENV, `${variable}=${directory}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${directory}\n`);
+        }
+        JS
+
+    # Retain compatibility with setup-node's existing npm download caches.
+    # Reusing downloads never skips npm ci or restores node_modules.
+    - name: Restore npm download cache
+      id: npm-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.npm.outputs.path }}
+        key: node-cache-${{ runner.os }}-${{ steps.npm.outputs.arch }}-npm-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          node-cache-${{ runner.os }}-${{ steps.npm.outputs.arch }}-npm-
+
+    - name: Restore packaging downloads
+      if: inputs.packaging == 'true'
+      id: packaging
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          ${{ steps.paths.outputs.electron }}
+          ${{ steps.paths.outputs.builder }}
+        key: seed-packaging-${{ runner.os }}-${{ steps.npm.outputs.arch }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          seed-packaging-${{ runner.os }}-${{ steps.npm.outputs.arch }}-
+
+    - name: Install locked dependencies
+      shell: bash
+      run: npm ci --prefer-offline --no-fund
+
+    # Save immediately, before compilation, tests, packaging or uploads can fail.
+    - name: Save npm download cache
+      if: steps.npm-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ steps.npm.outputs.path }}
+        key: ${{ steps.npm-cache.outputs.cache-primary-key }}

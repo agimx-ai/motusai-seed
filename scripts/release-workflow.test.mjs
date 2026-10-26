@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { test } from 'vitest';
 import { parse } from 'yaml';
@@ -93,5 +95,121 @@ test('Linux launcher identity matches the app and uses a multi-resolution icon s
   }
   for (const types of [['ic04', 'icp4'], ['ic05', 'icp5'], ['ic12', 'icp6'], ['ic07'], ['ic08'], ['ic09']]) {
     assert.ok(types.some((type) => representations.has(type)), `Missing icon representation: ${types.join('/')}`);
+  }
+});
+
+test('tag pushes dispatch the exact release tag from the default branch so future versions can share caches', async () => {
+  const workflow = parse(await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'));
+  assert.deepEqual(Object.keys(workflow.on).sort(), ['push', 'workflow_dispatch']);
+  assert.deepEqual(workflow.on.push, { tags: ['*.*.*'] });
+  const dispatch = workflow.jobs['dispatch-release'];
+  assert.equal(dispatch.if, "github.event_name == 'push'");
+  assert.equal(dispatch.permissions.actions, 'write');
+  assert.equal(workflow.jobs.metadata.if, "github.event_name == 'workflow_dispatch'");
+  assert.ok(workflow.concurrency.group.includes('github.event_name'));
+  const step = dispatch.steps[0];
+  assert.equal(step.env.DEFAULT_BRANCH, '${{ github.event.repository.default_branch }}');
+  assert.equal(step.env.RELEASE_TAG, '${{ github.ref_name }}');
+  assert.equal(step.run, 'gh workflow run release.yml --ref "$DEFAULT_BRANCH" -f "tag=$RELEASE_TAG"');
+  for (const name of ['metadata', 'sdk', 'macos', 'windows', 'linux', 'publish']) {
+    assert.equal(
+      workflow.jobs[name].steps.find((step) => step.name === 'Check out source').with.ref,
+      "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}",
+    );
+  }
+});
+
+test('npm cache falls back only within a platform, always installs the lockfile and saves before building', async () => {
+  const workflow = parse(await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'));
+  const action = parse(await readFile(new URL('../.github/actions/setup-dependencies/action.yml', import.meta.url), 'utf8'));
+  const steps = action.runs.steps;
+  const restore = steps.find((step) => step.id === 'npm-cache');
+  const save = steps.find((step) => step.name === 'Save npm download cache');
+  const install = steps.find((step) => step.name === 'Install locked dependencies');
+  const expand = (template, os, arch, hash) => template
+    .replaceAll('${{ runner.os }}', os)
+    .replaceAll('${{ steps.npm.outputs.arch }}', arch)
+    .replaceAll("${{ hashFiles('package-lock.json') }}", hash).trim();
+  const targets = [['Linux', 'x64'], ['Windows', 'x64'], ['macOS', 'arm64']];
+  for (const [os, arch] of targets) {
+    const fallback = expand(restore.with['restore-keys'], os, arch, 'new');
+    assert.ok(expand(restore.with.key, os, arch, 'old').startsWith(fallback));
+    assert.notEqual(expand(restore.with.key, os, arch, 'old'), expand(restore.with.key, os, arch, 'new'));
+    for (const [otherOs, otherArch] of targets.filter(([a, b]) => a !== os || b !== arch)) {
+      assert.ok(!expand(restore.with.key, otherOs, otherArch, 'old').startsWith(fallback));
+    }
+  }
+  assert.equal(restore.with.path, '${{ steps.npm.outputs.path }}');
+  assert.ok(steps.find((step) => step.id === 'npm').run.includes('npm config get cache'));
+  assert.equal(steps[0].with['package-manager-cache'], false);
+  assert.equal(install.run, 'npm ci --prefer-offline --no-fund');
+  assert.equal(install.if, undefined);
+  assert.ok(steps.indexOf(save) > steps.indexOf(install));
+  assert.equal(save.with.key, '${{ steps.npm-cache.outputs.cache-primary-key }}');
+  for (const name of ['sdk', 'macos', 'windows', 'linux']) {
+    const job = workflow.jobs[name].steps;
+    const setup = job.findIndex((step) => step.id === 'dependencies');
+    assert.equal(job[setup].uses, './.github/actions/setup-dependencies');
+    assert.ok(setup > job.findIndex((step) => step.name === 'Check out source'));
+    assert.ok(setup < job.findIndex((step) => step.name.startsWith('Build ')));
+  }
+});
+
+test('desktop jobs cache Electron and packaging tools separately from npm and preserve downloads on build failure', async () => {
+  const workflow = parse(await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'));
+  const action = parse(await readFile(new URL('../.github/actions/setup-dependencies/action.yml', import.meta.url), 'utf8'));
+  const paths = action.runs.steps.find((step) => step.id === 'paths');
+  assert.ok(paths.run.includes('electron_config_cache'));
+  assert.ok(paths.run.includes('ELECTRON_BUILDER_CACHE'));
+  assert.ok(paths.run.includes('process.env.GITHUB_ENV'));
+  const restore = action.runs.steps.find((step) => step.id === 'packaging');
+  assert.equal(restore.if, "inputs.packaging == 'true'");
+  assert.ok(restore.with.key.startsWith('seed-packaging-${{ runner.os }}-${{ steps.npm.outputs.arch }}-'));
+  assert.ok(!restore.with.path.includes('node_modules'));
+  assert.ok(!restore.with.path.includes('release/'));
+  for (const name of ['macos', 'windows', 'linux']) {
+    const steps = workflow.jobs[name].steps;
+    assert.equal(steps.find((step) => step.id === 'dependencies').with.packaging, 'true');
+    const save = steps.findIndex((step) => step.name === 'Save packaging downloads');
+    const build = steps.findIndex((step) => step.name.startsWith('Build '));
+    const verify = steps.findIndex((step) => step.name.startsWith('Verify '));
+    assert.ok(build < save && save < verify);
+    assert.ok(steps[save].if.includes('!cancelled()'));
+    assert.ok(steps[save].if.includes("packaging-key != ''"));
+    assert.equal(steps[save].with.path, '${{ steps.dependencies.outputs.packaging-paths }}');
+    assert.equal(steps[save].with.key, '${{ steps.dependencies.outputs.packaging-key }}');
+  }
+  assert.equal(workflow.jobs.sdk.steps.find((step) => step.id === 'dependencies').with, undefined);
+});
+
+
+test('packaging cache setup exports actual tool directories even when the runner path contains spaces', async () => {
+  const action = parse(await readFile(new URL('../.github/actions/setup-dependencies/action.yml', import.meta.url), 'utf8'));
+  const root = await mkdtemp(join(tmpdir(), 'seed runner cache '));
+  const environment = join(root, 'environment');
+  const output = join(root, 'output');
+  try {
+    await writeFile(environment, '');
+    await writeFile(output, '');
+    await promisify(execFile)('bash', ['-e', '-c', action.runs.steps.find((step) => step.id === 'paths').run], {
+      env: { ...process.env, RUNNER_TEMP: root, GITHUB_ENV: environment, GITHUB_OUTPUT: output },
+    });
+    const parseLines = (text) => Object.fromEntries(text.trim().split('\n').map((line) => {
+      const separator = line.indexOf('=');
+      return [line.slice(0, separator), line.slice(separator + 1)];
+    }));
+    const variables = parseLines(await readFile(environment, 'utf8'));
+    const paths = parseLines(await readFile(output, 'utf8'));
+    assert.equal(variables.electron_config_cache, join(root, 'seed-electron-downloads'));
+    assert.equal(variables.ELECTRON_BUILDER_CACHE, join(root, 'seed-builder-downloads'));
+    assert.equal(paths.electron, variables.electron_config_cache);
+    assert.equal(paths.builder, variables.ELECTRON_BUILDER_CACHE);
+    // Check the installed builder uses the exported override, without downloading or packaging.
+    const { stdout } = await promisify(execFile)(process.execPath, ['-e',
+      'require("builder-util").getUserDefinedCacheDir().then(path => process.stdout.write(path))',
+    ], { env: { ...process.env, ...variables } });
+    assert.equal(stdout, paths.builder);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

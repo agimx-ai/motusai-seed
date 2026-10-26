@@ -21,11 +21,29 @@ env:
   MOTUSAI_ALLOW_INSECURE_HTTP: 'false'
 
 concurrency:
-  group: seed-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  group: seed-release-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  dispatch-release:
+    name: Start release with shared default-branch caches
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      # Cache scope follows the workflow ref, not the checked-out source ref.
+      # Dispatch from the default branch while all build jobs check out the exact tag.
+      - name: Dispatch tagged release on the default branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh workflow run release.yml --ref "$DEFAULT_BRANCH" -f "tag=$RELEASE_TAG"
+
   metadata:
+    if: github.event_name == 'workflow_dispatch'
     name: Validate release metadata
     runs-on: ubuntu-24.04
     permissions:
@@ -120,14 +138,9 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Prepare release dependencies
+        id: dependencies
+        uses: ./.github/actions/setup-dependencies
 
       - name: Build and pack SDK
         run: |
@@ -159,20 +172,24 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Prepare release dependencies
+        id: dependencies
+        uses: ./.github/actions/setup-dependencies
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+          packaging: 'true'
 
       - name: Build macOS package
         run: |
           npm run icons:generate
           npm run build
           npx electron-builder --config electron-builder.config.mjs --mac dmg zip --arm64 --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false
+
+      - name: Save packaging downloads
+        if: ${{ !cancelled() && steps.dependencies.outputs.packaging-key != '' && steps.dependencies.outputs.packaging-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.dependencies.outputs.packaging-paths }}
+          key: ${{ steps.dependencies.outputs.packaging-key }}
 
       - name: Verify macOS release assets
         shell: bash
@@ -227,20 +244,24 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Prepare release dependencies
+        id: dependencies
+        uses: ./.github/actions/setup-dependencies
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+          packaging: 'true'
 
       - name: Build Windows package
         run: |
           npm run icons:generate
           npm run build
           npx electron-builder --config electron-builder.config.mjs --win nsis --x64 --publish never
+
+      - name: Save packaging downloads
+        if: ${{ !cancelled() && steps.dependencies.outputs.packaging-key != '' && steps.dependencies.outputs.packaging-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.dependencies.outputs.packaging-paths }}
+          key: ${{ steps.dependencies.outputs.packaging-key }}
 
       - name: Verify Windows release assets
         run: |
@@ -289,17 +310,21 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Prepare release dependencies
+        id: dependencies
+        uses: ./.github/actions/setup-dependencies
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+          packaging: 'true'
 
       - name: Build Linux packages and update feed
         run: npm run package:linux
+
+      - name: Save packaging downloads
+        if: ${{ !cancelled() && steps.dependencies.outputs.packaging-key != '' && steps.dependencies.outputs.packaging-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.dependencies.outputs.packaging-paths }}
+          key: ${{ steps.dependencies.outputs.packaging-key }}
 
       - name: Verify Linux release assets
         run: node scripts/verify-linux-package.mjs
