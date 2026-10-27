@@ -215,6 +215,30 @@ describe('class-only service lifecycle', () => {
     expect(audit.mock.calls.some(([service, args]) => service === 'seed.plugin.audit' && args.entry.outcome === 'denied' && args.entry.error_code === 'capability_cycle')).toBe(true);
   });
 
+  it('normalizes native provider error codes before writing capability audit records', async () => {
+    const provider = await fixture('provider', `
+      this.addCapability(definitions[0], { invoke: async () => {
+        throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+      } });
+    `);
+    const consumer = await fixture('consumer', '', [], {
+      consumes: [{ capability: 'provider', methods: ['echo'] }],
+    });
+    const audit = vi.fn(async (_service: string, _args: any): Promise<unknown> => null);
+    const host = await routedRuntime([provider, consumer], audit);
+
+    await expect(host.invokeConsumedByPackage(
+      consumer.package_id,
+      { capability: 'provider', method: 'echo', arguments: { value: 'blocked' } },
+      [],
+    )).rejects.toMatchObject({ code: 'EPERM' });
+    expect(audit.mock.calls.some(([service, args]) =>
+      service === 'seed.plugin.audit'
+      && args.entry.outcome === 'failed'
+      && args.entry.error_code === 'eperm',
+    )).toBe(true);
+  });
+
   it('expires returned invocation ancestry for background work while a separate progress read is pending', async () => {
     let releaseBackground!: () => void, releaseProgress!: () => void;
     const background = new Promise<void>((resolve) => { releaseBackground = resolve; });

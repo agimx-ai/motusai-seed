@@ -1,6 +1,16 @@
 import type { SeedBillingReceipt, SeedPluginErrorParameter } from '@motus-ai/seed-sdk'
 import { isCreditAmount } from './credit-amount'
 
+const pluginErrorCodePattern = /^[a-z][a-z0-9_.-]{0,127}$/
+
+/** Normalize platform error codes before they enter the public audit contract. */
+export function pluginErrorCode(error: unknown): string | undefined {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined
+  if (typeof code !== 'string') return undefined
+  const normalized = code.trim().toLowerCase()
+  return pluginErrorCodePattern.test(normalized) ? normalized : undefined
+}
+
 /** Copy only settlement contract fields, never arbitrary plugin error properties. */
 export function pluginErrorBilling(error: unknown): SeedBillingReceipt | undefined {
   const billing = error && typeof error === 'object' && 'billing' in error ? error.billing : undefined

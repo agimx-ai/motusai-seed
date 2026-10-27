@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, realpath, rename, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdtemp, mkdir, readFile, readdir, realpath, rename, symlink, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,6 +47,28 @@ describe('LocalFileService', () => {
     expect(read.content).toBe('hello seed')
     expect(read.bytes_read).toBe(10)
     expect(read.sha256).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('skips inaccessible directory entries without failing the whole listing', async () => {
+    await writeFile(join(root, 'available.txt'), 'visible')
+    await writeFile(join(root, 'hiberfil.sys'), 'protected')
+    const guarded = new LocalFileService([filesystemRoot], backupRoot, async () => undefined, async (path) => {
+      if (path.endsWith('hiberfil.sys')) throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+      return lstat(path)
+    })
+
+    const listed = await guarded.execute('list', filesystemRoot.id, { path: '' }) as {
+      entries: Array<{ name: string }>
+      truncated: boolean
+    }
+
+    expect(listed.entries.map((entry) => entry.name)).toEqual(['available.txt'])
+    expect(listed.truncated).toBe(false)
+
+    const broken = new LocalFileService([filesystemRoot], backupRoot, async () => undefined, async () => {
+      throw Object.assign(new Error('device failure'), { code: 'EIO' })
+    })
+    await expect(broken.execute('list', filesystemRoot.id, { path: '' })).rejects.toMatchObject({ code: 'EIO' })
   })
 
   it('publishes create-only snapshots without replacing concurrent creators', async () => {

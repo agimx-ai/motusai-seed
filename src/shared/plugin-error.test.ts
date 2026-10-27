@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { pluginErrorBilling, pluginErrorParams } from './plugin-error'
+import { pluginErrorBilling, pluginErrorCode, pluginErrorParams } from './plugin-error'
+
+describe('plugin error code', () => {
+  it('normalizes native platform codes for the public audit contract', () => {
+    expect(pluginErrorCode({ code: 'EPERM' })).toBe('eperm')
+    expect(pluginErrorCode({ code: ' capability_denied ' })).toBe('capability_denied')
+  })
+
+  it('omits non-string and invalid error codes', () => {
+    expect(pluginErrorCode({ code: 13 })).toBeUndefined()
+    expect(pluginErrorCode({ code: 'not allowed' })).toBeUndefined()
+    expect(pluginErrorCode(new Error('failure'))).toBeUndefined()
+  })
+})
 
 describe('plugin error parameters', () => {
   it('preserves SDK scalar parameters and excludes non-contract values', () => {

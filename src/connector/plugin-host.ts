@@ -35,7 +35,7 @@ import type { GlobalTaskActivityObserver } from './global-task-activity-observer
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace';
 import { isCreditAmount } from '../shared/credit-amount';
 import { BillingReceipt } from './billing-receipt';
-import { pluginErrorBilling } from '../shared/plugin-error';
+import { pluginErrorBilling, pluginErrorCode } from '../shared/plugin-error';
 import type { SeedBilledCapabilityResult } from '@motus-ai/seed-sdk';
 
 type MethodValidators = { input?: ValidateFunction; output?: ValidateFunction };
@@ -1483,6 +1483,7 @@ export class SeedPluginHost {
     outcome: 'allowed' | 'denied' | 'failed',
     error?: unknown,
   ) {
+    const errorCode = pluginErrorCode(error);
     await this.runtime.invoke_host('seed.plugin.audit', {
       package_id: consumer.package_id,
       plugin_version: consumer.version,
@@ -1492,9 +1493,7 @@ export class SeedPluginHost {
         outcome,
         risk,
         request_id: requestId,
-        ...(error && typeof error === 'object' && 'code' in error
-          ? { error_code: String((error as { code?: unknown }).code || '') }
-          : {}),
+        ...(errorCode ? { error_code: errorCode } : {}),
         metadata: { provider_plugin_id: providerId, capability_id: capability, capability_method: method },
       },
     });

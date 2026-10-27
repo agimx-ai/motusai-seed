@@ -21,6 +21,8 @@ import type { FilesystemRoot } from '../../../shared/contracts'
 
 export type LocalFileMethod = 'list' | 'stat' | 'search' | 'find' | 'grep' | 'read' | 'read_binary' | 'mkdir' | 'write' | 'write_binary' | 'edit' | 'move' | 'delete'
 export type TrashItem = (path: string) => Promise<void>
+type FileMetadata = Awaited<ReturnType<typeof lstat>>
+type InspectPath = (path: string) => Promise<FileMetadata>
 const relativePathSchema = z.string().max(2_048).transform((value, context) => {
   const normalized = value.replaceAll('\\', '/').replace(/^\.\//, '')
   if (!normalized || normalized === '.' || normalized.startsWith('/') || /^[a-zA-Z]:\//.test(normalized)) {
@@ -130,6 +132,11 @@ function isoDate(value: Date) {
   return value.toISOString()
 }
 
+function isUnavailableDirectoryEntry(error: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined
+  return code === 'EACCES' || code === 'EPERM' || code === 'ENOENT'
+}
+
 type IgnoreRule = { base: string; matcher: Ignore }
 
 async function ignoreRules(directory: string, inherited: IgnoreRule[]) {
@@ -151,6 +158,7 @@ export class LocalFileService {
     private roots: FilesystemRoot[],
     private backupRoot: string,
     private trashItem: TrashItem,
+    private inspectPath: InspectPath = lstat,
   ) {}
 
   replaceRoots(roots: FilesystemRoot[]) {
@@ -239,11 +247,15 @@ export class LocalFileService {
     const allowedEntries = entries
       .filter((entry) => !pathPolicyError([location.relativePath, entry.name].filter(Boolean).join('/')))
       .sort((left, right) => left.name.localeCompare(right.name))
-    const visible = await Promise.all(allowedEntries
-      .slice(0, maximum)
+    const selectedEntries = allowedEntries.slice(0, maximum)
+    const visible = (await Promise.all(selectedEntries
       .map(async (entry) => {
         const childPath = resolve(location.target, entry.name)
-        const child = await lstat(childPath)
+        const child = await this.inspectPath(childPath).catch((error: unknown) => {
+          if (isUnavailableDirectoryEntry(error)) return null
+          throw error
+        })
+        if (!child) return null
         return {
           name: entry.name,
           path: [location.relativePath, entry.name].filter(Boolean).join('/'),
@@ -251,8 +263,8 @@ export class LocalFileService {
           size: child.isFile() ? child.size : undefined,
           modified_at: isoDate(child.mtime),
         }
-      }))
-    return { path: location.relativePath, entries: visible, truncated: allowedEntries.length > visible.length }
+      }))).filter((entry) => entry !== null)
+    return { path: location.relativePath, entries: visible, truncated: allowedEntries.length > maximum }
   }
 
   private async stat(rootId: string, args: Record<string, unknown>) {
