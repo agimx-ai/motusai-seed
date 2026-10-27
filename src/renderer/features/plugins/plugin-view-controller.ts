@@ -14,6 +14,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { icons } from 'lucide-react';
 import { PluginNavigationController, type PluginBreadcrumbState } from './plugin-navigation';
+import { userFacingErrorMessage } from '../../lib/errors';
 
 type Surface = { toolbar: HTMLElement; content: HTMLElement; status: HTMLElement };
 type Active = { key: object; hide(): Promise<void> };
@@ -44,7 +45,7 @@ export class PluginViewController {
     services: Pick<App, 'data' | 'service' | 'resources' | 'files' | 'clipboard' | 'reloadService'>,
     appearance: Pick<App, 'locale' | 'theme' | 'installationId'>,
     private readonly report: (error: unknown) => void = (error) => {
-      toast.error(String(error));
+      toast.error(userFacingErrorMessage(error));
     },
     onNavigationChange: (state: PluginBreadcrumbState | undefined) => void = () => {},
   ) {

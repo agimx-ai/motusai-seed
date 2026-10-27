@@ -8,6 +8,7 @@ import * as reactDOMClient from 'react-dom/client';
 import { loadPluginBundle, pluginViewConstructor } from '../../../shared/plugin-bundle';
 import type { PluginViewConfiguration } from '../../../shared/plugin-view';
 import { PluginViewController } from './plugin-view-controller';
+import { userFacingErrorMessage } from '../../lib/errors';
 import type { PluginHeaderNavigation } from './plugin-navigation';
 
 const sessions = new Map<string, PluginDomHost>();
@@ -80,7 +81,7 @@ class PluginDomHost {
           const lease = this.lease;
           lease?.loading(true);
           void this.stop().then(() => lease?.withdrawn());
-        } else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(String(error)));
+        } else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(userFacingErrorMessage(error)));
       });
       if (configuration.styleUrl) {
         const style = (this.style = document.createElement('link'));
@@ -171,7 +172,7 @@ class PluginDomHost {
     this.lease = undefined;
     this.element.remove();
     void window.motusSeed.unmountPluginView(this.token);
-    void this.controller?.hide().catch((error) => sdk.toast.error(String(error)));
+    void this.controller?.hide().catch((error) => sdk.toast.error(userFacingErrorMessage(error)));
   }
 
   async stop() {
@@ -185,7 +186,7 @@ class PluginDomHost {
     this.style?.remove();
     this.element.remove();
     if (sessions.get(this.pluginId) === this) sessions.delete(this.pluginId);
-    await this.controller?.stop().catch((error) => sdk.toast.error(String(error)));
+    await this.controller?.stop().catch((error) => sdk.toast.error(userFacingErrorMessage(error)));
   }
 }
 

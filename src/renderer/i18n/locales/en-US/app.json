@@ -5,7 +5,7 @@
     "previous": "Previous announcement",
     "next": "Next announcement",
     "position": "Announcement {{current}} of {{total}}",
-    "failed": "Could not complete this action. Please try again.",
+    "failed": "Could not complete this action. Please try again",
     "retryImage": "Background could not load. Retry"
   },
   "common": {
@@ -26,7 +26,7 @@
     "close": "Close"
   },
   "errors": {
-    "appUnavailable": "The app did not start correctly. Quit and reopen it."
+    "appUnavailable": "The app did not start correctly. Quit and reopen it"
   },
   "nav": {
     "overview": "Companion",
@@ -40,7 +40,7 @@
     "creditUsageUnavailable": "Remaining percentage unavailable",
     "creditRemainingPercent": "Remaining: {{percent}}",
     "lowCreditsTitle": "{{count}} credits remaining",
-    "lowCreditsDescription": "Fewer than 20 credits left. Add credits to keep using the app.",
+    "lowCreditsDescription": "Fewer than 20 credits left. Add credits to keep using the app",
     "lowCreditsMeter": "Credit balance (20-credit warning threshold)",
     "dismissLowCredits": "Dismiss credit warning",
     "addCredits": "Add credits",
@@ -109,7 +109,7 @@
     "loadingInstalled": "Loading installed plugins",
     "loadingAvailable": "Loading available plugins",
     "loadingView": "Loading plugin…",
-    "loadFailed": "Unable to load plugins. Use Refresh in the top-right corner to try again.",
+    "loadFailed": "Unable to load plugins. Use Refresh in the top-right corner to try again",
     "availableSection": "Available plugins",
     "sourceFilter": "Plugin source",
     "sources": {
@@ -118,7 +118,7 @@
     },
     "organizationName": "{{name}}",
     "noMatches": "No matching plugins",
-    "searchHint": "Try searching by plugin name.",
+    "searchHint": "Try searching by plugin name",
     "versionUpdate": "Update available from {{current}} to {{target}}",
     "updateNotification": "{{count}} plugin updates available",
     "updateNotificationEmpty": "No plugin updates available",
@@ -143,8 +143,8 @@
       "cancel": "Stop download"
     },
     "incompatible": "Incompatible",
-    "requiresSeedVersion": "This plugin requires Seed {{version}} or later. Update the client first.",
-    "missingSeedVersion": "This plugin version lacks a minimum Seed version. Wait for a new release.",
+    "requiresSeedVersion": "This plugin requires Seed {{version}} or later. Update the client first",
+    "missingSeedVersion": "This plugin version lacks a minimum Seed version. Wait for a new release",
     "installedVersionIncompatible": "This plugin version is incompatible with the current Seed",
     "confirmInstallTitle": "Install {{name}}?",
     "confirmUpdateTitle": "Update {{name}}?",
@@ -341,13 +341,13 @@
     "autoUpdatePluginsDescription": "Update installed plugins on the first launch after an app upgrade.",
     "cleanPluginDataDescription": "Clean up saved data for uninstalled plugins. Installed plugins are not affected.",
     "cleanPluginDataAction": "Clean Up",
-    "noOrphanedPluginData": "No saved data for uninstalled plugins to clean up.",
+    "noOrphanedPluginData": "No saved data for uninstalled plugins to clean up",
     "cleanPluginDataConfirmTitle": "Clean up data for uninstalled plugins?",
     "cleanPluginDataConfirmAction": "Clean Up Data",
-    "pluginDataCleanupResult": "Plugin data cleaned up.",
-    "pluginDataCleanupPartial": "Some plugin data couldn't be cleaned up. Please try again.",
-    "pluginDataCleanupFailed": "Couldn't clean up plugin data. Please try again.",
-    "pluginDataCleanupPreserved": "Data for reinstalled plugins was kept.",
+    "pluginDataCleanupResult": "Plugin data cleaned up",
+    "pluginDataCleanupPartial": "Some plugin data couldn't be cleaned up. Please try again",
+    "pluginDataCleanupFailed": "Couldn't clean up plugin data. Please try again",
+    "pluginDataCleanupPreserved": "Data for reinstalled plugins was kept",
     "languageSystem": "Auto-detect",
     "languageZhCN": "简体中文",
     "languageEnUS": "English",
@@ -388,11 +388,11 @@
     "displayName": "Display name",
     "username": "Username",
     "usernameHint": "3–80 characters using letters, numbers, _, ., or -; start with a letter or number.",
-    "displayNameInvalid": "Display name must be 1–120 characters.",
-    "usernameInvalid": "Enter a valid username.",
+    "displayNameInvalid": "Display name must be 1–120 characters",
+    "usernameInvalid": "Enter a valid username",
     "changeAvatar": "Change avatar",
-    "avatarInvalid": "Choose a valid PNG, JPEG, or WebP image.",
-    "avatarTooLarge": "Avatar image must be under 10 MB.",
+    "avatarInvalid": "Choose a valid PNG, JPEG, or WebP image",
+    "avatarTooLarge": "Avatar image must be under 10 MB",
     "save": "Save",
     "saved": "Profile updated"
   },
@@ -402,7 +402,7 @@
     "catalogRefreshed": "Plugin catalog refreshed",
     "pluginInstalled": "Plugin installed",
     "pluginUninstalled": "Plugin uninstalled",
-    "localClientUsingPlugin": "“{{client}}” is using “{{plugin}}”.",
+    "localClientUsingPlugin": "“{{client}}” is using “{{plugin}}”",
     "activityCleared": "Activity log cleared",
     "logsUploaded": "Diagnostic package uploaded",
     "settingUpdated": "Settings updated"

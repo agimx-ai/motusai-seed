@@ -155,7 +155,7 @@ export default function App() {
         <LoginPage
           appName={snapshot.appName}
           status={snapshot.auth.status}
-          error={snapshot.auth.error}
+          error={snapshot.auth.error ? userFacingErrorMessage(snapshot.auth.error) : undefined}
           busy={Boolean(busy)}
           cancelling={busy === 'cancel-sign-in'}
           onSignIn={() => void run('sign-in', (api) => api.signIn())}
@@ -182,7 +182,8 @@ export default function App() {
   const catalogLoading = searchQuery
     ? !currentSearch || (pluginSearchLoading && !currentSearch.page.items.length)
     : snapshot.pluginCatalogStatus === 'loading';
-  const catalogError = searchQuery ? currentSearch?.error : snapshot.pluginCatalogError;
+  const rawCatalogError = searchQuery ? currentSearch?.error : snapshot.pluginCatalogError;
+  const catalogError = rawCatalogError ? userFacingErrorMessage(rawCatalogError) : undefined;
   const pluginUpdateCount = countAvailablePluginUpdates(plugins, snapshot.catalogPlugins ?? []);
   const updateAllPlugins = async () => {
     if (

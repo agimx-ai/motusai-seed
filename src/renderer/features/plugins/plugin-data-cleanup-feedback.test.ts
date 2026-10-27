@@ -6,8 +6,8 @@ describe('Plugin data cleanup feedback', () => {
   it('uses a short success message without execution statistics', () => {
     expect(pluginDataCleanupFeedback({ reset: ['a', 'b'], skipped: [], failed: [] }))
       .toEqual({ tone: 'success', key: 'settings.pluginDataCleanupResult' })
-    expect(seedI18nResources['zh-CN'].app.settings.pluginDataCleanupResult).toBe('插件数据已清理。')
-    expect(seedI18nResources['en-US'].app.settings.pluginDataCleanupResult).toBe('Plugin data cleaned up.')
+    expect(seedI18nResources['zh-CN'].app.settings.pluginDataCleanupResult).toBe('插件数据已清理')
+    expect(seedI18nResources['en-US'].app.settings.pluginDataCleanupResult).toBe('Plugin data cleaned up')
   })
   it('warns on partial failure and errors on complete failure', () => {
     const failed = [{ id: 'a', message: '/private/path: technical error' }]

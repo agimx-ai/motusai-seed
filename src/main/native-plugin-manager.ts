@@ -273,10 +273,10 @@ export class NativePluginManager {
 
   async call(packageId: string, operation: NativePluginOperation, requestId: string = randomUUID()) {
     const slot = this.slots.get(packageId);
-    if (!slot || slot.stopping) throw remoteError('原生插件进程当前不可用。', 'native_plugin_unavailable');
+    if (!slot || slot.stopping) throw remoteError('原生插件进程当前不可用', 'native_plugin_unavailable');
     await slot.ready;
     if (this.slots.get(packageId) !== slot || slot.stopping) {
-      throw remoteError('原生插件进程当前不可用。', 'native_plugin_unavailable');
+      throw remoteError('原生插件进程当前不可用', 'native_plugin_unavailable');
     }
     const queuedCancellation = slot.cancelledBeforeCall.get(requestId);
     if (queuedCancellation) {
