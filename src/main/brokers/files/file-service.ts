@@ -134,7 +134,7 @@ function isoDate(value: Date) {
 
 function isUnavailableDirectoryEntry(error: unknown) {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined
-  return code === 'EACCES' || code === 'EPERM' || code === 'ENOENT'
+  return code === 'EACCES' || code === 'EPERM' || code === 'ENOENT' || code === 'EINVAL'
 }
 
 type IgnoreRule = { base: string; matcher: Ignore }

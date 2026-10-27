@@ -49,11 +49,13 @@ describe('LocalFileService', () => {
     expect(read.sha256).toMatch(/^[a-f0-9]{64}$/)
   })
 
-  it('skips inaccessible directory entries without failing the whole listing', async () => {
+  it('skips inaccessible and unsupported directory entries without failing the whole listing', async () => {
     await writeFile(join(root, 'available.txt'), 'visible')
     await writeFile(join(root, 'hiberfil.sys'), 'protected')
+    await writeFile(join(root, 'DumpStack.log.tmp'), 'protected')
     const guarded = new LocalFileService([filesystemRoot], backupRoot, async () => undefined, async (path) => {
       if (path.endsWith('hiberfil.sys')) throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+      if (path.endsWith('DumpStack.log.tmp')) throw Object.assign(new Error('invalid argument'), { code: 'EINVAL' })
       return lstat(path)
     })
 
