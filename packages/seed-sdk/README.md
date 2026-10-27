@@ -595,6 +595,8 @@ toast.error('保存失败', { description: '请检查连接后重试。' });
 
 返回值：`Promise<unknown>`。
 
+`seed.shell.open-url` 使用系统默认浏览器打开网页，要求插件声明 `shell.open-url` 权限。参数为 `{ url: string }`，成功返回 `{ opened: true }`。支持 HTTP（含内网站点）和 HTTPS，拒绝包含用户名／密码、控制字符及非网页协议的地址。
+
 ### `mountPluginService` 详细说明
 
 加载插件后端，用于测试方法调用、配置读写和能力注册。

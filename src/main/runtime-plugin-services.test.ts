@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('electron', () => ({
   app: {
     getLoginItemSettings: () => ({ openAtLogin: false }),
@@ -8,13 +8,15 @@ vi.mock('electron', () => ({
   },
   BrowserWindow: class {},
   powerSaveBlocker: {},
-  shell: {},
+  shell: { openExternal: vi.fn(async () => undefined) },
   ipcMain: {},
   session: { defaultSession: { resolveProxy: vi.fn(async () => 'PROXY 127.0.0.1:7890') } },
 }));
 vi.mock('./updater', () => ({ SeedUpdater: class {} }));
 import { SeedRuntime } from './runtime';
-import { session } from 'electron';
+import { session, shell } from 'electron';
+
+beforeEach(() => vi.mocked(shell.openExternal).mockReset().mockResolvedValue(undefined));
 
 function fixture(kind = 'sandboxed-web') {
   const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
@@ -45,6 +47,71 @@ function fixture(kind = 'sandboxed-web') {
   return { runtime, call };
 }
 describe('generic plugin SDK brokers', () => {
+  it.each(['native-host', 'sandboxed-web'])(
+    'opens HTTP LAN and HTTPS pages in the system browser for %s',
+    async (kind) => {
+      const { runtime, call } = fixture(kind);
+      runtime.runtimePlugins[0].permissions = ['shell.open-url'];
+      for (const url of ['http://192.168.2.58:18182/authorize?state=private-state', 'https://example.com/login']) {
+        await expect(call('one', 'seed.shell.open-url', { url, package_id: 'com.example.two' })).resolves.toEqual({
+          opened: true,
+        });
+        expect(shell.openExternal).toHaveBeenLastCalledWith(url);
+      }
+      expect(runtime.diagnostics.record).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects missing browser permission and revoked owners before opening any URL', async () => {
+    const { runtime, call } = fixture();
+    for (const owner of ['one', 'missing'])
+      await expect(call(owner, 'seed.shell.open-url', { url: 'https://example.com' })).rejects.toMatchObject({
+        code: 'broker_permission_denied',
+      });
+    runtime.runtimePlugins[0].permissions = ['shell.open-url'];
+    runtime.pluginIsAuthorized.mockReturnValue(false);
+    await expect(call('one', 'seed.shell.open-url', { url: 'https://example.com' })).rejects.toMatchObject({
+      code: 'broker_permission_denied',
+    });
+    expect(shell.openExternal).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsafe browser targets without disclosing the supplied URL', async () => {
+    const { runtime, call } = fixture();
+    runtime.runtimePlugins[0].permissions = ['shell.open-url'];
+    for (const url of [
+      'file:///private/file',
+      'javascript:alert(1)',
+      'mailto:private@example.com',
+      'https://user:private-token@example.com',
+      '/relative',
+      'https://example.com/\nprivate-token',
+      'https://example.com/' + 'x'.repeat(16384),
+    ]) {
+      const error = await call('one', 'seed.shell.open-url', { url }).catch((cause: unknown) => cause);
+      expect(error).toMatchObject({ code: 'broker_url_denied' });
+      expect(String(error)).not.toContain('private-token');
+    }
+    expect(shell.openExternal).not.toHaveBeenCalled();
+  });
+
+  it('sanitizes system browser launch failures and suppresses success after an owner changes', async () => {
+    const { runtime, call } = fixture();
+    runtime.runtimePlugins[0].permissions = ['shell.open-url'];
+    vi.mocked(shell.openExternal).mockRejectedValueOnce(new Error('private-token from OS'));
+    const error = await call('one', 'seed.shell.open-url', { url: 'https://example.com?token=private-token' }).catch(
+      (cause: unknown) => cause,
+    );
+    expect(error).toMatchObject({ code: 'broker_open_url_failed' });
+    expect(String(error)).not.toContain('private-token');
+    vi.mocked(shell.openExternal).mockImplementationOnce(async () => {
+      runtime.runtimePlugins = [runtime.runtimePlugins[1]];
+    });
+    await expect(call('one', 'seed.shell.open-url', { url: 'https://example.com' })).rejects.toMatchObject({
+      code: 'broker_owner_inactive',
+    });
+  });
+
   it('resolves OS proxy routes only for active plugins with network permission, without forwarding URL secrets', async () => {
     const { runtime, call } = fixture('native-host');
     await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://example.com' })).rejects.toMatchObject({

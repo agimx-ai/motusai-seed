@@ -2,7 +2,7 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { SeedInvocation } from '@motus-ai/seed-sdk'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileBroker, filesystemRoots } from './index'
 import { fileBrokerPermissions } from './permissions'
 
@@ -110,13 +110,21 @@ describe('FileBroker', () => {
     await new Promise((resolveWait) => setTimeout(resolveWait, 50))
     await writeFile(join(root, 'changed.md'), 'hello')
 
-    const result = await pending
-
-    expect(result.next).toBeGreaterThan(0)
-    expect(result.events).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        path: relative(filesystemRoots()[0]!.rootPath, join(root, 'changed.md')).split(sep).join('/'),
-      }),
-    ]))
+    let result = await pending
+    const expectedPath = relative(filesystemRoots()[0]!.rootPath, join(root, 'changed.md')).split(sep).join('/')
+    // Native watchers may report the directory itself before the file write.
+    // Follow the cursor until the requested change arrives instead of assuming the first batch contains it.
+    await vi.waitFor(async () => {
+      if (!result.events.some((event) => event.path === expectedPath)) {
+        result = await broker.invoke('watch', {
+          ...invocation(''),
+          arguments: { ...invocation('').arguments, after: result.next, wait_ms: 500 },
+        }) as typeof result
+      }
+      expect(result.next).toBeGreaterThan(0)
+      expect(result.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: expectedPath }),
+      ]))
+    }, { timeout: 5_000 })
   })
 })

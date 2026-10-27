@@ -372,6 +372,11 @@ export class SeedRuntime {
         await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.shell.open-path', argumentsValue),
     ],
     [
+      'seed.shell.open-url',
+      async (argumentsValue) =>
+        await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.shell.open-url', argumentsValue),
+    ],
+    [
       'seed.audio',
       async (argumentsValue) =>
         await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.audio', argumentsValue),
@@ -2895,6 +2900,35 @@ export class SeedRuntime {
           });
         },
       });
+    }
+    if (service === 'seed.shell.open-url') {
+      const plugin = this.runtimePlugins.find(
+        (candidate) => candidate.package_id === packageId && candidate.api_version === 2 && candidate.has_service,
+      );
+      if (!plugin?.permissions.includes('shell.open-url') || !this.pluginIsAuthorized(packageId))
+        throw Object.assign(new Error('Plugin browser permission is unavailable.'), {
+          code: 'broker_permission_denied',
+        });
+      let url: URL;
+      try {
+        const value = argumentsValue.url;
+        if (typeof value !== 'string' || value.length > 16384 || /[\u0000-\u0020\u007f]/.test(value)) throw new Error();
+        url = new URL(value);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error();
+      } catch {
+        throw Object.assign(new Error('Opening a browser requires an HTTP(S) URL without credentials.'), {
+          code: 'broker_url_denied',
+        });
+      }
+      try {
+        await shell.openExternal(url.href);
+      } catch {
+        throw Object.assign(new Error('Unable to open the system browser.'), { code: 'broker_open_url_failed' });
+      }
+      assertActive?.();
+      if (!this.runtimePlugins.includes(plugin) || !this.pluginIsAuthorized(packageId))
+        throw Object.assign(new Error('Browser request owner is no longer active.'), { code: 'broker_owner_inactive' });
+      return { opened: true };
     }
     if (service === 'seed.shell.open-path') {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId);
