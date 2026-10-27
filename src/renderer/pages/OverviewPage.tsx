@@ -8,12 +8,14 @@ import { companionPresentation } from '../lib/companion'
 import claudeIcon from '@lobehub/icons-static-svg/icons/claudecode-color.svg'
 import codexIcon from '@lobehub/icons-static-svg/icons/codex.svg'
 import workbuddyIcon from '@lobehub/icons-static-svg/icons/workbuddy-color.svg'
+import dshIcon from '@lobehub/icons-static-svg/icons/deepseek-color.svg'
 import vscodeIcon from '../assets/vscode.svg'
 
 const clients = [
   // Match the visible marks rather than their SVG canvas dimensions.
   { name: 'Claude Code', icon: claudeIcon, iconSize: 'size-5.5' },
   { name: 'Codex', icon: codexIcon, iconSize: 'size-5', gradient: 'linear-gradient(#B1A7FF, #7A9DFF 50%, #3941FF)' },
+  { name: 'DeepSeek Harness (DSH)', icon: dshIcon, iconSize: 'size-5.5' },
   { name: 'WorkBuddy', icon: workbuddyIcon, iconSize: 'size-4.5' },
   { name: 'VS Code', icon: vscodeIcon, iconSize: 'size-5' },
 ]
