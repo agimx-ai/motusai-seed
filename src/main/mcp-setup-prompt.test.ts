@@ -14,11 +14,11 @@ vi.mock('electron', () => ({
 vi.mock('./updater', () => ({ SeedUpdater: class {} }));
 import { SeedRuntime } from './runtime';
 import { fetchMcpSetupPrompt, mcpSetupPromptUrl } from './mcp-setup-prompt';
-import { seedLocalMcpUrl } from '../shared/local-api';
 
 const eventsUrl = 'wss://cloud.example/api/v1/distributions/motusai/events';
-const response = (template = 'Connect {{url}}', locale = 'en-US', revision = 1) =>
-  Response.json({ revision, locale, template });
+const response = (document = '# Connect Seed\n\nUse the local MCP service.') =>
+  new Response(document, { headers: { 'Content-Type': 'text/markdown; charset=utf-8' } });
+const englishPrompt = 'Follow https://cloud.example/install/seed.en.md to install Seed.';
 function runtime() {
   return Object.assign(Object.create(SeedRuntime.prototype), {
     user: { id: 'user-1' },
@@ -31,41 +31,41 @@ function runtime() {
 beforeEach(() => writeText.mockClear());
 afterEach(() => vi.unstubAllGlobals());
 describe('Cloud-backed MCP setup copying', () => {
-  it('uses the signed distribution endpoint, sending the locale and rejecting redirects', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response('Use {{url}} then check {{url}}'));
-    expect(await fetchMcpSetupPrompt({ eventsUrl, locale: 'en-US' }, fetcher)).toBe(
-      `Use ${seedLocalMcpUrl} then check ${seedLocalMcpUrl}`,
-    );
+  it('checks the installation document on the signed Cloud origin and copies only a one-line instruction', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response());
+    expect(await fetchMcpSetupPrompt({ eventsUrl, locale: 'en-US' }, fetcher)).toBe(englishPrompt);
     const [url, init] = fetcher.mock.calls[0];
-    expect(String(url)).toBe('https://cloud.example/api/v1/distributions/motusai/mcp-prompt?locale=en-US');
+    expect(String(url)).toBe('https://cloud.example/install/seed.en.md');
     expect(init).toMatchObject({
       cache: 'no-store',
       redirect: 'error',
-      headers: { Accept: 'application/json', 'Accept-Language': 'en-US' },
+      headers: { Accept: 'text/markdown', 'Accept-Language': 'en-US' },
     });
     expect(init?.signal).toBeInstanceOf(AbortSignal);
-    expect(mcpSetupPromptUrl('ws://127.0.0.1:43180/api/v1/distributions/motusai/events').protocol).toBe('http:');
+    expect(mcpSetupPromptUrl('ws://127.0.0.1:43180/api/v1/distributions/motusai/events', 'zh-CN').href).toBe(
+      'http://127.0.0.1:43180/install/seed.md',
+    );
     for (const invalid of [
       'https://cloud.example/other',
       'file:///api/events',
       'https://name:secret@cloud.example/events',
     ])
-      expect(() => mcpSetupPromptUrl(invalid)).toThrow();
+      expect(() => mcpSetupPromptUrl(invalid, 'en-US')).toThrow();
   });
-  it('fetches every time and copies newly saved revisions without a local template or cached fallback', async () => {
+  it('checks the latest document on every copy and leaves a failed copy retryable without a cached fallback', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(response('First {{url}}'))
+      .mockResolvedValueOnce(response('First installation instructions'))
       .mockResolvedValueOnce(new Response('', { status: 503 }))
-      .mockResolvedValueOnce(response('New {{url}}', 'en-US', 2));
+      .mockResolvedValueOnce(response('Updated installation instructions'));
     vi.stubGlobal('fetch', fetcher);
     const app = runtime();
     await app.copyMcpSetupPrompt();
-    expect(writeText).toHaveBeenLastCalledWith(`First ${seedLocalMcpUrl}`);
+    expect(writeText).toHaveBeenLastCalledWith(englishPrompt);
     await expect(app.copyMcpSetupPrompt()).rejects.toThrow();
     expect(writeText).toHaveBeenCalledTimes(1);
     await app.copyMcpSetupPrompt();
-    expect(writeText).toHaveBeenLastCalledWith(`New ${seedLocalMcpUrl}`);
+    expect(writeText).toHaveBeenLastCalledWith(englishPrompt);
     expect(fetcher).toHaveBeenCalledTimes(3);
     expect(writeText).toHaveBeenCalledTimes(2);
   });
@@ -73,25 +73,24 @@ describe('Cloud-backed MCP setup copying', () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockRejectedValueOnce(new TypeError('offline'))
-      .mockResolvedValueOnce(response('连接 {{url}}', 'zh-CN'));
+      .mockResolvedValueOnce(response('# 连接 Seed\n\n使用本机 MCP 服务。'));
     vi.stubGlobal('fetch', fetcher);
     const app = runtime();
     Reflect.set(app, 'store', { languagePreference: () => 'zh-CN' });
     await expect(app.copyMcpSetupPrompt()).rejects.toThrow('offline');
     expect(writeText).not.toHaveBeenCalled();
     await app.copyMcpSetupPrompt();
-    expect(writeText).toHaveBeenCalledWith(`连接 ${seedLocalMcpUrl}`);
-    expect(String(fetcher.mock.calls[1][0])).toContain('locale=zh-CN');
+    expect(writeText).toHaveBeenCalledWith('根据 https://cloud.example/install/seed.md 安装 Seed。');
+    expect(String(fetcher.mock.calls[1][0])).toBe('https://cloud.example/install/seed.md');
   });
   it.each([
-    { revision: 1, locale: 'en-US', template: '' },
-    { revision: 1, locale: 'en-US', template: 'Missing URL' },
-    { revision: 1, locale: 'en-US', template: '{{url}} {{token}}' },
-    { revision: 1, locale: 'en-US', template: '{{url}}' + 'x'.repeat(20_000) },
-    { revision: 0, locale: 'en-US', template: '{{url}}' },
-    { revision: 1, locale: 'zh-CN', template: '{{url}}' },
+    () => response(''),
+    () => response('   '),
+    () => response('x'.repeat(100_001)),
+    () => new Response('<html>Cloud home page</html>', { headers: { 'Content-Type': 'text/html' } }),
+    () => Response.json({ error: 'unavailable' }),
   ])('does not touch the clipboard for invalid response %#', async (value) => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(value)));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(value()));
     await expect(runtime().copyMcpSetupPrompt()).rejects.toThrow();
     expect(writeText).not.toHaveBeenCalled();
   });
