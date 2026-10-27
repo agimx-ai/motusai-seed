@@ -1,5 +1,5 @@
 import { Blocks } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { cx } from '../lib/display'
 
 const iconBackgroundCache = new Map<string, boolean>()
@@ -24,11 +24,15 @@ function imageHasBackground(image: HTMLImageElement) {
   }
 }
 
-function AdaptiveIconImage({ src, sizeClass, className }: {
+function AdaptiveIconImage({ src, sizeClass, className, fallback, errorFallback }: {
   src: string
   sizeClass: string
   className?: string
+  fallback: ReactNode
+  errorFallback?: ReactNode
 }) {
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
   const [detectedIcon, setDetectedIcon] = useState<{ src: string; hasBackground: boolean }>()
   const hasBackground = detectedIcon?.src === src ? detectedIcon.hasBackground : iconBackgroundCache.get(src)
   const imageClass = cx('h-full w-full', hasBackground === false ? 'object-contain p-1' : 'object-cover')
@@ -36,16 +40,30 @@ function AdaptiveIconImage({ src, sizeClass, className }: {
     const detected = imageHasBackground(image)
     iconBackgroundCache.set(src, detected)
     setDetectedIcon({ src, hasBackground: detected })
+    setStatus('loaded')
   }
 
-  return <span className={cx('block shrink-0 overflow-hidden bg-card', hasBackground === false && 'border border-plugin-icon-border', sizeClass, className)} aria-hidden="true">
-    <img
-      className={imageClass}
+  useEffect(() => {
+    if (status !== 'error') return
+    const retry = () => {
+      setStatus('loading')
+      setAttempt((value) => value + 1)
+    }
+    window.addEventListener('online', retry)
+    return () => window.removeEventListener('online', retry)
+  }, [status])
+
+  return <span className={cx('relative block shrink-0 overflow-hidden bg-card', hasBackground === false && status === 'loaded' && 'border border-plugin-icon-border', sizeClass, className)} aria-hidden="true">
+    {status !== 'loaded' && (status === 'error' ? errorFallback ?? fallback : fallback)}
+    {status !== 'error' && <img
+      key={attempt}
+      className={cx(imageClass, status !== 'loaded' && 'invisible absolute inset-0')}
       crossOrigin={/^https?:\/\//i.test(src) ? 'anonymous' : undefined}
       src={src}
       alt=""
       onLoad={(event) => detectIconBackground(event.currentTarget)}
-    />
+      onError={() => setStatus('error')}
+    />}
   </span>
 }
 
@@ -56,13 +74,15 @@ export function AdaptiveIcon({ iconUrl, iconDarkUrl, fallback, large = false }: 
   large?: boolean
 }) {
   const sizeClass = large ? 'h-14 w-14 rounded-[14px]' : 'h-9 w-9 rounded-[10px]'
-  if (iconUrl) return <>
-    <AdaptiveIconImage src={iconUrl} sizeClass={sizeClass} className={iconDarkUrl ? 'dark:hidden' : undefined} />
-    {iconDarkUrl && <AdaptiveIconImage src={iconDarkUrl} sizeClass={sizeClass} className="hidden dark:block" />}
-  </>
-  return <span className={cx('grid shrink-0 place-items-center border border-plugin-icon-border bg-card text-muted-foreground', sizeClass)} aria-hidden="true">
-    {fallback || <Blocks size={large ? 25 : 18} />}
+  const placeholder = <span className={cx('grid shrink-0 place-items-center border border-plugin-icon-border bg-card text-muted-foreground', sizeClass)} aria-hidden="true">
+    {fallback ?? <Blocks size={large ? 25 : 18} />}
   </span>
+  if (iconUrl) return <>
+    <AdaptiveIconImage key={`light:${iconUrl}`} src={iconUrl} sizeClass={sizeClass} fallback={placeholder} className={iconDarkUrl ? 'dark:hidden' : undefined} />
+    {iconDarkUrl && <AdaptiveIconImage key={`dark:${iconDarkUrl}`} src={iconDarkUrl} sizeClass={sizeClass} className="hidden dark:block"
+      fallback={placeholder} errorFallback={<AdaptiveIconImage key={iconUrl} src={iconUrl} sizeClass={sizeClass} fallback={placeholder} />} />}
+  </>
+  return placeholder
 }
 
 export function ResourceCard({ icon, title, description, trailing, onOpen }: {
