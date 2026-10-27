@@ -1,0 +1,7 @@
+{
+  "version": "0.3.12",
+  "documentation": {
+    "pages": ["/docs/quickstart", "/docs/plugins", "/docs/plugins/reference"],
+    "screenshots": true
+  }
+}
