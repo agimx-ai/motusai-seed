@@ -41,7 +41,9 @@ MotusAI Seed 是可扩展的桌面插件客户端。登录 Seed Cloud 后，你�
 
 ## 开发插件
 
-Seed 是通用插件宿主，具体能力和界面由插件声明。开始开发前，请阅读：
+Seed 是通用插件宿主，具体能力和界面由插件声明。从 [seed-sample-plugin 官方示例工程](https://github.com/agimx-ai/seed-sample-plugin) 开始，点击 **Use this template** 创建自己的插件仓库，安装依赖后即可构建和测试。
+
+进一步开发请阅读：
 
 - [插件开发手册](./docs/插件开发手册.md)
 - [Seed SDK](./packages/seed-sdk/README.md)

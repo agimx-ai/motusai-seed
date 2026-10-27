@@ -32,6 +32,8 @@ npm install --save-dev typescript @types/react@^19 @types/react-dom@^19
 
 ## 🚀 快速开始
 
+完整工程可直接使用 [seed-sample-plugin 官方示例](https://github.com/agimx-ai/seed-sample-plugin)：点击 **Use this template** 创建自己的仓库，安装依赖后即可构建和测试。以下代码展示最小前后端示例。
+
 `src/service.ts`：
 
 ```ts
