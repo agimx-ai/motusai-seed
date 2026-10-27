@@ -5,16 +5,17 @@ import { ActionButton } from '@motus-ai/seed-sdk/react'
 import type { SeedSnapshot } from '../../shared/contracts'
 import { SeedlingMascot } from '../components/SeedlingMascot'
 import { companionPresentation } from '../lib/companion'
-import claudeIcon from '../assets/mcp-clients/claude.svg'
-import codexIcon from '../assets/mcp-clients/openai.svg'
-import workbuddyIcon from '../assets/mcp-clients/workbuddy.svg'
-import vscodeIcon from '../assets/mcp-clients/vscode.png'
+import claudeIcon from '@lobehub/icons-static-svg/icons/claudecode-color.svg'
+import codexIcon from '@lobehub/icons-static-svg/icons/codex.svg'
+import workbuddyIcon from '@lobehub/icons-static-svg/icons/workbuddy-color.svg'
+import vscodeIcon from '../assets/vscode.svg'
 
 const clients = [
-  { name: 'Claude Code', icon: claudeIcon },
-  { name: 'Codex', icon: codexIcon, monochrome: true },
-  { name: 'WorkBuddy', icon: workbuddyIcon },
-  { name: 'VS Code', icon: vscodeIcon },
+  // Match the visible marks rather than their SVG canvas dimensions.
+  { name: 'Claude Code', icon: claudeIcon, iconSize: 'size-5.5' },
+  { name: 'Codex', icon: codexIcon, iconSize: 'size-5', gradient: 'linear-gradient(#B1A7FF, #7A9DFF 50%, #3941FF)' },
+  { name: 'WorkBuddy', icon: workbuddyIcon, iconSize: 'size-4.5' },
+  { name: 'VS Code', icon: vscodeIcon, iconSize: 'size-5' },
 ]
 
 export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
@@ -55,8 +56,8 @@ export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
       <SeedlingMascot state={state} label={`${t('overview.interact')} · ${statusText}`} />
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">{statusText}</p>
     </div>
-    <div className="seed-mcp-connect flex w-full max-w-104 flex-col items-center gap-6">
-      <div className="relative grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-full border border-border bg-card p-1.5">
+    <div className="seed-mcp-connect flex w-full max-w-104 translate-y-6 flex-col items-center gap-6">
+      <div className="relative grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--border)_75%,var(--input))] bg-card p-1.5">
         <span className="seed-mcp-border-beam" aria-hidden="true" />
         <p className="col-start-2 m-0 min-w-0 text-center text-[length:var(--text-input-font-size)] text-foreground">{t('overview.mcp.instruction')}</p>
         <ActionButton type="button" tone="primary" onClick={() => void copySetup()} busy={copying}
@@ -68,11 +69,19 @@ export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
         </ActionButton>
       </div>
       <ul aria-label={t('overview.mcp.clients')} className="m-0 flex list-none flex-wrap justify-center gap-4 p-0">
-        {clients.map((client, index) => <li key={client.name}
+        {clients.map((client, index) => <li key={client.name} className="seed-mcp-client"
           style={{ '--seed-client-delay': `${Math.floor(Math.abs(index - (clients.length - 1) / 2)) * 110}ms` } as CSSProperties}>
           <span className="seed-mcp-client-mark grid size-9 place-items-center rounded-full border border-plugin-icon-border bg-card">
-            <span className="seed-mcp-client-icon grid size-5 place-items-center">
-              <img src={client.icon} alt={client.name === 'VS Code' ? t('overview.mcp.vscode') : client.name} className={`size-5 object-contain ${client.monochrome ? 'dark:invert' : ''}`} />
+            <span className="seed-mcp-client-icon grid size-7 place-items-center">
+              {client.gradient
+                ? <span role="img" aria-label={client.name} className={client.iconSize} style={{
+                  backgroundImage: client.gradient,
+                  maskImage: `url("${client.icon}")`,
+                  maskPosition: 'center',
+                  maskRepeat: 'no-repeat',
+                  maskSize: 'contain',
+                }} />
+                : <img src={client.icon} alt={client.name === 'VS Code' ? t('overview.mcp.vscode') : client.name} className={`${client.iconSize} object-contain`} />}
             </span>
           </span>
         </li>)}

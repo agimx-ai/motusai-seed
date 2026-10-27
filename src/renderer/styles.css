@@ -193,6 +193,17 @@
     animation-delay: var(--seed-client-delay);
   }
 
+  .seed-mcp-connect .seed-mcp-client:hover .seed-mcp-client-icon {
+    filter: grayscale(0);
+    opacity: 1;
+    transition-delay: 0ms;
+  }
+
+  .seed-mcp-connect .seed-mcp-client:hover .seed-mcp-client-mark {
+    animation: seed-mcp-client-jump 600ms ease-out both;
+    animation-delay: 0ms;
+  }
+
   @keyframes seed-mcp-client-jump {
     0%, 100% { transform: translateY(0) scale(1); }
     35% { transform: translateY(-6px) scale(1.06); }
