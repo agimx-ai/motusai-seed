@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { app } from 'electron';
 vi.mock('electron', () => ({
-  app: { getPreferredSystemLanguages: () => ['en-US'], getLocale: () => 'en-US' },
+  app: { isPackaged: false, getPreferredSystemLanguages: () => ['en-US'], getLocale: () => 'en-US' },
   BrowserWindow: class {},
   powerSaveBlocker: {},
   shell: {},
@@ -29,11 +30,13 @@ function fixture() {
   const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
     stopping: false,
     pluginReloadWork: Promise.resolve(),
+    developmentPluginStates: {},
     pluginServicesReady: Promise.resolve(),
     configureWorker: vi.fn(async () => {}),
     runtimePlugins: [one, two],
     installedPlugins: [],
     developmentPlugins: {
+      failures: new Map(),
       refresh: vi.fn(async () => development),
       has: (id: string) => development.some((entry) => entry.installed.id === id),
       pruneSnapshots: vi.fn(),
@@ -83,10 +86,20 @@ function fixture() {
   };
 }
 describe('one runtime with distinct plugin sources', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    Object.assign(app, { isPackaged: false });
+  });
+
   it('finishes activation before completing a reload or replacing the next plugin source', async () => {
     const h = fixture();
     let activate!: () => void;
-    h.runtime.configureWorker.mockImplementationOnce(() => new Promise<void>((resolve) => { activate = resolve; }));
+    h.runtime.configureWorker.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          activate = resolve;
+        }),
+    );
     const completed = vi.fn();
     const first = h.runtime.reloadPlugins().then(completed);
     await vi.waitFor(() => expect(activate).toBeTypeOf('function'));
@@ -104,7 +117,9 @@ describe('one runtime with distinct plugin sources', () => {
   it('waits for existing service configuration before withdrawing its plugin sources', async () => {
     const h = fixture();
     let activate!: () => void;
-    h.runtime.pluginServicesReady = new Promise<void>((resolve) => { activate = resolve; });
+    h.runtime.pluginServicesReady = new Promise<void>((resolve) => {
+      activate = resolve;
+    });
     const pending = h.runtime.reloadPlugins();
     await Promise.resolve();
     expect(h.runtime.developmentPlugins.refresh).not.toHaveBeenCalled();
@@ -218,5 +233,85 @@ describe('one runtime with distinct plugin sources', () => {
     await h.runtime.reloadPlugins();
     expect(h.runtime.pluginInstaller.listInstalled).toHaveBeenCalledTimes(2);
     expect(h.runtime.configureWorker).toHaveBeenCalledTimes(2);
+  });
+  it.each([
+    { startup: 'packaged client', isPackaged: true, devServer: undefined },
+    { startup: 'source with Vite', isPackaged: false, devServer: 'http://localhost:5173' },
+    { startup: 'source without Vite', isPackaged: false, devServer: undefined },
+  ])(
+    'uses the same development switch in $startup and restores installed sources when disabled',
+    async (environment) => {
+      Object.assign(app, { isPackaged: environment.isPackaged });
+      vi.stubEnv('VITE_DEV_SERVER_URL', environment.devServer);
+      const h = fixture();
+      const source = { ...h.runtime.developmentPlugins, stop: vi.fn() };
+      h.runtime.developmentPlugins = undefined;
+      h.runtime.pluginDevelopmentWork = Promise.resolve();
+      let enabled = false;
+      h.runtime.store.pluginDevelopmentEnabled = () => enabled;
+      h.runtime.store.setPluginDevelopmentEnabled = vi.fn(async (value: boolean) => {
+        enabled = value;
+      });
+      h.runtime.publishSnapshot = vi.fn();
+      h.runtime.startPluginDevelopment = vi.fn(async () => {
+        h.runtime.developmentPlugins = source;
+      });
+      const next = { ...h.one, source: 'development', configuration_revision: 'new-build' };
+      h.setDevelopment([
+        {
+          installed: {
+            id: h.one.package_id,
+            version: next.version,
+            source: 'development',
+            manifestDigest: 'new-build',
+          },
+          runtime: next,
+        },
+      ]);
+      await expect(h.runtime.setPluginDevelopmentEnabled(true)).resolves.toBe(true);
+      expect(h.runtime.runtimePlugins).toContainEqual(next);
+      expect(enabled).toBe(true);
+      await expect(h.runtime.setPluginDevelopmentEnabled(false)).resolves.toBe(false);
+      expect(source.stop).toHaveBeenCalledOnce();
+      expect(h.runtime.runtimePlugins).toEqual([h.one, h.two]);
+      expect(enabled).toBe(false);
+      expect(h.runtime.developmentPluginStates).toEqual({});
+    },
+  );
+
+  it('serializes rapid mode changes and ignores readiness from an older build', async () => {
+    const h = fixture();
+    const source = { ...h.runtime.developmentPlugins, stop: vi.fn() };
+    h.runtime.developmentPlugins = undefined;
+    h.runtime.pluginDevelopmentWork = Promise.resolve();
+    let enabled = false;
+    h.runtime.store.pluginDevelopmentEnabled = () => enabled;
+    h.runtime.store.setPluginDevelopmentEnabled = async (value: boolean) => {
+      enabled = value;
+    };
+    h.runtime.publishSnapshot = vi.fn();
+    h.runtime.startPluginDevelopment = async () => {
+      h.runtime.developmentPlugins = source;
+    };
+    await Promise.all([h.runtime.setPluginDevelopmentEnabled(true), h.runtime.setPluginDevelopmentEnabled(false)]);
+    expect(enabled).toBe(false);
+    const current = { ...h.one, source: 'development', configuration_revision: 'current' };
+    h.runtime.runtimePlugins = [current];
+    h.runtime.installedPlugins = [{ id: h.one.package_id, manifestDigest: 'digest-current' }];
+    await h.runtime.handleWorkerEvent({
+      type: 'plugin.runtime.ready',
+      packageId: h.one.package_id,
+      configurationRevision: 'old',
+    });
+    expect(h.runtime.developmentPluginStates).toEqual({});
+    await h.runtime.handleWorkerEvent({
+      type: 'plugin.runtime.ready',
+      packageId: h.one.package_id,
+      configurationRevision: 'current',
+    });
+    expect(h.runtime.developmentPluginStates[h.one.package_id]).toEqual({
+      state: 'loaded',
+      manifestDigest: 'digest-current',
+    });
   });
 });

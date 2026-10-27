@@ -34,14 +34,17 @@ describe('SeedStore SQLite persistence', () => {
     await store.load();
     try {
       expect(store.autoUpdatePlugins()).toBe(true);
+      expect(store.pluginDevelopmentEnabled()).toBe(false);
       expect(store.systemNotificationsEnabled()).toBe(true);
       for (const enabled of [false, true]) {
         await store.setAutoUpdatePlugins(enabled);
+        await store.setPluginDevelopmentEnabled(enabled);
         await store.setSystemNotificationsEnabled(enabled);
         await store.close();
         store = new SeedStore(directory, 'MotusAI Seed');
         await store.load();
         expect(store.autoUpdatePlugins()).toBe(enabled);
+        expect(store.pluginDevelopmentEnabled()).toBe(enabled);
         expect(store.systemNotificationsEnabled()).toBe(enabled);
       }
     } finally {
@@ -61,7 +64,10 @@ describe('SeedStore SQLite persistence', () => {
     const reopened = new SeedStore(directory, 'MotusAI Seed');
     await reopened.load();
     try {
-      expect(await reopened.pluginUpdateCheckpoint('alice')).toEqual({ appVersion: '0.3.6', pending: ['com.example.pending'] });
+      expect(await reopened.pluginUpdateCheckpoint('alice')).toEqual({
+        appVersion: '0.3.6',
+        pending: ['com.example.pending'],
+      });
       expect(await reopened.pluginUpdateCheckpoint('bob')).toEqual({ appVersion: '0.3.6', pending: [] });
       expect(await reopened.pluginUpdateCheckpoint('other')).toBeUndefined();
       expect(await reopened.installedPluginState()).toEqual(installed);

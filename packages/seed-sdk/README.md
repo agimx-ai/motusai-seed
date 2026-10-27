@@ -12,7 +12,7 @@ MotusAI Seed 插件开发 SDK —— 提供设置页、前后端通信、数据�
 - 📡 **事件订阅** — 支持前后端通知，以及跨插件后台事件
 - 🔔 **系统通知** — 发送桌面通知，监听显示、点击和关闭事件
 - 🧭 **控件引导** — 创建单步提示或多步导览，支持中英文按钮和异步步骤
-- 🔄 **开发热更新** — 监听源码变化，自动构建并同步到 Seed 开发客户端
+- 🔄 **开发热更新** — 监听源码变化，自动构建并同步到已开启插件开发模式的 Seed 客户端
 - 📦 **插件打包** — 生成 `.seedpkg` 安装包及 SHA-256 摘要
 
 ## 📦 安装
@@ -1585,6 +1585,10 @@ console.log(result.manifest.id);
 
 ## 🔧 开发
 
+需要 Node.js 24 或更新版本。SDK npm 包包含已经编译的开发工具，插件开发者不需要检出客户端源码或编译 SDK。在提供此功能的 Seed 客户端「插件设置」中开启「插件开发模式」后，安装版同样可以加载开发插件；开关默认关闭，关闭后恢复仍获授权的正式版本并保留数据。
+
+CLI 会分别提示已同步、等待客户端、开发模式关闭、正在加载、加载成功或加载失败。加载成功只确认当前构建摘要对应的后端已就绪，仍需打开真实页面验证界面。旧版客户端没有此开关或状态回报时，不能把同步日志当作加载证据。支持该流程的客户端与更新 CLI 需要一起发布；本地源码实现不代表已经发布。
+
 ```bash
 # 安装依赖
 npm install
@@ -1606,7 +1610,7 @@ npm run pack
 | `readPluginCapabilities({ root?, entry? })` | `entry` 默认 `src/capabilities.ts` | `Promise<CapabilityDefinition[]>` |
 | `collectPluginFiles({ root?, outdir?, variant? })` | `outdir` 默认 `dist` | `Promise<{ manifest: BuiltPluginManifest; entries: Map<string, Buffer>; targeted: boolean }>` |
 | `packPlugin({ root?, outdir?, packages?, variant? })` | `outdir='dist'`，`packages='artifacts'` | `Promise<{ packagePath: string; sha256: string; size: number }>` |
-| `publishDevelopmentPlugin({ root?, directory? })` | 同步已有 `dist`；`directory` 默认开发目录 | `Promise<{ id: string; directory: string; ownership: { dev: number; ino: number } }>` |
+| `publishDevelopmentPlugin({ root?, directory? })` | 同步已有 `dist`；`directory` 默认开发目录 | `Promise<{ id: string; directory: string; manifestDigest: string; ownership: { dev: number; ino: number } }>` |
 | `developmentPluginDirectory()` | 根据当前系统和用户计算路径 | `string` |
 | `developPlugin({ root?, directory?, log?, signal? })` | 构建、同步并持续监听；`log` 接收字符串 | `Promise<{ rebuild(): Promise<void>; stop(): Promise<void> }>` |
 

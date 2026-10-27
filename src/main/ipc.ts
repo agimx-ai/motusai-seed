@@ -77,8 +77,9 @@ export function registerIpc(runtime: SeedRuntime) {
   handle(ipcChannels.preventSystemSleep, (_event, enabled) =>
     runtime.setPreventSystemSleep(z.boolean().parse(enabled)),
   );
-  handle(ipcChannels.autoUpdatePlugins, (_event, enabled) =>
-    runtime.setAutoUpdatePlugins(z.boolean().parse(enabled)),
+  handle(ipcChannels.autoUpdatePlugins, (_event, enabled) => runtime.setAutoUpdatePlugins(z.boolean().parse(enabled)));
+  handle(ipcChannels.pluginDevelopmentEnabled, (_event, enabled) =>
+    runtime.setPluginDevelopmentEnabled(z.boolean().parse(enabled)),
   );
   handle(ipcChannels.systemNotificationsEnabled, (_event, enabled) =>
     runtime.setSystemNotificationsEnabled(z.boolean().parse(enabled)),

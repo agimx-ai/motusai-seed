@@ -29,6 +29,7 @@ type StoredConfig = {
   encryptedPluginData?: string;
   preventSystemSleep: boolean;
   autoUpdatePlugins: boolean;
+  pluginDevelopmentEnabled: boolean;
   systemNotificationsEnabled: boolean;
   languagePreference: SeedLanguagePreference;
   themePreference: SeedThemePreference;
@@ -89,6 +90,7 @@ type AuditRow = {
 const defaults = (): StoredConfig => ({
   preventSystemSleep: false,
   autoUpdatePlugins: true,
+  pluginDevelopmentEnabled: false,
   systemNotificationsEnabled: true,
   languagePreference: 'system',
   themePreference: 'system',
@@ -388,6 +390,7 @@ export class SeedStore {
       encryptedPluginData: settings.get('encrypted_plugin_data'),
       preventSystemSleep: settings.get('prevent_system_sleep') === 'true',
       autoUpdatePlugins: settings.get('auto_update_plugins') !== 'false',
+      pluginDevelopmentEnabled: settings.get('plugin_development_enabled') === 'true',
       systemNotificationsEnabled: settings.get('system_notifications_enabled') !== 'false',
       languagePreference: language === 'zh-CN' || language === 'en-US' ? language : 'system',
       themePreference:
@@ -460,6 +463,13 @@ export class SeedStore {
   }
   preventSystemSleep() {
     return this.value.preventSystemSleep;
+  }
+  pluginDevelopmentEnabled() {
+    return this.value.pluginDevelopmentEnabled;
+  }
+  async setPluginDevelopmentEnabled(enabled: boolean) {
+    await this.setSetting('plugin_development_enabled', JSON.stringify(enabled));
+    this.value.pluginDevelopmentEnabled = enabled;
   }
   autoUpdatePlugins() {
     return this.value.autoUpdatePlugins;
@@ -690,7 +700,9 @@ export class SeedStore {
     await this.setSetting('installed_plugin_state', JSON.stringify(state));
   }
   async pluginUpdateCheckpoint(account: string): Promise<unknown> {
-    const row = await this.getDatabase()<SettingRow>('app_settings').where({ key: `plugin_updates:${account}` }).first();
+    const row = await this.getDatabase()<SettingRow>('app_settings')
+      .where({ key: `plugin_updates:${account}` })
+      .first();
     if (!row) return undefined;
     try {
       return JSON.parse(row.value) as unknown;
@@ -945,11 +957,7 @@ export class SeedStore {
       .clearOrder()
       .count<{ total: number | string }>({ total: '*' });
     const rowsQuery = applyFilters(
-      withoutVisibleAncestor(
-        database<AuditRow>('observation_records')
-          .select('*')
-          .where({ visibility: 'activity' }),
-      ),
+      withoutVisibleAncestor(database<AuditRow>('observation_records').select('*').where({ visibility: 'activity' })),
     );
     if (cursor)
       rowsQuery.andWhere((scope) => {

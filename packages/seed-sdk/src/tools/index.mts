@@ -10,3 +10,4 @@ export {
 } from './package.mjs';
 export { developPlugin, developmentPluginDirectory, publishDevelopmentPlugin } from './development.mjs';
 export type { BuiltPluginManifest, PluginResource } from './manifest.mjs';
+export { readDevelopmentFeedback } from './development-status.mjs';

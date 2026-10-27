@@ -51,20 +51,35 @@ const localHttpGateway = new SeedLocalHttpGateway(
 let pluginsReady: Promise<void> = Promise.resolve();
 
 function configurePlugins(command: Extract<WorkerCommand, { type: 'configure' }>) {
-  pluginsReady = pluginsReady.catch(() => undefined).then(async () => {
-    await localHttpGateway.start();
-    const failures = await pluginHost.start(command.plugins);
-    for (const failure of failures) emit({ type: 'plugin.runtime.failed', ...failure });
-    const failedIds = new Set(failures.map((failure) => failure.packageId));
-    localHttpGateway.updatePluginStates(
-      command.plugins.map((plugin) => ({
-        plugin_id: plugin.package_id,
-        version: plugin.version,
-        state: failedIds.has(plugin.package_id) ? 'failed' : 'ready',
-        ...(plugin.configuration_revision ? { configuration_revision: plugin.configuration_revision } : {}),
-      })),
-    );
-  });
+  pluginsReady = pluginsReady
+    .catch(() => undefined)
+    .then(async () => {
+      await localHttpGateway.start();
+      const failures = await pluginHost.start(command.plugins);
+      for (const failure of failures)
+        emit({
+          type: 'plugin.runtime.failed',
+          ...failure,
+          configurationRevision: command.plugins.find((plugin) => plugin.package_id === failure.packageId)
+            ?.configuration_revision,
+        });
+      const failedIds = new Set(failures.map((failure) => failure.packageId));
+      for (const plugin of command.plugins)
+        if (!failedIds.has(plugin.package_id))
+          emit({
+            type: 'plugin.runtime.ready',
+            packageId: plugin.package_id,
+            configurationRevision: plugin.configuration_revision,
+          });
+      localHttpGateway.updatePluginStates(
+        command.plugins.map((plugin) => ({
+          plugin_id: plugin.package_id,
+          version: plugin.version,
+          state: failedIds.has(plugin.package_id) ? 'failed' : 'ready',
+          ...(plugin.configuration_revision ? { configuration_revision: plugin.configuration_revision } : {}),
+        })),
+      );
+    });
   return pluginsReady;
 }
 
@@ -177,7 +192,9 @@ async function handleCommand(command: WorkerCommand) {
     } catch (error) {
       if (command.requestId)
         emit({
-          type: 'configure.result', requestId: command.requestId, ok: false,
+          type: 'configure.result',
+          requestId: command.requestId,
+          ok: false,
           error: error instanceof Error ? error.message : String(error),
         });
       throw error;

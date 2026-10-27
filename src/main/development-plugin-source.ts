@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { watch, type FSWatcher } from 'node:fs';
-import { chmod, lstat, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { SeedInstalledPlugin, SeedPluginRuntimeDefinition } from '../shared/contracts';
 import { compareSeedVersions } from '../shared/seed-version';
@@ -12,6 +12,7 @@ const pluginId = /^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/;
 /** Development source only. Uses the same manifest reader and runtime as downloaded packages. */
 export class DevelopmentPluginSource {
   private readonly entries = new Map<string, Entry>();
+  readonly failures = new Map<string, { manifestDigest?: string; message: string }>();
   private watcher?: FSWatcher;
   private timer?: ReturnType<typeof setTimeout>;
   private stopped = false;
@@ -49,14 +50,23 @@ export class DevelopmentPluginSource {
 
   private async scan(): Promise<Entry[]> {
     if (this.stopped) return [];
+    this.failures.clear();
     const present = new Set<string>();
     for (const child of await readdir(this.root, { withFileTypes: true })) {
       if (!pluginId.test(child.name)) continue;
       present.add(child.name);
+      let attemptedDigest: string | undefined;
       try {
         if (!child.isDirectory() || child.isSymbolicLink())
           throw new Error('Development plugins must be regular directories.');
+        const manifestPath = join(this.root, child.name, 'manifest.json');
+        const metadata = await lstat(manifestPath);
+        if (metadata.isFile() && !metadata.isSymbolicLink() && metadata.size <= 1024 * 1024) {
+          const body = await readFile(manifestPath);
+          attemptedDigest = 'sha256:' + createHash('sha256').update(body).digest('hex');
+        }
         const inspected = await inspectPluginDirectory(join(this.root, child.name));
+        attemptedDigest = inspected.manifestDigest;
         const { manifest, manifestDigest } = inspected;
         if (manifest.id !== child.name) throw new Error('Plugin directory name must match manifest.id.');
         if (compareSeedVersions(this.appVersion, manifest.minSeedVersion) < 0)
@@ -118,6 +128,10 @@ export class DevelopmentPluginSource {
         });
       } catch (error) {
         // Incomplete/manual edits must not unload an otherwise healthy previous generation.
+        this.failures.set(child.name, {
+          manifestDigest: attemptedDigest,
+          message: error instanceof Error ? error.message : String(error),
+        });
         this.report(child.name, error);
       }
     }

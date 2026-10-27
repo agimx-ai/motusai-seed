@@ -47,50 +47,75 @@ function fixture(kind = 'sandboxed-web') {
 describe('generic plugin SDK brokers', () => {
   it('resolves OS proxy routes only for active plugins with network permission, without forwarding URL secrets', async () => {
     const { runtime, call } = fixture('native-host');
-    await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://example.com' })).rejects.toMatchObject({ code: 'broker_permission_denied' });
+    await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://example.com' })).rejects.toMatchObject({
+      code: 'broker_permission_denied',
+    });
     runtime.runtimePlugins[0].permissions = ['network.connect.internet'];
-    await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://example.com/path?token=private' })).resolves.toEqual({ proxy: 'PROXY 127.0.0.1:7890' });
+    await expect(
+      call('one', 'seed.network.resolve-proxy', { url: 'https://example.com/path?token=private' }),
+    ).resolves.toEqual({ proxy: 'PROXY 127.0.0.1:7890' });
     expect(session.defaultSession.resolveProxy).toHaveBeenCalledWith('https://example.com');
-    await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://user:secret@example.com' })).rejects.toThrow('without credentials');
+    await expect(call('one', 'seed.network.resolve-proxy', { url: 'https://user:secret@example.com' })).rejects.toThrow(
+      'without credentials',
+    );
     await expect(call('one', 'seed.network.resolve-proxy', { url: 'file:///tmp/private' })).rejects.toThrow('HTTP(S)');
   });
-  it.each(['native-host', 'sandboxed-web'])('routes notification identity, permission and optional navigation for %s', async (kind) => {
-    const { runtime, call } = fixture(kind);
-    runtime.runtimePlugins[0].permissions = ['system.notifications'];
-    const window = { isDestroyed: () => false, isMinimized: () => true, restore: vi.fn(), show: vi.fn(), focus: vi.fn() };
-    runtime.window.mockReturnValue(window);
-    const request = { version: 1, operation: 'show', id: crypto.randomUUID(), notification: { title: 'Complete' } };
-    expect(await call('one', 'seed.notifications', { ...request, package_id: 'com.example.two' })).toBe('sent');
-    const [owner, input, context] = runtime.systemNotifications.invoke.mock.calls[0];
-    expect(owner).toBe('com.example.one'); expect(input).toEqual(request);
-    expect(context.plugin).toBe(runtime.runtimePlugins[0]); expect(context.enabled()).toBe(true);
-    expect(runtime.requestNavigation).not.toHaveBeenCalled();
-    const target = { destination: 'plugins', pluginId: 'com.example.target', query: 'details' };
-    context.activate(target);
-    expect(window.restore).toHaveBeenCalledOnce(); expect(window.show).toHaveBeenCalledOnce(); expect(window.focus).toHaveBeenCalledOnce();
-    expect(runtime.requestNavigation).toHaveBeenCalledExactlyOnceWith(target);
-    runtime.store.systemNotificationsEnabled.mockReturnValue(false); expect(context.enabled()).toBe(false);
-    await runtime.releasePluginWork('com.example.one');
-    expect(runtime.systemNotifications.clear).toHaveBeenCalledExactlyOnceWith('com.example.one');
-    runtime.runtimePlugins = [runtime.runtimePlugins[1]];
-    expect(() => context.assertActive()).toThrow('no longer running');
-  });
+  it.each(['native-host', 'sandboxed-web'])(
+    'routes notification identity, permission and optional navigation for %s',
+    async (kind) => {
+      const { runtime, call } = fixture(kind);
+      runtime.runtimePlugins[0].permissions = ['system.notifications'];
+      const window = {
+        isDestroyed: () => false,
+        isMinimized: () => true,
+        restore: vi.fn(),
+        show: vi.fn(),
+        focus: vi.fn(),
+      };
+      runtime.window.mockReturnValue(window);
+      const request = { version: 1, operation: 'show', id: crypto.randomUUID(), notification: { title: 'Complete' } };
+      expect(await call('one', 'seed.notifications', { ...request, package_id: 'com.example.two' })).toBe('sent');
+      const [owner, input, context] = runtime.systemNotifications.invoke.mock.calls[0];
+      expect(owner).toBe('com.example.one');
+      expect(input).toEqual(request);
+      expect(context.plugin).toBe(runtime.runtimePlugins[0]);
+      expect(context.enabled()).toBe(true);
+      expect(runtime.requestNavigation).not.toHaveBeenCalled();
+      const target = { destination: 'plugins', pluginId: 'com.example.target', query: 'details' };
+      context.activate(target);
+      expect(window.restore).toHaveBeenCalledOnce();
+      expect(window.show).toHaveBeenCalledOnce();
+      expect(window.focus).toHaveBeenCalledOnce();
+      expect(runtime.requestNavigation).toHaveBeenCalledExactlyOnceWith(target);
+      runtime.store.systemNotificationsEnabled.mockReturnValue(false);
+      expect(context.enabled()).toBe(false);
+      await runtime.releasePluginWork('com.example.one');
+      expect(runtime.systemNotifications.clear).toHaveBeenCalledExactlyOnceWith('com.example.one');
+      runtime.runtimePlugins = [runtime.runtimePlugins[1]];
+      expect(() => context.assertActive()).toThrow('no longer running');
+    },
+  );
   it('checks plugin notification permission before touching the notification service', async () => {
     const { runtime, call } = fixture();
     for (const owner of ['one', 'missing'])
-      await expect(call(owner, 'seed.notifications', { version: 1, operation: 'is-supported' }))
-        .rejects.toMatchObject({ code: 'broker_permission_denied' });
-    runtime.runtimePlugins[0].permissions = ['system.notifications']; runtime.pluginIsAuthorized.mockReturnValue(false);
-    await expect(call('one', 'seed.notifications', { version: 1, operation: 'is-supported' }))
-      .rejects.toMatchObject({ code: 'broker_permission_denied' });
+      await expect(call(owner, 'seed.notifications', { version: 1, operation: 'is-supported' })).rejects.toMatchObject({
+        code: 'broker_permission_denied',
+      });
+    runtime.runtimePlugins[0].permissions = ['system.notifications'];
+    runtime.pluginIsAuthorized.mockReturnValue(false);
+    await expect(call('one', 'seed.notifications', { version: 1, operation: 'is-supported' })).rejects.toMatchObject({
+      code: 'broker_permission_denied',
+    });
     expect(runtime.systemNotifications.invoke).not.toHaveBeenCalled();
   });
   it('persists notification disable and clears pending handles', async () => {
     const { runtime } = fixture();
-    runtime.store.setSystemNotificationsEnabled = vi.fn(); runtime.publishSnapshot = vi.fn();
+    runtime.store.setSystemNotificationsEnabled = vi.fn();
+    runtime.publishSnapshot = vi.fn();
     expect(await runtime.setSystemNotificationsEnabled(false)).toBe(false);
     expect(runtime.store.setSystemNotificationsEnabled).toHaveBeenCalledWith(false);
-    expect(runtime.systemNotifications.clear).toHaveBeenCalledExactlyOnceWith(); expect(runtime.publishSnapshot).toHaveBeenCalledOnce();
+    expect(runtime.systemNotifications.clear).toHaveBeenCalledExactlyOnceWith();
+    expect(runtime.publishSnapshot).toHaveBeenCalledOnce();
   });
   it('counts only a real active capture task, deduplicating repeated requests for the same task', () => {
     const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
@@ -98,6 +123,7 @@ describe('generic plugin SDK brokers', () => {
         audit: () => [],
         preventSystemSleep: () => false,
         autoUpdatePlugins: () => true,
+        pluginDevelopmentEnabled: () => false,
         systemNotificationsEnabled: () => true,
         languagePreference: () => 'en-US',
         themePreference: () => 'light',

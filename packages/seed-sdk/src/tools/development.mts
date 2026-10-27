@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { watch, type Stats } from 'node:fs';
 import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -7,8 +7,13 @@ import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { collectPluginFiles, readPackageVariants } from './package.mjs';
 import type { BuiltPluginManifest } from './manifest.mjs';
+import { readDevelopmentFeedback } from './development-status.mjs';
 
-export function developmentPluginDirectory(platform: typeof process.platform = process.platform, environment: typeof process.env = process.env, home = homedir()) {
+export function developmentPluginDirectory(
+  platform: typeof process.platform = process.platform,
+  environment: typeof process.env = process.env,
+  home = homedir(),
+) {
   const appData =
     platform === 'darwin'
       ? join(home, 'Library/Application Support')
@@ -71,7 +76,12 @@ export async function publishDevelopmentPlugin({
       throw error;
     }
     if (moved) await rm(previous, { recursive: true, force: true });
-    return { id: manifest.id, directory: destination, ownership: { dev: ownership.dev, ino: ownership.ino } };
+    return {
+      id: manifest.id,
+      directory: destination,
+      manifestDigest: 'sha256:' + createHash('sha256').update(entries.get('manifest.json')!).digest('hex'),
+      ownership: { dev: ownership.dev, ino: ownership.ino },
+    };
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
@@ -89,8 +99,11 @@ async function removeOwnedDevelopmentPlugin(deployed: Awaited<ReturnType<typeof 
     if (error.code !== 'ENOENT') throw error;
     return undefined;
   });
-  const owns = (state: Stats | undefined) => state?.isDirectory() && !state.isSymbolicLink()
-    && state.dev === deployed.ownership.dev && state.ino === deployed.ownership.ino;
+  const owns = (state: Stats | undefined) =>
+    state?.isDirectory() &&
+    !state.isSymbolicLink() &&
+    state.dev === deployed.ownership.dev &&
+    state.ino === deployed.ownership.ino;
   if (!owns(current)) return;
   const retiring = join(parent, '.cleanup-' + randomUUID());
   try {
@@ -110,7 +123,9 @@ async function removeOwnedDevelopmentPlugin(deployed: Awaited<ReturnType<typeof 
 export async function developPlugin({
   root = process.cwd(),
   directory,
-  log = (message: string) => { process.stdout.write(message + '\n'); },
+  log = (message: string) => {
+    process.stdout.write(message + '\n');
+  },
   signal,
 }: {
   root?: string;
@@ -124,9 +139,30 @@ export async function developPlugin({
   const deployed = new Map<string, Awaited<ReturnType<typeof publishDevelopmentPlugin>>>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let child: ChildProcess | undefined;
-  let stopped = false, pending = false;
+  let stopped = false,
+    pending = false;
   let running: Promise<void> | undefined;
   let stopWork: Promise<void> | undefined;
+  let currentBuild: Awaited<ReturnType<typeof publishDevelopmentPlugin>> | undefined;
+  let lastFeedback = '';
+  let readingStatus = false;
+  const reportStatus = async () => {
+    if (stopped || !currentBuild || readingStatus) return;
+    readingStatus = true;
+    const build = currentBuild;
+    try {
+      const feedback = await readDevelopmentFeedback(directory, build.id, build.manifestDigest).catch(
+        (error) => 'Cannot read Seed development status: ' + String(error),
+      );
+      const key = build.manifestDigest + ':' + feedback;
+      if (!stopped && currentBuild === build && key !== lastFeedback) {
+        lastFeedback = key;
+        log(feedback);
+      }
+    } finally {
+      readingStatus = false;
+    }
+  };
   const compile = async () => {
     do {
       pending = false;
@@ -142,7 +178,9 @@ export async function developPlugin({
         if (!stopped) {
           const published = await publishDevelopmentPlugin({ root, directory });
           deployed.set(published.directory, published);
+          currentBuild = published;
           log('Synced development plugin: ' + published.directory);
+          await reportStatus();
         }
       } catch (error) {
         if (!stopped) log(String(error));
@@ -173,10 +211,15 @@ export async function developPlugin({
     timer = setTimeout(() => void rebuild(), 100);
   });
   watcher.on('error', (error) => log(String(error)));
+  const statusTimer = setInterval(() => {
+    void reportStatus();
+  }, 1_000);
+  statusTimer.unref();
   const stop = () => {
     if (!stopWork) {
       stopped = true;
       clearTimeout(timer);
+      clearInterval(statusTimer);
       watcher.close();
       child?.kill();
       stopWork = (async () => {
@@ -187,13 +230,14 @@ export async function developPlugin({
     }
     return stopWork;
   };
-  const onAbort = () => void stop().catch((error) => {
-    process.exitCode = 1;
-    log(String(error));
-  });
+  const onAbort = () =>
+    void stop().catch((error) => {
+      process.exitCode = 1;
+      log(String(error));
+    });
   signal?.addEventListener('abort', onAbort, { once: true });
   if (signal?.aborted) await stop();
   else await rebuild();
-  if (!stopped) log('Watching source changes. Press Ctrl+C to stop. Seed loads the synced directory.');
+  if (!stopped) log('Watching source changes. Press Ctrl+C to stop.');
   return { rebuild, stop };
 }

@@ -337,6 +337,8 @@
     "language": "Language",
     "languageDescription": "App UI language",
     "cleanPluginData": "Clean Up Plugin Data",
+    "pluginDevelopment": "Plugin development mode",
+    "pluginDevelopmentDescription": "Load and hot-reload plugins you develop on this device. Only enable this for code you trust. Turning it off restores installed versions without deleting plugin data.",
     "autoUpdatePlugins": "Automatically update plugins",
     "autoUpdatePluginsDescription": "Update installed plugins on the first launch after an app upgrade.",
     "cleanPluginDataDescription": "Clean up saved data for uninstalled plugins. Installed plugins are not affected.",

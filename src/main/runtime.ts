@@ -74,6 +74,8 @@ import { authorizationEndpointPermission, PluginBrowserAuthorization } from './p
 import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh';
 import { selectDevelopmentOverrides } from './plugin-source-selection';
 import { DevelopmentPluginSource } from './development-plugin-source';
+import { PluginDevelopmentStatusWriter } from './plugin-development-status';
+import type { PluginDevelopmentStatus } from '@motus-ai/seed-sdk';
 import { PluginDataCleaner } from './plugin-data-cleaner';
 import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error';
 import type { DiagnosticTraceContext } from '../shared/diagnostic-trace';
@@ -137,7 +139,7 @@ export class SeedRuntime {
   private runtimePlugins: SeedPluginRuntimeDefinition[] = [];
   private readonly pluginCapabilityCatalog = new PluginCapabilityCatalog();
   private readonly pluginEvents = new PluginEventBroker(
-    () => this.stopping ? [] : this.runtimePlugins.filter((plugin) => this.pluginIsAuthorized(plugin.package_id)),
+    () => (this.stopping ? [] : this.runtimePlugins.filter((plugin) => this.pluginIsAuthorized(plugin.package_id))),
     this.pluginCapabilityCatalog,
   );
   private readonly authorizedInstalledPluginIds = new Set<string>();
@@ -157,34 +159,21 @@ export class SeedRuntime {
   private readonly sandboxHost: SeedPluginSandboxSupervisor;
   private readonly nativeHost: NativePluginManager;
   private readonly pluginViewHosts = new Map<string, SeedPluginViewHost>();
-  private readonly pluginViewMounts = new Map<BrowserWindow, {
-    token: string;
-    pluginId: string;
-    controller: AbortController;
-  }>();
+  private readonly pluginViewMounts = new Map<
+    BrowserWindow,
+    {
+      token: string;
+      pluginId: string;
+      controller: AbortController;
+    }
+  >();
   private stopping = false;
   private pluginReloadWork: Promise<void> = Promise.resolve();
   private pluginServicesReady: Promise<void> = Promise.resolve();
-  private readonly developmentPlugins =
-    !app.isPackaged && process.env.VITE_DEV_SERVER_URL
-      ? new DevelopmentPluginSource(
-          join(app.getPath('userData'), 'plugins/development'),
-          app.getVersion(),
-          () => {
-            void this.reloadPlugins()
-              .then(() => this.publishSnapshot())
-              .catch((error) => this.reportPluginViewFailure('', error));
-          },
-          (id, error) =>
-            this.diagnostics.record({
-              level: 'warn',
-              source: 'main',
-              event: 'plugin.development.invalid',
-              plugin_id: id,
-              ...errorDetails(error),
-            }),
-        )
-      : undefined;
+  private developmentPlugins?: DevelopmentPluginSource;
+  private developmentStatus?: PluginDevelopmentStatusWriter;
+  private readonly developmentPluginStates: PluginDevelopmentStatus['plugins'] = {};
+  private pluginDevelopmentWork: Promise<unknown> = Promise.resolve();
   private readonly systemAppearanceChanged = () => this.updatePluginViewAppearance();
   private readonly updater: SeedUpdater;
   private readonly distributionEvents: SeedDistributionEvents;
@@ -674,8 +663,14 @@ export class SeedRuntime {
     readonly diagnostics = new ObservationStore(app.getPath('userData'), buildConfig.appName),
   ) {
     this.store = new SeedStore(app.getPath('userData'), buildConfig.appName, diagnostics);
-    this.systemNotifications = new SystemNotifications(
-      (owner, message) => this.diagnostics.record({ level: 'warn', source: 'main', event: 'notification.failed', plugin_id: owner, message }),
+    this.systemNotifications = new SystemNotifications((owner, message) =>
+      this.diagnostics.record({
+        level: 'warn',
+        source: 'main',
+        event: 'notification.failed',
+        plugin_id: owner,
+        message,
+      }),
     );
     this.pluginInstaller = new SeedPluginInstaller(
       app.getPath('userData'),
@@ -690,7 +685,7 @@ export class SeedRuntime {
     this.pluginUpdates = new PluginUpdates({
       appVersion: app.getVersion(),
       automaticEnabled: () => this.store.autoUpdatePlugins(),
-      account: () => this.authStatus.status === 'signed_in' && !this.stopping ? this.user?.id : undefined,
+      account: () => (this.authStatus.status === 'signed_in' && !this.stopping ? this.user?.id : undefined),
       installed: () => this.installedPlugins,
       canUpdate: (plugin) => this.pluginIsAuthorized(plugin.id),
       refreshCatalog: () => this.refreshPluginCatalog(),
@@ -739,6 +734,12 @@ export class SeedRuntime {
       (packageId, service, argumentsValue, assertActive) =>
         this.invokePluginBroker(packageId, service, argumentsValue, assertActive),
       (packageId, event, message, details) => {
+        const configurationRevision =
+          typeof details?.configuration_revision === 'string' ? details.configuration_revision : undefined;
+        if (event === 'plugin.configure.ready')
+          void this.handleWorkerEvent({ type: 'plugin.runtime.ready', packageId, configurationRevision });
+        if (['plugin.process.gone', 'plugin.configure.failed', 'plugin.restart.exhausted'].includes(event))
+          void this.handleWorkerEvent({ type: 'plugin.runtime.failed', packageId, configurationRevision, message });
         if (event === 'plugin.process.gone') {
           void this.releasePluginWork(packageId, true).catch(() => undefined);
           this.pluginCapabilityCatalog.remove(packageId);
@@ -780,6 +781,13 @@ export class SeedRuntime {
           details: { exit_code: code },
         });
         this.diagnostics.interruptOpenSpans(undefined, 'connector_process_gone', `Connector exited with code ${code}.`);
+        for (const plugin of this.runtimePlugins.filter((entry) => entry.source === 'development'))
+          void this.handleWorkerEvent({
+            type: 'plugin.runtime.failed',
+            packageId: plugin.package_id,
+            configurationRevision: plugin.configuration_revision,
+            message: 'Seed connector stopped. Waiting for it to restart.',
+          });
       },
       (stream, chunk) =>
         this.diagnostics.record({
@@ -799,6 +807,13 @@ export class SeedRuntime {
           this.pluginCapabilityCatalog.remove(packageId);
         }
         this.connector.send({ type: 'native.runtime.updated', packageId, snapshot });
+        if (snapshot)
+          void this.handleWorkerEvent({
+            type: 'plugin.runtime.ready',
+            packageId,
+            configurationRevision: this.runtimePlugins.find((plugin) => plugin.package_id === packageId)
+              ?.configuration_revision,
+          });
       },
       (packageId, event, error) => {
         this.diagnostics.record({
@@ -808,10 +823,10 @@ export class SeedRuntime {
           plugin_id: packageId,
           ...errorDetails(error),
         });
-        if (event === 'native.process.gone')
+        if (event === 'native.process.gone') {
           this.diagnostics.interruptOpenSpans(packageId, 'native_process_gone', error.message);
-        if (event === 'native.process.gone')
           void this.handleWorkerEvent({ type: 'plugin.runtime.failed', packageId, message: error.message });
+        }
       },
       (event) => void this.handleWorkerEvent(event),
       (packageId, stream, chunk) =>
@@ -835,8 +850,7 @@ export class SeedRuntime {
       const plugin = currentNativePluginRuntimeDefinition(requested, configured);
       if (!plugin) throw new Error('原生插件运行定义无效。');
       const configuration = args.configuration as
-        | Extract<import('../shared/contracts').WorkerCommand, { type: 'configure' }>
-        | undefined;
+        Extract<import('../shared/contracts').WorkerCommand, { type: 'configure' }> | undefined;
       if (!configuration || configuration.pluginDataRoot !== join(app.getPath('userData'), 'plugin-data'))
         throw new Error('原生插件运行配置无效。');
       const snapshot = await this.nativeHost.start(plugin, { ...configuration, plugins: this.runtimePlugins });
@@ -903,7 +917,14 @@ export class SeedRuntime {
 
   async initialize() {
     await this.store.load();
-    await this.developmentPlugins?.start();
+    this.developmentStatus = new PluginDevelopmentStatusWriter(
+      join(app.getPath('userData'), 'plugins/development'),
+      app.getVersion(),
+      () => ({ enabled: Boolean(this.developmentPlugins), plugins: { ...this.developmentPluginStates } }),
+      (error) => this.reportPluginViewFailure('', error),
+    );
+    await this.developmentStatus.start();
+    if (this.store.pluginDevelopmentEnabled()) await this.startPluginDevelopment();
     nativeTheme?.on?.('updated', this.systemAppearanceChanged);
     this.localClients = await this.store.localClients();
     this.languagePreferenceChanged(this.store.languagePreference());
@@ -972,6 +993,35 @@ export class SeedRuntime {
         details: event.details,
       });
       return;
+    }
+    if (event.type === 'plugin.runtime.ready' || event.type === 'plugin.runtime.failed') {
+      const current = this.runtimePlugins.find((plugin) => plugin.package_id === event.packageId);
+      if (
+        current?.source === 'development' &&
+        (!event.configurationRevision || event.configurationRevision === current.configuration_revision)
+      ) {
+        const entry = this.installedPlugins.find((plugin) => plugin.id === event.packageId);
+        if (
+          event.type === 'plugin.runtime.ready' &&
+          current.has_service &&
+          current.runtime_kind === 'sandboxed-web' &&
+          !this.sandboxHost.isReady(event.packageId, current.configuration_revision)
+        )
+          return;
+        const previous = this.developmentPluginStates[event.packageId];
+        if (
+          this.developmentPlugins?.failures.has(event.packageId) &&
+          previous?.manifestDigest !== entry?.manifestDigest
+        )
+          return;
+        this.developmentPluginStates[event.packageId] = {
+          manifestDigest: entry?.manifestDigest,
+          state: event.type === 'plugin.runtime.ready' ? 'loaded' : 'failed',
+          ...(event.type === 'plugin.runtime.failed' ? { message: event.message.slice(0, 500) } : {}),
+        };
+        await this.publishDevelopmentStatus();
+      }
+      if (event.type === 'plugin.runtime.ready') return;
     }
     if (event.type === 'plugin.runtime.failed') {
       const plugin = this.installedPlugins.find((candidate) => candidate.id === event.packageId);
@@ -1133,7 +1183,16 @@ export class SeedRuntime {
       ),
     });
     this.pluginServicesReady = ready;
-    void ready.catch((error) => this.reportPluginViewFailure('', error));
+    void ready.catch((error) => {
+      this.reportPluginViewFailure('', error);
+      for (const plugin of this.runtimePlugins.filter((entry) => entry.source === 'development'))
+        void this.handleWorkerEvent({
+          type: 'plugin.runtime.failed',
+          packageId: plugin.package_id,
+          configurationRevision: plugin.configuration_revision,
+          message: error instanceof Error ? error.message : String(error),
+        });
+    });
     return ready;
   }
 
@@ -1168,6 +1227,7 @@ export class SeedRuntime {
       launchAtLogin: loginSettings.openAtLogin,
       preventSystemSleep: this.store.preventSystemSleep(),
       autoUpdatePlugins: this.store.autoUpdatePlugins(),
+      pluginDevelopmentEnabled: this.store.pluginDevelopmentEnabled(),
       systemNotificationsEnabled: this.store.systemNotificationsEnabled(),
       languagePreference: this.store.languagePreference(),
       locale: resolveSeedLocale(this.store.languagePreference()),
@@ -1219,7 +1279,11 @@ export class SeedRuntime {
     const item = this.announcements.snapshot().find((entry) => entry.id === id);
     if (!this.user || !item) return;
     if (item.action?.kind === 'plugin')
-      await this.requestNavigation({ destination: 'plugins', pluginId: item.action.plugin_id, query: item.action.plugin_id });
+      await this.requestNavigation({
+        destination: 'plugins',
+        pluginId: item.action.plugin_id,
+        query: item.action.plugin_id,
+      });
     else if (item.action?.kind === 'url') await shell.openExternal(item.action.url);
     await this.announcements.dismiss(id);
   }
@@ -1415,6 +1479,79 @@ export class SeedRuntime {
     );
     await this.publishSnapshot();
     return this.store.preventSystemSleep();
+  }
+
+  private async publishDevelopmentStatus() {
+    await this.developmentStatus?.publish().catch((error) => this.reportPluginViewFailure('', error));
+  }
+
+  private async startPluginDevelopment() {
+    if (this.stopping) throw new Error('Seed is stopping.');
+    const source: DevelopmentPluginSource = new DevelopmentPluginSource(
+      join(app.getPath('userData'), 'plugins/development'),
+      app.getVersion(),
+      () => {
+        if (this.developmentPlugins !== source || this.stopping) return;
+        void this.reloadPlugins()
+          .then(() => this.publishSnapshot())
+          .catch((error) => this.reportPluginViewFailure('', error));
+      },
+      (id, error) => {
+        this.developmentPluginStates[id] = {
+          ...source.failures.get(id),
+          state: 'failed',
+          message: (error instanceof Error ? error.message : String(error)).slice(0, 500),
+        };
+        void this.publishDevelopmentStatus();
+        this.diagnostics.record({
+          level: 'warn',
+          source: 'main',
+          event: 'plugin.development.invalid',
+          plugin_id: id,
+          ...errorDetails(error),
+        });
+      },
+    );
+    await source.start();
+    if (this.stopping) {
+      await source.stop();
+      throw new Error('Seed is stopping.');
+    }
+    this.developmentPlugins = source;
+  }
+
+  setPluginDevelopmentEnabled(enabled: boolean): Promise<boolean> {
+    const work = this.pluginDevelopmentWork
+      .catch(() => undefined)
+      .then(async () => {
+        if (this.stopping) throw new Error('Seed is stopping.');
+        const previous = this.store.pluginDevelopmentEnabled();
+        if (enabled === previous) return enabled;
+        try {
+          if (enabled) await this.startPluginDevelopment();
+          else {
+            const source = this.developmentPlugins;
+            this.developmentPlugins = undefined;
+            await source?.stop();
+          }
+          await this.store.setPluginDevelopmentEnabled(enabled);
+          await this.reloadPlugins();
+        } catch (error) {
+          const source = this.developmentPlugins;
+          this.developmentPlugins = undefined;
+          await source?.stop();
+          if (previous && !this.stopping) await this.startPluginDevelopment();
+          await this.store.setPluginDevelopmentEnabled(previous);
+          await this.reloadPlugins().catch((failure) => this.reportPluginViewFailure('', failure));
+          await this.publishSnapshot();
+          throw error;
+        }
+        await this.publishDevelopmentStatus();
+        await this.publishSnapshot();
+        return enabled;
+      });
+    this.pluginDevelopmentWork = work;
+    return work;
   }
 
   async setAutoUpdatePlugins(enabled: boolean) {
@@ -1937,8 +2074,14 @@ export class SeedRuntime {
   }
 
   private updatePluginsAfterStartup() {
-    if (app.isPackaged && this.store.autoUpdatePlugins() && this.authStatus.status === 'signed_in' && this.installedPluginsStatus === 'ready' &&
-      Date.now() < this.entitlementExpiresAt && !this.stopping)
+    if (
+      app.isPackaged &&
+      this.store.autoUpdatePlugins() &&
+      this.authStatus.status === 'signed_in' &&
+      this.installedPluginsStatus === 'ready' &&
+      Date.now() < this.entitlementExpiresAt &&
+      !this.stopping
+    )
       void this.pluginUpdates.automatic(this.remotePluginCatalog);
   }
 
@@ -1969,7 +2112,9 @@ export class SeedRuntime {
     const operationId = randomUUID();
     const operation = { operationId, controller: new AbortController(), cancelable: true };
     this.pluginInstallOperations.set(pluginId, operation);
-    const abort = () => { if (operation.cancelable) operation.controller.abort(); };
+    const abort = () => {
+      if (operation.cancelable) operation.controller.abort();
+    };
     signal?.addEventListener('abort', abort, { once: true });
     const emitProgress = (progress: Omit<PluginInstallProgress, 'operationId'>) => {
       this.emit({ type: 'plugin.install.progress', pluginId, progress: { operationId, ...progress } });
@@ -1978,8 +2123,7 @@ export class SeedRuntime {
     emitProgress({ version, phase: 'preparing', cancelable: true });
     let installedSummary = '';
     let installedMetadata:
-      | { plugin_id: string; plugin_version: string; plugin_name_en_us: string; plugin_name_zh_hans: string }
-      | undefined;
+      { plugin_id: string; plugin_version: string; plugin_name_en_us: string; plugin_name_zh_hans: string } | undefined;
     let completed = false;
     try {
       try {
@@ -2038,12 +2182,12 @@ export class SeedRuntime {
         if (!installed) throw new Error('插件安装后未通过本地文件完整性校验。');
         if (installed.status === 'incompatible')
           throw new Error(installed.incompatibilityReason || '插件格式与当前客户端不兼容。');
-        if (installed.version !== verified.manifest.version)
-          throw new Error('插件安装状态与所选版本不一致。');
+        if (installed.version !== verified.manifest.version) throw new Error('插件安装状态与所选版本不一致。');
         if (Date.now() >= this.entitlementExpiresAt || !this.authorizedInstalledPluginIds.has(installed.id))
           throw new Error('插件已安装，但当前账号未获得运行权限。');
         const activeVersion = active?.source === 'development' ? active.version : verified.manifest.version;
-        if (installed.enabled && runtime?.version !== activeVersion) throw new Error('插件已安装，但对应版本的运行时未能载入。');
+        if (installed.enabled && runtime?.version !== activeVersion)
+          throw new Error('插件已安装，但对应版本的运行时未能载入。');
         installedSummary = `已安装 ${installed.name.zh_Hans}（${installed.version}）。`;
         installedMetadata = {
           plugin_id: installed.id,
@@ -2109,8 +2253,7 @@ export class SeedRuntime {
   private async uninstallPluginPackage(pluginId: string) {
     let uninstalledSummary = '';
     let uninstalledMetadata:
-      | { plugin_id: string; plugin_version: string; plugin_name_en_us: string; plugin_name_zh_hans: string }
-      | undefined;
+      { plugin_id: string; plugin_version: string; plugin_name_en_us: string; plugin_name_zh_hans: string } | undefined;
     try {
       const plugin = this.installedPlugins.find((candidate) => candidate.id === pluginId);
       if (!plugin) throw new Error('插件尚未安装。');
@@ -2187,12 +2330,14 @@ export class SeedRuntime {
   }
 
   private reloadPlugins(activate = true): Promise<void> {
-    const work = this.pluginReloadWork.catch(() => undefined).then(async () => {
-      await this.pluginServicesReady.catch(() => undefined);
-      if (this.stopping || this.resettingPluginData) return;
-      await this.reloadPluginSources();
-      if (activate && !this.stopping) await this.configureWorker();
-    });
+    const work = this.pluginReloadWork
+      .catch(() => undefined)
+      .then(async () => {
+        await this.pluginServicesReady.catch(() => undefined);
+        if (this.stopping || this.resettingPluginData) return;
+        await this.reloadPluginSources();
+        if (activate && !this.stopping) await this.configureWorker();
+      });
     this.pluginReloadWork = work;
     return work;
   }
@@ -2203,6 +2348,25 @@ export class SeedRuntime {
     await this.pluginInstaller.pruneInactiveVersions();
     const installed = await this.pluginInstaller.listInstalled();
     const development = selectDevelopmentOverrides(developmentCandidates, installed);
+    for (const id of Object.keys(this.developmentPluginStates)) {
+      if (
+        !developmentCandidates.some((entry) => entry.installed.id === id) &&
+        !this.developmentPlugins?.failures.has(id)
+      )
+        delete this.developmentPluginStates[id];
+    }
+    for (const entry of developmentCandidates) {
+      if (this.developmentPlugins?.failures.has(entry.installed.id)) continue;
+      const selected = development.includes(entry);
+      const previous = this.developmentPluginStates[entry.installed.id];
+      if (!selected || previous?.manifestDigest !== entry.installed.manifestDigest) {
+        this.developmentPluginStates[entry.installed.id] = {
+          manifestDigest: entry.installed.manifestDigest,
+          state: selected ? 'loading' : 'superseded',
+        };
+      }
+    }
+    await this.publishDevelopmentStatus();
     const downloadedRuntime = await this.pluginInstaller.listRuntimePlugins();
     if (this.stopping) return;
     const developmentIds = new Set(development.map((entry) => entry.installed.id));
@@ -2411,9 +2575,19 @@ export class SeedRuntime {
   ): Promise<unknown> {
     assertActive?.();
     if (service === 'seed.network.resolve-proxy') {
-      const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId && candidate.has_service);
-      if (!plugin || !this.pluginIsAuthorized(packageId) || !plugin.permissions.some((permission) => ['network.connect.internet', 'network.connect.lan', 'network.connect.loopback'].includes(permission)))
-        throw Object.assign(new Error('Plugin network permission is unavailable.'), { code: 'broker_permission_denied' });
+      const plugin = this.runtimePlugins.find(
+        (candidate) => candidate.package_id === packageId && candidate.has_service,
+      );
+      if (
+        !plugin ||
+        !this.pluginIsAuthorized(packageId) ||
+        !plugin.permissions.some((permission) =>
+          ['network.connect.internet', 'network.connect.lan', 'network.connect.loopback'].includes(permission),
+        )
+      )
+        throw Object.assign(new Error('Plugin network permission is unavailable.'), {
+          code: 'broker_permission_denied',
+        });
       const url = new URL(z.string().max(2048).parse(argumentsValue.url));
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
         throw new Error('Proxy resolution requires an HTTP(S) URL without credentials.');
@@ -2422,7 +2596,8 @@ export class SeedRuntime {
       if (!this.runtimePlugins.includes(plugin)) throw new Error('Proxy resolution owner is no longer active.');
       return { proxy };
     }
-    if (service === 'seed.plugin-events') return await this.pluginEvents.invoke(packageId, argumentsValue, assertActive);
+    if (service === 'seed.plugin-events')
+      return await this.pluginEvents.invoke(packageId, argumentsValue, assertActive);
     if (service === 'seed.plugin-event') {
       if (!this.runtimePlugins.some((plugin) => plugin.package_id === packageId && plugin.api_version === 2))
         throw new Error('Plugin event owner is not running.');
@@ -2510,7 +2685,11 @@ export class SeedRuntime {
           capability_id: input.capability_id,
           method: input.method,
         });
-      const { call_id: callId, payload, model_id: modelId } = input as typeof input & {
+      const {
+        call_id: callId,
+        payload,
+        model_id: modelId,
+      } = input as typeof input & {
         call_id?: string;
         model_id?: string;
         payload: Record<string, unknown>;
@@ -2707,7 +2886,10 @@ export class SeedRuntime {
           }
           void this.requestNavigation(target).catch((error: unknown) => {
             this.diagnostics.record({
-              level: 'warn', source: 'main', event: 'notification.activation.failed', plugin_id: packageId,
+              level: 'warn',
+              source: 'main',
+              event: 'notification.activation.failed',
+              plugin_id: packageId,
               message: error instanceof Error ? error.message : String(error),
             });
           });
@@ -2777,7 +2959,9 @@ export class SeedRuntime {
       calls.clear();
     }
     this.sandboxTasks.clear();
+    await this.pluginDevelopmentWork.catch(() => undefined);
     await this.developmentPlugins?.stop();
+    await this.developmentStatus?.stop();
     await this.pluginReloadWork.catch(() => undefined);
     nativeTheme?.off?.('updated', this.systemAppearanceChanged);
     this.pluginViewMounts.clear();

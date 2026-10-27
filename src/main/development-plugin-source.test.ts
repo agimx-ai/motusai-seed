@@ -178,4 +178,16 @@ describe('development directory discovery and reload', () => {
     expect(await h.source.refresh()).toEqual([]);
     expect(h.report).toHaveBeenCalledTimes(3);
   });
+  it('identifies the rejected build and clears its failure when a compatible build arrives', async () => {
+    const h = await fixture();
+    const directory = await bundle(h.root, 'com.example.probe', 'first', { minAppVersion: '99.0.0' });
+    expect(await h.source.refresh()).toEqual([]);
+    expect(h.source.failures.get('com.example.probe')).toMatchObject({
+      manifestDigest: 'sha256:' + hash(await readFile(join(directory, 'manifest.json'))),
+      message: 'Plugin requires a newer Seed client.',
+    });
+    await bundle(h.root);
+    expect(await h.source.refresh()).toHaveLength(1);
+    expect(h.source.failures.size).toBe(0);
+  });
 });

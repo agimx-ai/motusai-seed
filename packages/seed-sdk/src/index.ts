@@ -1,6 +1,12 @@
+export { pluginDevelopmentStatusFile, type PluginDevelopmentStatus } from './development-status.js';
 export { Component, type Disposer } from './component.js';
 export { Events, type EventRef } from './events.js';
-export type { PluginBreadcrumb, PluginNavigation, PluginNavigationHandle, PluginNavigationOptions } from './navigation.js';
+export type {
+  PluginBreadcrumb,
+  PluginNavigation,
+  PluginNavigationHandle,
+  PluginNavigationOptions,
+} from './navigation.js';
 export type {
   SystemNotificationOptions,
   SystemNotificationResult,
@@ -293,13 +299,7 @@ export const seedNetworkPermissions = [
 export type SeedNetworkPermission = (typeof seedNetworkPermissions)[number];
 
 export type SeedConnectionState =
-  | 'idle'
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'disconnecting'
-  | 'disconnected'
-  | 'failed';
+  'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnecting' | 'disconnected' | 'failed';
 
 export type SeedConnectionDescriptor = {
   /** Unique within the owning plugin Component. */

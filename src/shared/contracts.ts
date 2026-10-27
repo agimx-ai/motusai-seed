@@ -215,6 +215,7 @@ export type SeedSnapshot = {
   launchAtLogin: boolean;
   preventSystemSleep: boolean;
   autoUpdatePlugins: boolean;
+  pluginDevelopmentEnabled: boolean;
   systemNotificationsEnabled: boolean;
   languagePreference: SeedLanguagePreference;
   locale: SeedLocale;
@@ -383,6 +384,7 @@ export type SeedApi = {
   setLaunchAtLogin(enabled: boolean): Promise<boolean>;
   setPreventSystemSleep(enabled: boolean): Promise<boolean>;
   setAutoUpdatePlugins(enabled: boolean): Promise<boolean>;
+  setPluginDevelopmentEnabled(enabled: boolean): Promise<boolean>;
   setSystemNotificationsEnabled(enabled: boolean): Promise<boolean>;
   setLanguagePreference(preference: SeedLanguagePreference): Promise<void>;
   setThemePreference(preference: SeedThemePreference): Promise<void>;
@@ -440,6 +442,7 @@ export const ipcChannels = {
   launchAtLogin: 'seed:settings:launch-at-login',
   preventSystemSleep: 'seed:settings:prevent-system-sleep',
   autoUpdatePlugins: 'seed:settings:auto-update-plugins',
+  pluginDevelopmentEnabled: 'seed:settings:plugin-development-enabled',
   systemNotificationsEnabled: 'seed:settings:system-notifications',
   languagePreference: 'seed:settings:language-preference',
   themePreference: 'seed:settings:theme-preference',
@@ -590,7 +593,8 @@ export type WorkerEvent =
       error_code?: string;
       details?: Record<string, string | number | boolean | null>;
     }
-  | { type: 'plugin.runtime.failed'; packageId: string; message: string }
+  | { type: 'plugin.runtime.ready'; packageId: string; configurationRevision?: string }
+  | { type: 'plugin.runtime.failed'; packageId: string; message: string; configurationRevision?: string }
   | {
       type: 'host.invoke';
       requestId: string;

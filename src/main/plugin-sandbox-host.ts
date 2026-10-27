@@ -5,7 +5,11 @@ import { BrowserWindow, ipcMain, session } from 'electron';
 import type { SeedInvocation } from '@motus-ai/seed-sdk';
 import type { SeedPluginRuntimeDefinition } from '../shared/contracts';
 import { fileBrokerPermissions } from './brokers/files/permissions';
-import type { SandboxPluginConfiguration, SandboxPluginInvocation, SandboxBrokerResult } from '../shared/sandbox-plugin';
+import type {
+  SandboxPluginConfiguration,
+  SandboxPluginInvocation,
+  SandboxBrokerResult,
+} from '../shared/sandbox-plugin';
 import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error';
 import { pluginHostContentSecurityPolicy } from './plugin-host-policy';
 
@@ -203,7 +207,10 @@ export class SeedPluginSandboxHost {
       );
   };
 
-  private handleBroker = async (event: Electron.IpcMainInvokeEvent, message: Record<string, unknown>): Promise<SandboxBrokerResult> => {
+  private handleBroker = async (
+    event: Electron.IpcMainInvokeEvent,
+    message: Record<string, unknown>,
+  ): Promise<SandboxBrokerResult> => {
     this.trustedSender(event);
     try {
       return { ok: true, result: await this.invokeOwnedBroker(message) };
@@ -211,8 +218,10 @@ export class SeedPluginSandboxHost {
       return {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
-        code: error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-          ? error.code : 'plugin_broker_error',
+        code:
+          error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+            ? error.code
+            : 'plugin_broker_error',
         params: pluginErrorParams(error),
         billing: pluginErrorBilling(error),
       };
@@ -581,6 +590,13 @@ export class SeedPluginSandboxSupervisor {
     }
   }
 
+  isReady(packageId: string, configurationRevision?: string) {
+    return (
+      this.plugins.get(packageId)?.configuration_revision === configurationRevision &&
+      this.hosts.get(packageId)?.isHealthy() === true
+    );
+  }
+
   private locale = 'en-US';
 
   setLocale(locale: string) {
@@ -592,7 +608,10 @@ export class SeedPluginSandboxSupervisor {
     this.locale = locale;
     this.hosts.get(plugin.package_id)?.destroy();
     const host = new SeedPluginSandboxHost(this.invokeBroker, plugin.package_id, (event, message, details) => {
-      this.report(plugin.package_id, event, message, details);
+      this.report(plugin.package_id, event, message, {
+        ...details,
+        configuration_revision: plugin.configuration_revision ?? '',
+      });
       if (event === 'plugin.process.gone') this.scheduleRestart(plugin.package_id);
     });
     this.hosts.set(plugin.package_id, host);
@@ -601,12 +620,17 @@ export class SeedPluginSandboxSupervisor {
       if (revision !== this.revision || this.plugins.get(plugin.package_id) !== plugin) {
         host.destroy();
         if (this.hosts.get(plugin.package_id) === host) this.hosts.delete(plugin.package_id);
+      } else {
+        this.report(plugin.package_id, 'plugin.configure.ready', 'Plugin backend is ready.', {
+          configuration_revision: plugin.configuration_revision ?? '',
+        });
       }
     } catch (error) {
       this.report(
         plugin.package_id,
         'plugin.configure.failed',
-        error instanceof Error ? error.stack || error.message : String(error),
+        error instanceof Error ? error.message : String(error),
+        { configuration_revision: plugin.configuration_revision ?? '' },
       );
       if (this.hosts.get(plugin.package_id) === host) {
         host.destroy();

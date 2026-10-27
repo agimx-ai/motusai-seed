@@ -33,6 +33,7 @@ const ipcChannels = {
   launchAtLogin: 'seed:settings:launch-at-login',
   preventSystemSleep: 'seed:settings:prevent-system-sleep',
   autoUpdatePlugins: 'seed:settings:auto-update-plugins',
+  pluginDevelopmentEnabled: 'seed:settings:plugin-development-enabled',
   systemNotificationsEnabled: 'seed:settings:system-notifications',
   languagePreference: 'seed:settings:language-preference',
   themePreference: 'seed:settings:theme-preference',
@@ -91,6 +92,7 @@ const api: SeedApi = {
   setLaunchAtLogin: (enabled: boolean) => ipcRenderer.invoke(ipcChannels.launchAtLogin, enabled),
   setPreventSystemSleep: (enabled: boolean) => ipcRenderer.invoke(ipcChannels.preventSystemSleep, enabled),
   setAutoUpdatePlugins: (enabled: boolean) => ipcRenderer.invoke(ipcChannels.autoUpdatePlugins, enabled),
+  setPluginDevelopmentEnabled: (enabled: boolean) => ipcRenderer.invoke(ipcChannels.pluginDevelopmentEnabled, enabled),
   setSystemNotificationsEnabled: (enabled) => ipcRenderer.invoke(ipcChannels.systemNotificationsEnabled, enabled),
   setLanguagePreference: (preference: SeedLanguagePreference) =>
     ipcRenderer.invoke(ipcChannels.languagePreference, preference),

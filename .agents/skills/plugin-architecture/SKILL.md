@@ -38,7 +38,7 @@ description: 维护 Seed Plugin API v2 的 SDK、构建工具、DOM 承载、隔
 
 ## 开发与正式安装
 
-- 固定 `plugins/development/<id>` 只在未打包且通过开发服务器启动时启用；自动发现符合规范的手动目录或 dev 同步产物，不要求选择工程目录或先上传云端。
+- 固定 `plugins/development/<id>` 由持久化的「插件开发模式」开关控制，默认关闭，正式安装版与源码启动均可显式启用；自动发现符合规范的手动目录或 dev 同步产物，不要求选择工程目录或先上传云端。
 - 完整构建原子同步，宿主运行不可变快照；失败保留最后有效产物。同 ID 的本地开发源与正式源按 SemVer 选较高版本，同版本保留开发热更新；选中正式源仍须授权。同版本开发重载不改正式安装记录、凭据和数据，移除覆盖后恢复已授权正式版本。
 - 开发同步不等于客户端加载成功；用实际活动记录和页面确认。正式安装仍校验不可变版本、摘要和授权，不能因开发便利降低门禁。
 - 新客户端使用 `/api/v2` 目录并携带真实客户端版本；Cloud 对旧客户端保留的 v1 分发协议不代表 Seed 恢复 v1 执行入口。
@@ -48,4 +48,4 @@ description: 维护 Seed Plugin API v2 的 SDK、构建工具、DOM 承载、隔
 
 按改动范围运行类型检查、目标／全量测试、Electron 与 renderer 构建。SDK 变化先构建 SDK，再验证依赖方；可见变化遵循 AGENTS.md 的真实页面验收。
 
-运行时变化按需执行 `smoke:plugin-sdk`、`smoke:plugin-isolation`、`smoke:native-isolation`；本地发现／重载用 `smoke:plugin-development`。单包安装 smoke 需要显式包路径：`npm run smoke:plugin-host -- /absolute/plugin.seedpkg`。这些验证不授予打包、重启用户应用或发布权限。
+运行时变化按需执行 `smoke:plugin-sdk`、`smoke:plugin-isolation`、`smoke:native-isolation`；本地发现／重载用 `smoke:plugin-development`；正式渲染路径的开发模式与 CLI 联通用 `smoke:plugin-development-mode`。单包安装 smoke 需要显式包路径：`npm run smoke:plugin-host -- /absolute/plugin.seedpkg`。这些验证不授予打包、重启用户应用或发布权限。

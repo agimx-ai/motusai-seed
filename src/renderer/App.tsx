@@ -187,9 +187,11 @@ export default function App() {
   const pluginUpdateCount = countAvailablePluginUpdates(plugins, snapshot.catalogPlugins ?? []);
   const updateAllPlugins = async () => {
     if (
-      updatingAllPlugins || busy ||
+      updatingAllPlugins ||
+      busy ||
       Object.values(pluginInstallProgress).some((progress) => progress.phase !== 'completed')
-    ) return;
+    )
+      return;
     await run('plugin-update-all', (api) => api.updateAllPlugins());
   };
   const selectedPlugin =
@@ -366,7 +368,15 @@ export default function App() {
                 catalog={snapshot.catalogPlugins}
                 busy={Boolean(busy)}
                 autoUpdatePlugins={snapshot.autoUpdatePlugins}
-                onAutoUpdatePluginsChange={() => void run('plugin-auto-update', (api) => api.setAutoUpdatePlugins(!snapshot.autoUpdatePlugins))}
+                pluginDevelopmentEnabled={snapshot.pluginDevelopmentEnabled}
+                onPluginDevelopmentChange={() =>
+                  void run('plugin-development', (api) =>
+                    api.setPluginDevelopmentEnabled(!snapshot.pluginDevelopmentEnabled),
+                  )
+                }
+                onAutoUpdatePluginsChange={() =>
+                  void run('plugin-auto-update', (api) => api.setAutoUpdatePlugins(!snapshot.autoUpdatePlugins))
+                }
                 onListOrphanedPluginData={() => run('plugin-data-scan', (api) => api.listOrphanedPluginData())}
                 onResetOrphanedPluginData={async (ids) => {
                   const result = await run('plugin-data-reset', (api) => api.resetOrphanedPluginData(ids));

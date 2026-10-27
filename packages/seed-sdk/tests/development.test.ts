@@ -29,18 +29,30 @@ async function fixture() {
 }
 describe('independent plugin development tools', () => {
   it.skipIf(process.platform === 'win32').each(['SIGINT', 'SIGTERM'] as const)(
-    'cleans the synchronized directory when npm run dev receives %s', async (signal) => {
+    'cleans the synchronized directory when npm run dev receives %s',
+    async (signal) => {
       const h = await fixture();
-      await writeFile(join(h.project, 'package.json'), JSON.stringify({
-        private: true,
-        scripts: { dev: `${JSON.stringify(process.execPath)} ${JSON.stringify(resolve('packages/seed-sdk/dist/tools/cli.mjs'))} dev --directory ${JSON.stringify(h.directory)}` },
-      }));
+      await writeFile(
+        join(h.project, 'package.json'),
+        JSON.stringify({
+          private: true,
+          scripts: {
+            dev: `${JSON.stringify(process.execPath)} ${JSON.stringify(resolve('packages/seed-sdk/dist/tools/cli.mjs'))} dev --directory ${JSON.stringify(h.directory)}`,
+          },
+        }),
+      );
       const child = spawn('npm', ['run', 'dev'], {
-        cwd: h.project, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: h.project,
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
       let output = '';
-      child.stdout.on('data', (chunk) => { output += chunk.toString(); });
-      child.stderr.on('data', (chunk) => { output += chunk.toString(); });
+      child.stdout.on('data', (chunk) => {
+        output += chunk.toString();
+      });
+      child.stderr.on('data', (chunk) => {
+        output += chunk.toString();
+      });
       const exited = new Promise<void>((resolve, reject) => {
         child.once('close', () => resolve());
         child.once('error', reject);
@@ -54,31 +66,45 @@ describe('independent plugin development tools', () => {
         if (child.exitCode === null && child.signalCode === null) process.kill(-child.pid!, 'SIGTERM');
         await exited;
       }
-    }, 15_000,
+    },
+    15_000,
   );
 
-  it.each(['SIGINT', 'SIGTERM'] as const)('cleans the synchronized directory when the CLI receives %s', async (signal) => {
-    const h = await fixture();
-    const child = spawn(process.execPath, [resolve('packages/seed-sdk/dist/tools/cli.mjs'), 'dev', '--directory', h.directory], {
-      cwd: h.project, stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let output = '';
-    child.stdout.on('data', (chunk) => { output += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { output += chunk.toString(); });
-    const exited = new Promise<number | null>((resolve, reject) => {
-      child.once('exit', (code) => resolve(code));
-      child.once('error', reject);
-    });
-    try {
-      await vi.waitFor(() => expect(output).toContain('Synced development plugin:'), { timeout: 8000 });
-      child.kill(signal);
-      await expect(exited).resolves.toBe(0);
-      expect(await readdir(h.directory)).toEqual([]);
-    } finally {
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
-      await exited;
-    }
-  }, 15_000);
+  it.each(['SIGINT', 'SIGTERM'] as const)(
+    'cleans the synchronized directory when the CLI receives %s',
+    async (signal) => {
+      const h = await fixture();
+      const child = spawn(
+        process.execPath,
+        [resolve('packages/seed-sdk/dist/tools/cli.mjs'), 'dev', '--directory', h.directory],
+        {
+          cwd: h.project,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+      let output = '';
+      child.stdout.on('data', (chunk) => {
+        output += chunk.toString();
+      });
+      child.stderr.on('data', (chunk) => {
+        output += chunk.toString();
+      });
+      const exited = new Promise<number | null>((resolve, reject) => {
+        child.once('exit', (code) => resolve(code));
+        child.once('error', reject);
+      });
+      try {
+        await vi.waitFor(() => expect(output).toContain('Synced development plugin:'), { timeout: 8000 });
+        child.kill(signal);
+        await expect(exited).resolves.toBe(0);
+        expect(await readdir(h.directory)).toEqual([]);
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+        await exited;
+      }
+    },
+    15_000,
+  );
 
   it('removes only its synchronized plugin on stop, preserving other plugins and user data', async () => {
     const h = await fixture();
@@ -125,7 +151,12 @@ describe('independent plugin development tools', () => {
     await mkdir(previous, { recursive: true });
     await writeFile(join(previous, 'keep.txt'), 'not owned by this watcher');
     const controller = new AbortController();
-    const starting = tools.developPlugin({ root: h.project, directory: h.directory, signal: controller.signal, log: () => {} });
+    const starting = tools.developPlugin({
+      root: h.project,
+      directory: h.directory,
+      signal: controller.signal,
+      log: () => {},
+    });
     controller.abort();
     const watcher = await starting;
     watchers.push(watcher);
@@ -203,7 +234,7 @@ describe('independent plugin development tools', () => {
     const watcher = await tools.developPlugin({ root: h.project, directory: h.directory, log });
     watchers.push(watcher);
     expect(log.mock.calls.some(([message]) => String(message).startsWith('Synced development plugin:'))).toBe(true);
-    expect(log).toHaveBeenCalledWith('Watching source changes. Press Ctrl+C to stop. Seed loads the synced directory.');
+    expect(log).toHaveBeenCalledWith('Watching source changes. Press Ctrl+C to stop.');
     const source = join(h.project, 'src/service.ts');
     const deployed = join(h.directory, 'com.example.generic');
     const first = await inspectPluginDirectory(deployed);

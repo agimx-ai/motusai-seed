@@ -36,6 +36,7 @@
     "smoke:plugin-navigation": "npm run build && electron scripts/smoke-plugin-navigation.mjs",
     "smoke:tour": "npm run build && electron scripts/smoke-tour.mjs",
     "smoke:plugin-events": "npm run build && electron scripts/smoke-plugin-events.mjs",
+    "smoke:plugin-development-mode": "npm run build && electron scripts/smoke-plugin-development-mode.mjs",
     "smoke:plugin-development": "npm run build && node scripts/smoke-plugin-development.mjs",
     "smoke:plugin-isolation": "npm run build && electron scripts/smoke-plugin-isolation.mjs",
     "clean": "node scripts/clean.mjs",
