@@ -77,6 +77,15 @@
       "processingRecordingWithTasks": "正在整理录音 · 另有 {{count}} 项任务进行中",
       "recordingFailed": "录音遇到问题",
       "recordingFailedWithTasks": "录音遇到问题 · 另有 {{count}} 项任务进行中"
+    },
+    "mcp": {
+      "instruction": "让 Seed 的能力，被你常用的AI使用",
+      "copy": "复制",
+      "copied": "已复制",
+      "copyFailed": "复制失败，请重试",
+      "retry": "重试",
+      "clients": "支持的客户端",
+      "vscode": "VS Code（GitHub Copilot）"
     }
   },
   "signIn": {

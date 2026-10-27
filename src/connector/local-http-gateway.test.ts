@@ -40,7 +40,7 @@ describe('SeedLocalHttpGateway', () => {
 
   afterEach(async () => gateway?.stop())
 
-  it('exposes only explicitly registered plugin tools over Streamable HTTP', async () => {
+  it.each(['auto', 'legacy'] as const)('exposes explicitly registered tools over Streamable HTTP (%s negotiation)', async (mode) => {
     const invoke = vi.fn(async () => ({ answer: 42 }))
     let available = true
     const runtime = { configuration: () => null, invoke_host: vi.fn() } as unknown as CapsRuntimeService
@@ -56,10 +56,10 @@ describe('SeedLocalHttpGateway', () => {
     gateway = new SeedLocalHttpGateway(runtime, () => host, 0)
     await gateway.start()
     const url = new URL(`http://127.0.0.1:${gateway.port()}/mcp`)
-    const client = new Client({ name: 'seed-test', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } })
+    const client = new Client({ name: 'seed-test', version: '1.0.0' }, { versionNegotiation: { mode } })
     try {
       await client.connect(new StreamableHTTPClientTransport(url))
-      expect(client.getProtocolEra()).toBe('modern')
+      expect(client.getProtocolEra()).toBe(mode === 'auto' ? 'modern' : 'legacy')
       expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(['read_probe'])
       expect(await client.callTool({ name: 'read_probe', arguments: { value: 3 } })).toMatchObject({
         content: [{ type: 'text', text: '{"answer":42}' }],

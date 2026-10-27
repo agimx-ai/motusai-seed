@@ -44,6 +44,7 @@ export function registerIpc(runtime: SeedRuntime) {
     if (window) runtime.unmountPluginView(window, z.string().uuid().parse(token));
   });
   handle(ipcChannels.snapshot, () => runtime.snapshot());
+  handle(ipcChannels.copyMcpSetupPrompt, () => runtime.copyMcpSetupPrompt());
   handle(ipcChannels.personalCreditWallet, () => runtime.personalCreditWallet());
   handle(ipcChannels.personalCreditGrants, (_event, cursor) =>
     runtime.personalCreditGrants(z.string().regex(/^\d+$/).optional().parse(cursor)),

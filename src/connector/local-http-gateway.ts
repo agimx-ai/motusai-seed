@@ -12,8 +12,9 @@ import type { SeedPluginHost } from './plugin-host';
 import type { GlobalTaskActivityObserver } from './global-task-activity-observer';
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace';
 import { SeedLocalMcpServer } from './local-mcp-server';
+import { seedLocalApiPort } from '../shared/local-api';
 
-export const seedLocalApiPort = 43127;
+export { seedLocalApiPort } from '../shared/local-api';
 const maxBodyBytes = 1024 * 1024 * 1024;
 const maxMcpBodyBytes = 1024 * 1024;
 const allowedMethods = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';

@@ -1,7 +1,7 @@
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
-import { app, BrowserWindow, nativeTheme, powerSaveBlocker, shell, session } from 'electron';
+import { app, BrowserWindow, clipboard, nativeTheme, powerSaveBlocker, shell, session } from 'electron';
 import { z } from 'zod';
 import { buildConfig } from '../shared/build-config.generated';
 import type {
@@ -27,6 +27,7 @@ import type {
   WorkerEvent,
 } from '../shared/contracts';
 import { resolveSeedLocale } from './i18n/locale';
+import { fetchMcpSetupPrompt } from './mcp-setup-prompt';
 import { invokePluginSettings } from './plugin-settings';
 import { pluginCatalogV2Url } from './plugin-catalog-url';
 import { PluginCapabilityCatalog } from './plugin-capability-catalog';
@@ -1198,6 +1199,18 @@ export class SeedRuntime {
 
   dismissAnnouncement(id: string) {
     return this.announcements.dismiss(id);
+  }
+  async copyMcpSetupPrompt(): Promise<void> {
+    const user = this.user;
+    if (!user || this.authStatus.status !== 'signed_in' || this.stopping)
+      throw new Error('Sign in to Seed before copying setup instructions.');
+    const text = await fetchMcpSetupPrompt({
+      eventsUrl: (await this.currentDistribution()).events_url,
+      locale: resolveSeedLocale(this.store.languagePreference()),
+    });
+    if (this.user !== user || this.authStatus.status !== 'signed_in' || this.stopping)
+      throw new Error('Seed account changed while loading setup instructions.');
+    clipboard.writeText(text);
   }
   announcementBackground(id: string) {
     return this.announcements.background(id);

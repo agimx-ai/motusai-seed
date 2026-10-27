@@ -10,6 +10,7 @@ import type {
 } from '../shared/contracts';
 
 const ipcChannels = {
+  copyMcpSetupPrompt: 'seed:mcp:copy-setup-prompt',
   dismissAnnouncement: 'seed:announcements:dismiss',
   activateAnnouncement: 'seed:announcements:activate',
   announcementBackground: 'seed:announcements:background',
@@ -60,6 +61,7 @@ const ipcChannels = {
 } as const;
 
 const api: SeedApi = {
+  copyMcpSetupPrompt: () => ipcRenderer.invoke(ipcChannels.copyMcpSetupPrompt),
   dismissAnnouncement: (id) => ipcRenderer.invoke(ipcChannels.dismissAnnouncement, id),
   activateAnnouncement: (id) => ipcRenderer.invoke(ipcChannels.activateAnnouncement, id),
   announcementBackground: (id) => ipcRenderer.invoke(ipcChannels.announcementBackground, id),

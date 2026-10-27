@@ -77,6 +77,15 @@
       "processingRecordingWithTasks": "Finishing the recording · Other tasks in progress: {{count}}",
       "recordingFailed": "Recording encountered a problem",
       "recordingFailedWithTasks": "Recording encountered a problem · Other tasks in progress: {{count}}"
+    },
+    "mcp": {
+      "instruction": "Let your favorite AI use Seed’s capabilities",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed. Retry",
+      "retry": "Retry",
+      "clients": "Supported clients",
+      "vscode": "VS Code (GitHub Copilot)"
     }
   },
   "signIn": {

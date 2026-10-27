@@ -136,6 +136,87 @@
 }
 
 @layer components {
+  .seed-mcp-border-beam {
+    position: absolute;
+    inset: -1px;
+    border: 2px solid transparent;
+    border-radius: inherit;
+    pointer-events: none;
+    /* Keep the traveling accent strictly inside the existing border ring. */
+    mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000);
+    mask-clip: padding-box, border-box;
+    mask-composite: exclude;
+  }
+
+  .seed-mcp-border-beam::before {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(var(--spacing) * 20);
+    aspect-ratio: 1;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--foreground) 65%, transparent), transparent);
+    offset-path: inset(0 round 999px);
+    offset-rotate: auto;
+    animation: seed-mcp-border-travel 6s linear infinite;
+    content: '';
+  }
+
+  @keyframes seed-mcp-border-travel {
+    from { offset-distance: 0%; }
+    to { offset-distance: 100%; }
+  }
+
+  [data-reduced-motion='true'] .seed-mcp-border-beam {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .seed-mcp-border-beam {
+      display: none;
+    }
+  }
+
+  .seed-mcp-client-icon {
+    filter: grayscale(1);
+    opacity: 0.45;
+    transition: filter 450ms ease, opacity 450ms ease;
+  }
+
+  .seed-mcp-connect:has(.seed-mcp-copy-button:is(:hover, :focus-visible)) .seed-mcp-client-icon {
+    filter: grayscale(0);
+    opacity: 1;
+    transition-delay: var(--seed-client-delay);
+  }
+
+  .seed-mcp-connect:has(.seed-mcp-copy-button:is(:hover, :focus-visible)) .seed-mcp-client-mark {
+    animation: seed-mcp-client-jump 600ms ease-out both;
+    animation-delay: var(--seed-client-delay);
+  }
+
+  @keyframes seed-mcp-client-jump {
+    0%, 100% { transform: translateY(0) scale(1); }
+    35% { transform: translateY(-6px) scale(1.06); }
+    65% { transform: translateY(1px) scale(0.99); }
+    85% { transform: translateY(-1px) scale(1.01); }
+  }
+
+  [data-reduced-motion='true'] .seed-mcp-client-icon {
+    transition: none;
+  }
+
+  [data-reduced-motion='true'] .seed-mcp-client-mark {
+    animation: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .seed-mcp-client-icon {
+      transition: none;
+    }
+    .seed-mcp-client-mark {
+      animation: none !important;
+    }
+  }
+
   .seedling-mascot-button {
     --bloub-size: clamp(176px, 22vw, 208px);
     display: inline-grid;

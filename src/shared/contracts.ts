@@ -357,6 +357,7 @@ export type PluginDataResetResult = {
 };
 
 export type SeedApi = {
+  copyMcpSetupPrompt(): Promise<void>;
   dismissAnnouncement(id: string): Promise<void>;
   activateAnnouncement(id: string): Promise<void>;
   announcementBackground(id: string): Promise<string>;
@@ -416,6 +417,7 @@ export type SeedWindowApi = {
 };
 
 export const ipcChannels = {
+  copyMcpSetupPrompt: 'seed:mcp:copy-setup-prompt',
   dismissAnnouncement: 'seed:announcements:dismiss',
   activateAnnouncement: 'seed:announcements:activate',
   announcementBackground: 'seed:announcements:background',
