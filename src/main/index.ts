@@ -3,7 +3,7 @@ import { registerPluginViewProtocol } from './plugin-view-host'
 import { join, resolve } from 'node:path'
 import { release } from 'node:os'
 import { seedDeepLinkScheme, type SeedNavigationTarget } from '@motus-ai/seed-sdk'
-import { app, BrowserWindow, Menu, Tray, crashReporter, ipcMain, nativeImage, nativeTheme, powerMonitor, protocol, session, shell } from 'electron'
+import { app, BrowserWindow, Menu, Tray, crashReporter, ipcMain, nativeImage, nativeTheme, powerMonitor, protocol, session, shell, systemPreferences } from 'electron'
 import { buildConfig } from '../shared/build-config.generated'
 import { ipcChannels, type SeedLanguagePreference } from '../shared/contracts'
 import { registerIpc } from './ipc'
@@ -14,6 +14,10 @@ import { ObservationStore, errorDetails } from './observation-store'
 
 process.title = buildConfig.appName
 app.setName(buildConfig.appName)
+if (process.platform === 'darwin') {
+  // The app supplies its own fullscreen item; prevent AppKit from inserting another.
+  systemPreferences.setUserDefault('NSFullScreenMenuItemEverywhere', 'boolean', false)
+}
 if (process.platform === 'win32') app.setAppUserModelId(buildConfig.appId)
 crashReporter.start({ uploadToServer: false, productName: buildConfig.appName })
 protocol.registerSchemesAsPrivileged([{
@@ -134,6 +138,14 @@ function createWindow() {
       spellcheck: false,
     },
   })
+  if (process.platform !== 'darwin') {
+    window.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown' && input.control && input.shift && !input.alt && !input.meta && input.key.toLowerCase() === 'i') {
+        event.preventDefault()
+        if (!input.isAutoRepeat) window.webContents.toggleDevTools()
+      }
+    })
+  }
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
@@ -199,10 +211,9 @@ function createApplicationMenu() {
   const messages = nativeMenuMessages(languagePreference)
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: buildConfig.appName, submenu: [{ role: 'about', label: nativeMenuLabel(messages.about, buildConfig.appName) }, { type: 'separator' }, { role: 'hide', label: nativeMenuLabel(messages.hide, buildConfig.appName) }, { role: 'hideOthers', label: messages.hideOthers }, { role: 'unhide', label: messages.showAll }, { type: 'separator' }, { role: 'quit', label: nativeMenuLabel(messages.quitApp, buildConfig.appName) }] },
-    { label: messages.file, submenu: [{ role: 'close', label: messages.closeWindow }] },
     { label: messages.edit, submenu: [{ role: 'undo', label: messages.undo }, { role: 'redo', label: messages.redo }, { type: 'separator' }, { role: 'cut', label: messages.cut }, { role: 'copy', label: messages.copy }, { role: 'paste', label: messages.paste }, { role: 'selectAll', label: messages.selectAll }] },
-    { label: messages.view, submenu: [{ role: 'reload', label: messages.reload }, { role: 'togglefullscreen', label: messages.toggleFullScreen }] },
-    { label: messages.window, submenu: [{ role: 'minimize', label: messages.minimize }, { role: 'zoom', label: messages.zoom }, { role: 'front', label: messages.bringAllToFront }] },
+    { label: messages.view, submenu: [{ role: 'toggleDevTools', label: messages.toggleDevTools, accelerator: 'Command+Alt+I', icon: nativeImage.createMenuSymbol('chevron.left.forwardslash.chevron.right') }, { type: 'separator' }, { role: 'togglefullscreen', label: messages.toggleFullScreen, icon: nativeImage.createMenuSymbol('arrow.up.left.and.arrow.down.right') }] },
+    { label: messages.window, submenu: [{ role: 'minimize', label: messages.minimize }, { role: 'zoom', label: messages.zoom }, { type: 'separator' }, { role: 'close', label: messages.closeWindow }] },
   ]))
 }
 
