@@ -56,7 +56,7 @@ export function Toaster({ theme = 'system', contentInsetLeft = 0, ...props }: To
           width: 'max-content',
           maxWidth: `min(520px, calc(100vw - ${contentInsetLeft + 36}px))`,
           minHeight: '40px',
-          padding: '6px 16px 6px 18px',
+          padding: '6px 13px 6px 16px',
           borderRadius: '12px',
           boxShadow: 'none',
           translate: '-50% 0',

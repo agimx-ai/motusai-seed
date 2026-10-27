@@ -6,11 +6,11 @@
   align-self: flex-start;
   width: 14px;
   height: 14px;
-  margin: 7px 10px 0 0;
+  margin: 7px 9px 0 0;
 }
 
 .seed-toast .seed-toast-content {
-  margin-right: 0;
+  margin-right: 6px;
 }
 
 .seed-toast[data-styled='true'] .seed-toast-icon[data-icon] svg {
@@ -68,7 +68,7 @@
 
 .seed-toast[data-sonner-toast][data-styled='true'][data-multiline='true'] {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) max-content max-content;
+  grid-template-columns: 23px minmax(0, 1fr) max-content max-content;
   row-gap: 8px;
 }
 
@@ -83,7 +83,7 @@
 .seed-toast[data-multiline='true'] .seed-toast-content {
   grid-area: 1 / 2 / 2 / -1;
   align-self: start;
-  margin-right: 20px;
+  margin-right: 26px;
 }
 
 .seed-toast[data-multiline='true']:not(:has(.seed-toast-close)) .seed-toast-content {
