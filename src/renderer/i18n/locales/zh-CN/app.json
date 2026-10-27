@@ -79,7 +79,7 @@
       "recordingFailedWithTasks": "录音遇到问题 · 另有 {{count}} 项任务进行中"
     },
     "mcp": {
-      "instruction": "让 Seed 的能力，被你常用的AI使用",
+      "instruction": "让 Seed 的能力，被你常用的 AI 使用",
       "copy": "复制",
       "copied": "已复制",
       "copyFailed": "复制失败，请重试",
