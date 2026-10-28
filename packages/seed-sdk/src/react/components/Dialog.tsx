@@ -39,7 +39,7 @@ export function Dialog({
       data-plugin-view-portal={scope}
       ref={ref}
       aria-labelledby={titleId}
-      className="seed-dialog relative m-auto max-h-[min(720px,calc(100vh-64px))] w-[calc(100%-48px)] max-w-[360px] overflow-auto rounded-[18px] border border-border bg-card px-6 pb-8 pt-6 text-foreground shadow-[0_18px_55px_rgba(0,0,0,.18)] outline-none"
+      className="seed-dialog relative m-auto max-h-[min(720px,calc(100vh-64px))] w-[calc(100%-48px)] max-w-[360px] overflow-auto rounded-[18px] border border-border bg-card px-6 pb-5 pt-6 text-foreground shadow-[0_18px_55px_rgba(0,0,0,.18)] outline-none"
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) onClose();
