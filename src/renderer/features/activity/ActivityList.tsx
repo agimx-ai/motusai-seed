@@ -407,7 +407,7 @@ export function ActivityList({ entries, dayCounts }: { entries: AuditEntry[]; da
               <span className="text-[10px] tabular-nums text-muted-foreground">{dayCounts[group.key]}</span>
             )}
           </div>
-          <div className="space-y-2 py-2">
+          <div className="space-y-1 py-2">
             {group.entries.map((entry) => (
               <ActivityNode entry={entry} childrenByParent={childrenByParent} key={entry.id} />
             ))}
