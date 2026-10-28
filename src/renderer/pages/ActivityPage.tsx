@@ -1,10 +1,9 @@
-import { CloudUpload, MoreHorizontal, Trash2 } from 'lucide-react';
+import { CloudUpload, ListFilter, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
   AuditCategory,
   AuditEntry,
-  AuditRiskFilter,
   AuditStatusFilter,
   TerminalLogUploadProgress,
   TerminalLogUploadRange,
@@ -226,7 +225,6 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<AuditStatusFilter>('all');
   const [category, setCategory] = useState<AuditCategory>('all');
-  const [risk, setRisk] = useState<AuditRiskFilter>('all');
   const [results, setResults] = useState(entries.slice(0, pageSize));
   const [total, setTotal] = useState(entries.length);
   const [nextCursor, setNextCursor] = useState<string>();
@@ -238,10 +236,7 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
   const categoryOptions: Array<SelectControlOption<AuditCategory>> = (
     ['all', 'capabilities', 'permissions', 'plugins', 'system'] as const
   ).map((value) => ({ value, label: t(`activity.category.${value}`) }));
-  const riskOptions: Array<SelectControlOption<AuditRiskFilter>> = (['all', 'read', 'write', 'control'] as const).map(
-    (value) => ({ value, label: t(`activity.riskFilter.${value}`) }),
-  );
-  const hasActiveFilters = Boolean(query.trim()) || status !== 'all' || category !== 'all' || risk !== 'all';
+  const hasActiveFilters = Boolean(query.trim()) || status !== 'all' || category !== 'all';
   const showFilters = entries.length > 0 || total > 0 || hasActiveFilters;
 
   useEffect(() => {
@@ -250,13 +245,13 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
       () => {
         const bridge = window.motusSeed;
         if (!bridge) {
-          const filtered = filterActivityEntries(entries, { category, status, risk, query });
+          const filtered = filterActivityEntries(entries, { category, status, risk: 'all', query });
           setResults(filtered.slice(0, pageSize));
           setTotal(filtered.length);
           setNextCursor(undefined);
           return;
         }
-        void bridge.queryAudit({ category, status, risk, query, limit: pageSize }).then((page) => {
+        void bridge.queryAudit({ category, status, query, limit: pageSize }).then((page) => {
           if (version !== requestVersion.current) return;
           setResults(page.items);
           setTotal(page.total);
@@ -266,7 +261,7 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
       query.trim() ? 250 : 0,
     );
     return () => window.clearTimeout(timer);
-  }, [category, entries, query, risk, status]);
+  }, [category, entries, query, status]);
 
   const loadMore = async () => {
     if (!nextCursor || !window.motusSeed || loadingMore) return;
@@ -275,7 +270,6 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
       const page = await window.motusSeed.queryAudit({
         category,
         status,
-        risk,
         query,
         cursor: nextCursor,
         limit: pageSize,
@@ -294,7 +288,19 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
         <>
           <div className="flex flex-wrap items-center gap-2 pb-3">
             <SearchInput
-              className="min-w-[220px] flex-1"
+              className="min-w-[280px] flex-1 gap-2"
+              leading={
+                <div className="flex shrink-0 items-center border-r border-input pr-1">
+                  <ListFilter aria-hidden="true" size={16} />
+                  <SelectControl
+                    className="max-w-[150px] [&>button]:h-7 [&>button]:min-w-0 [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-2 [&>button]:leading-none [&>button]:text-muted-foreground"
+                    label={t('activity.category.label')}
+                    onValueChange={setCategory}
+                    options={categoryOptions}
+                    value={category}
+                  />
+                </div>
+              }
               clearLabel={t('common.clearSearch')}
               label={t('activity.search')}
               onValueChange={setQuery}
@@ -307,20 +313,6 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
               onValueChange={setStatus}
               options={statusOptions}
               value={status}
-            />
-            <SelectControl
-              className="[&>button]:h-[34px]"
-              label={t('activity.category.label')}
-              onValueChange={setCategory}
-              options={categoryOptions}
-              value={category}
-            />
-            <SelectControl
-              className="[&>button]:h-[34px]"
-              label={t('activity.riskFilter.label')}
-              onValueChange={setRisk}
-              options={riskOptions}
-              value={risk}
             />
           </div>
         </>
@@ -345,7 +337,6 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
                 setQuery('');
                 setStatus('all');
                 setCategory('all');
-                setRisk('all');
               }}
               type="button"
             >
