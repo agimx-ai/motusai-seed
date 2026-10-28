@@ -49,6 +49,7 @@ function page(
   query = '',
   catalogLoading = false,
   catalogOrganizations?: Array<NonNullable<SeedCatalogPlugin['organization']>>,
+  catalogLabels?: string[],
 ) {
   return (
     <SeedI18nProvider>
@@ -57,6 +58,7 @@ function page(
         plugins={[]}
         catalogPlugins={catalogPlugins}
         catalogOrganizations={catalogOrganizations}
+        catalogLabels={catalogLabels}
         installedLoading={false}
         catalogLoading={catalogLoading}
         query={query}
@@ -136,4 +138,44 @@ it('preserves selection during refresh and falls back to all only when the selec
   view.rerender(page(catalog.filter((item) => item.organization?.id !== g.id)));
   expect(screen.getByRole('button', { name: '全部' }).getAttribute('aria-pressed')).toBe('true');
   expectPlugins(['Public', 'IQ', 'EP']);
+});
+
+it('combines tag, keyword and organization filters and can return to all tags', () => {
+  const items = [
+    { ...plugin('Public'), labels: ['productivity'] as SeedCatalogPlugin['labels'] },
+    { ...plugin('IQ', w), labels: ['productivity'] as SeedCatalogPlugin['labels'] },
+    { ...plugin('EP', a), labels: ['utilities'] as SeedCatalogPlugin['labels'] },
+  ];
+  const view = render(page(items));
+  fireEvent.click(screen.getByRole('button', { name: '按插件标签筛选' }));
+  fireEvent.click(screen.getByRole('option', { name: '生产力' }));
+  expectPlugins(['Public', 'IQ']);
+  fireEvent.click(screen.getByRole('button', { name: w.name }));
+  expectPlugins(['IQ']);
+  view.rerender(page(items, 'missing'));
+  expectPlugins([]);
+  view.rerender(page(items));
+  fireEvent.click(screen.getByRole('button', { name: '全部' }));
+  fireEvent.click(screen.getByRole('button', { name: '按插件标签筛选' }));
+  fireEvent.click(screen.getByRole('option', { name: '全部标签' }));
+  expectPlugins(['Public', 'IQ', 'EP']);
+});
+
+it('derives and deduplicates tags from the directory and updates them after refresh', () => {
+  const items = [{ ...plugin('Public'), labels: ['productivity', 'productivity'] as SeedCatalogPlugin['labels'] }];
+  const view = render(page(items));
+  fireEvent.click(screen.getByRole('button', { name: '按插件标签筛选' }));
+  expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['全部标签', '生产力']);
+  fireEvent.click(screen.getByRole('option', { name: '生产力' }));
+  view.rerender(page(items, 'missing', false, undefined, ['productivity', 'utilities']));
+  fireEvent.click(screen.getByRole('button', { name: '按插件标签筛选' }));
+  expect(screen.getByRole('option', { name: '实用工具' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('option', { name: '生产力' }));
+  view.rerender(page([], '', true, undefined, []));
+  expect(screen.getByRole('button', { name: '按插件标签筛选' }).textContent).toContain('生产力');
+  view.rerender(page([], '', false, undefined, ['utilities']));
+  expect(screen.getByRole('button', { name: '按插件标签筛选' }).textContent).toContain('全部标签');
+  fireEvent.click(screen.getByRole('button', { name: '按插件标签筛选' }));
+  expect(screen.queryByRole('option', { name: '生产力' })).toBeNull();
+  expect(screen.getByRole('option', { name: '实用工具' })).toBeTruthy();
 });

@@ -1,8 +1,9 @@
 import { Search, X } from 'lucide-react'
-import { forwardRef, type InputHTMLAttributes } from 'react'
+import { forwardRef, type ReactNode, type InputHTMLAttributes } from 'react'
 import { cx } from '../lib/display'
 
 type SearchInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'type' | 'value'> & {
+  leading?: ReactNode
   clearLabel: string
   label: string
   value: string
@@ -11,6 +12,7 @@ type SearchInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' |
 }
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput({
+  leading,
   clearLabel,
   label,
   value,
@@ -20,7 +22,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
 }, ref) {
   return (
     <div className={cx('flex h-[34px] w-full items-center gap-2.5 rounded-full border border-input bg-card px-3 text-muted-foreground transition-colors focus-within:border-foreground/30', className)}>
-      <Search aria-hidden="true" size={17} />
+      {leading ?? <Search aria-hidden="true" size={17} />}
       <input
         ref={ref}
         aria-label={label}

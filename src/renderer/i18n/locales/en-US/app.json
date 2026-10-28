@@ -154,6 +154,7 @@
     "publisher": "Publisher",
     "releaseNotes": "Release notes",
     "releaseNotesDescription": "Review what was added, changed, and fixed in this release.",
+    "allLabels": "All tags",
     "labelFilter": "Filter by plugin label",
     "labels": {
       "all": "All",

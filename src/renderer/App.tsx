@@ -321,6 +321,7 @@ export default function App() {
                 appName={snapshot.appName}
                 plugins={plugins}
                 catalogPlugins={catalogPlugins}
+                catalogLabels={snapshot.catalogPlugins.flatMap((plugin) => plugin.labels)}
                 catalogOrganizations={snapshot.catalogPlugins.flatMap((plugin) =>
                   plugin.visibility === 'organization' && plugin.organization ? [plugin.organization] : [],
                 )}

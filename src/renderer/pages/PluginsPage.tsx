@@ -1,4 +1,4 @@
-import { PackageCheck } from 'lucide-react';
+import { ListFilter, PackageCheck } from 'lucide-react';
 import { useEffect, useState, type RefObject } from 'react';
 import type { PluginInstallProgress, SeedCatalogPlugin, SeedInstalledPlugin } from '../../shared/contracts';
 import { resolveSeedLocalizedText, type SeedLocalizedText } from '../../shared/plugin-manifest';
@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SearchInput } from '../components/SearchInput';
 import { InfiniteScrollTrigger } from '../components/InfiniteScrollTrigger';
-import { MarkdownContent, Tooltip } from '@motus-ai/seed-sdk/react';
+import { MarkdownContent, SelectControl, Tooltip } from '@motus-ai/seed-sdk/react';
 import { resourceCardGridClass } from '../components/ResourceCard';
 import {
   CatalogPluginCard,
@@ -35,6 +35,7 @@ type PluginsPageProps = {
   appName: string;
   plugins: SeedInstalledPlugin[];
   catalogPlugins: SeedCatalogPlugin[];
+  catalogLabels?: string[];
   catalogOrganizations?: Array<NonNullable<SeedCatalogPlugin['organization']>>;
   installedLoading: boolean;
   installedError?: boolean;
@@ -64,6 +65,7 @@ export function PluginsPage({
   appName,
   plugins,
   catalogPlugins,
+  catalogLabels,
   catalogOrganizations,
   installedLoading,
   installedError,
@@ -95,20 +97,31 @@ export function PluginsPage({
     | { kind: 'uninstall'; plugin: SeedInstalledPlugin }
   >();
   const [sourceFilter, setSourceFilter] = useState<'all' | 'public' | `organization:${string}`>('all');
+  const [labelFilter, setLabelFilter] = useState('all');
+  // Use the full directory metadata, independently of keyword search pages.
+  const availableLabels = Array.from(new Set(catalogLabels ?? catalogPlugins.flatMap((plugin) => plugin.labels)));
+  const selectedLabelMissing = labelFilter !== 'all' && !availableLabels.includes(labelFilter);
+  if (catalogLoading && selectedLabelMissing) availableLabels.push(labelFilter);
+  useEffect(() => {
+    if (!catalogLoading && selectedLabelMissing && (catalogLabels !== undefined || !query.trim())) {
+      setLabelFilter('all');
+    }
+  }, [catalogLoading, selectedLabelMissing, catalogLabels, query]);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const installedById = new Map(plugins.map((plugin) => [plugin.id, plugin]));
   const matches = (plugin: SeedInstalledPlugin | SeedCatalogPlugin) =>
-    !normalizedQuery ||
-    [
-      searchableText(plugin.name),
-      plugin.id,
-      plugin.publisher,
-      searchableText(plugin.description),
-      ...plugin.labels.map((label) => t(`plugins.labels.${label}`)),
-    ]
-      .join(' ')
-      .toLocaleLowerCase()
-      .includes(normalizedQuery);
+    (labelFilter === 'all' || plugin.labels.some((label) => label === labelFilter)) &&
+    (!normalizedQuery ||
+      [
+        searchableText(plugin.name),
+        plugin.id,
+        plugin.publisher,
+        searchableText(plugin.description),
+        ...plugin.labels.map((label) => t(`plugins.labels.${label}`)),
+      ]
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(normalizedQuery));
   const installedPlugins = plugins.filter(matches);
   const organizations = new Map<string, string>();
   const availableOrganizations =
@@ -342,6 +355,25 @@ export function PluginsPage({
       <section className="mx-auto w-full max-w-[730px] [--plugin-search-sticky-height:60px] animate-[rise_.25s_ease_both]">
         <div className="sticky top-0 z-20 flex h-[var(--plugin-search-sticky-height)] items-start bg-background pt-4">
           <SearchInput
+            className="gap-2"
+            leading={
+              <div className="flex shrink-0 items-center border-r border-input pr-1">
+                <ListFilter aria-hidden="true" size={16} />
+                <SelectControl
+                  label={t('plugins.labelFilter')}
+                  value={labelFilter}
+                  onValueChange={setLabelFilter}
+                  options={[
+                    { value: 'all', label: t('plugins.allLabels') },
+                    ...availableLabels.map((value) => ({
+                      value,
+                      label: t(`plugins.labels.${value}`, { defaultValue: value }),
+                    })),
+                  ]}
+                  className="max-w-[150px] [&>button]:h-7 [&>button]:min-w-0 [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:border-0 [&>button]:bg-transparent [&>button]:px-2 [&>button]:leading-none [&>button]:text-muted-foreground"
+                />
+              </div>
+            }
             ref={searchRef}
             clearLabel={t('common.clearSearch')}
             label={t('plugins.search')}
@@ -444,7 +476,7 @@ export function PluginsPage({
                   );
                 })}
               </div>
-            ) : catalogLoading ? (
+            ) : catalogLoading || (labelFilter !== 'all' && hasMore && !catalogError) ? (
               <PluginListSkeleton label={t('plugins.loadingAvailable')} />
             ) : catalogError ? (
               <div

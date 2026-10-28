@@ -154,6 +154,7 @@
     "publisher": "发布者",
     "releaseNotes": "更新说明",
     "releaseNotesDescription": "了解当前版本新增、调整和修复的内容。",
+    "allLabels": "全部标签",
     "labelFilter": "按插件标签筛选",
     "labels": {
       "all": "全部",
