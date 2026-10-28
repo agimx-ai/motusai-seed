@@ -340,7 +340,7 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
               value={query}
             />
             <SegmentedControl
-              className="h-[34px] [&>button]:h-7"
+              className="h-[34px] [&]:rounded-full [&>button]:h-7 [&>button]:rounded-full"
               label={t('activity.status.label')}
               onValueChange={setStatus}
               options={statusOptions}
