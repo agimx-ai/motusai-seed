@@ -278,7 +278,7 @@
       "control": "控制"
     },
     "outcome": {
-      "allowed": "已完成",
+      "allowed": "成功",
       "denied": "已拒绝",
       "failed": "失败",
       "running": "进行中",

@@ -16,7 +16,7 @@ import {
 } from './activity-model';
 
 const outcomeAppearance: Record<AuditEntry['outcome'], string> = {
-  allowed: 'text-accent-strong before:bg-accent-strong',
+  allowed: 'text-accent-strong before:bg-success',
   denied: 'text-danger before:bg-danger',
   failed: 'text-danger before:bg-danger',
   running: 'text-control before:bg-control',
@@ -122,7 +122,7 @@ function FlatLabel({
     return (
       <>
         {name && (
-          <span className="font-medium text-foreground transition-colors group-hover/activity:text-accent-strong">
+          <span className="font-normal text-foreground transition-colors group-hover/activity:text-accent-strong">
             「{name}」
           </span>
         )}
@@ -141,7 +141,7 @@ function FlatLabel({
     return (
       <>
         {name && (
-          <span className="font-medium text-foreground transition-colors group-hover/activity:text-accent-strong">
+          <span className="font-normal text-foreground transition-colors group-hover/activity:text-accent-strong">
             「{name}」
           </span>
         )}
@@ -170,7 +170,7 @@ function FlatLabel({
   if (name && entry.operation === 'plugin.install')
     return (
       <>
-        <span className="font-medium text-foreground transition-colors group-hover/activity:text-accent-strong">
+        <span className="font-normal text-foreground transition-colors group-hover/activity:text-accent-strong">
           「{name}」
         </span>
         <span aria-hidden="true" className="mx-1.5 text-muted-foreground/60">
@@ -182,7 +182,7 @@ function FlatLabel({
   if (name && entry.operation === 'plugin.uninstall')
     return (
       <>
-        <span className="font-medium text-foreground transition-colors group-hover/activity:text-accent-strong">
+        <span className="font-normal text-foreground transition-colors group-hover/activity:text-accent-strong">
           「{name}」
         </span>
         <span aria-hidden="true" className="mx-1.5 text-muted-foreground/60">
@@ -243,7 +243,7 @@ function ActivityRow({
                 ? '收起活动'
                 : '展开活动'
           }
-          className="grid h-11 w-7 place-items-center rounded-md text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-focus-ring)]"
+          className="grid h-9 w-7 place-items-center rounded-md text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-focus-ring)]"
           onClick={onToggle}
           type="button"
         >
@@ -258,11 +258,11 @@ function ActivityRow({
         </button>
         <button
           aria-expanded={expanded}
-          className="grid min-h-11 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-[9px] pr-2 text-left text-foreground outline-none transition-colors hover:text-accent-strong focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--color-focus-ring)]"
+          className="grid min-h-9 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-[9px] pr-2 text-left text-foreground outline-none transition-colors hover:text-accent-strong focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--color-focus-ring)]"
           onClick={onToggle}
           type="button"
         >
-          <span className="min-w-0 truncate text-[13px] leading-5">
+          <span className="min-w-0 truncate text-[12px] leading-5">
             <span className="min-w-0 truncate">
               <FlatLabel entry={entry} locale={locale} fallback={fallback} headline={headline} />
             </span>
@@ -270,7 +270,7 @@ function ActivityRow({
           <span className="flex shrink-0 items-center">
             <span
               className={cx(
-                'relative min-w-[52px] shrink-0 pl-3 text-left text-[11px] font-medium before:absolute before:left-0 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full',
+                'relative min-w-[52px] shrink-0 pl-3 text-left text-[11px] font-normal before:absolute before:left-0 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full',
                 outcomeAppearance[entry.outcome],
               )}
             >
@@ -351,18 +351,18 @@ function ActivityNode({
     <div
       className={cx(
         'relative',
-        depth === 0 && 'rounded-[12px] border border-border bg-muted/45 px-2 py-1',
+        depth === 0 && 'rounded-[12px] border border-border bg-muted/45 px-2 py-0.5',
         depth > 0 && 'ml-5 pl-5',
       )}
     >
       {depth > 0 && (
         <span
           aria-hidden="true"
-          className={cx('absolute left-0 top-0 border-l border-foreground/20', isLast ? 'h-[22px]' : 'bottom-0')}
+          className={cx('absolute left-0 top-0 border-l border-foreground/20', isLast ? 'h-[18px]' : 'bottom-0')}
         />
       )}
       {depth > 0 && (
-        <span aria-hidden="true" className="absolute left-0 top-[22px] w-4 border-t border-foreground/20" />
+        <span aria-hidden="true" className="absolute left-0 top-[18px] w-4 border-t border-foreground/20" />
       )}
       <ActivityRow
         depth={depth}
