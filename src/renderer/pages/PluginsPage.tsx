@@ -35,6 +35,7 @@ type PluginsPageProps = {
   appName: string;
   plugins: SeedInstalledPlugin[];
   catalogPlugins: SeedCatalogPlugin[];
+  catalogOrganizations?: Array<NonNullable<SeedCatalogPlugin['organization']>>;
   installedLoading: boolean;
   installedError?: boolean;
   catalogLoading: boolean;
@@ -63,6 +64,7 @@ export function PluginsPage({
   appName,
   plugins,
   catalogPlugins,
+  catalogOrganizations,
   installedLoading,
   installedError,
   catalogLoading,
@@ -92,7 +94,7 @@ export function PluginsPage({
     | { kind: 'install'; plugin: SeedCatalogPlugin; version: string; updating: boolean; currentVersion?: string }
     | { kind: 'uninstall'; plugin: SeedInstalledPlugin }
   >();
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'public' | 'organization'>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'public' | `organization:${string}`>('all');
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const installedById = new Map(plugins.map((plugin) => [plugin.id, plugin]));
   const matches = (plugin: SeedInstalledPlugin | SeedCatalogPlugin) =>
@@ -108,20 +110,46 @@ export function PluginsPage({
       .toLocaleLowerCase()
       .includes(normalizedQuery);
   const installedPlugins = plugins.filter(matches);
-  const organizationName = catalogPlugins.find((plugin) => plugin.visibility === 'organization' && plugin.organization)
-    ?.organization?.name;
-  const hasOrganizationPlugins = Boolean(organizationName);
-  const sourcePlugins = catalogPlugins.filter((plugin) => sourceFilter === 'all' || plugin.visibility === sourceFilter);
+  const organizations = new Map<string, string>();
+  const availableOrganizations =
+    catalogOrganizations ??
+    catalogPlugins.flatMap((plugin) =>
+      plugin.visibility === 'organization' && plugin.organization ? [plugin.organization] : [],
+    );
+  for (const organization of availableOrganizations) {
+    if (!organizations.has(organization.id)) organizations.set(organization.id, organization.name);
+  }
+  const sourceFilters = [
+    { key: 'all' as const, label: t('plugins.sources.all') },
+    { key: 'public' as const, label: t('plugins.sources.public') },
+    ...Array.from(organizations, ([id, name]) => ({
+      key: `organization:${id}` as const,
+      label: t('plugins.organizationName', { name }),
+    })),
+  ];
+  const selectedOrganizationId = sourceFilter.startsWith('organization:')
+    ? sourceFilter.slice('organization:'.length)
+    : undefined;
+  const selectedOrganizationMissing =
+    selectedOrganizationId !== undefined && !organizations.has(selectedOrganizationId);
+  const sourcePlugins = catalogPlugins.filter(
+    (plugin) =>
+      sourceFilter === 'all' ||
+      (sourceFilter === 'public'
+        ? plugin.visibility === 'public'
+        : plugin.visibility === 'organization' && plugin.organization?.id === selectedOrganizationId),
+  );
   useEffect(() => {
-    if (sourceFilter === 'organization' && !hasOrganizationPlugins) {
+    if (!catalogLoading && selectedOrganizationMissing) {
       setSourceFilter('all');
     }
-  }, [hasOrganizationPlugins, sourceFilter]);
+  }, [catalogLoading, selectedOrganizationMissing]);
   const visiblePlugins = sourcePlugins.filter(matches);
   const selectedInstalledPlugin = selectedPlugin && 'source' in selectedPlugin ? selectedPlugin : undefined;
-  const isPluginSubpage = selectedInstalledPlugin?.status === 'ready'
-    && pluginNavigation?.pluginId === selectedInstalledPlugin.id
-    && pluginNavigation.path.length > 0;
+  const isPluginSubpage =
+    selectedInstalledPlugin?.status === 'ready' &&
+    pluginNavigation?.pluginId === selectedInstalledPlugin.id &&
+    pluginNavigation.path.length > 0;
   const selectedCatalogPlugin = selectedPlugin
     ? (catalogPlugins.find((plugin) => plugin.id === selectedPlugin.id) ??
       (!('source' in selectedPlugin) ? selectedPlugin : undefined))
@@ -191,7 +219,11 @@ export function PluginsPage({
     return (
       <>
         <section className="mx-auto flex min-h-full w-full max-w-[730px] flex-col animate-[rise_.25s_ease_both]">
-          <div data-plugin-information hidden={isPluginSubpage} className="sticky top-0 z-10 grid shrink-0 grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-4 bg-background pb-6 pt-4">
+          <div
+            data-plugin-information
+            hidden={isPluginSubpage}
+            className="sticky top-0 z-10 grid shrink-0 grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-4 bg-background pb-6 pt-4"
+          >
             {selectedInstalledPlugin ? (
               <PluginMark plugin={selectedInstalledPlugin} large />
             ) : selectedCatalogPlugin ? (
@@ -368,19 +400,17 @@ export function PluginsPage({
                 onStart={onUpdateAll}
               />
             </div>
-            {hasOrganizationPlugins && (
+            {organizations.size > 0 && (
               <div className="mt-4 flex flex-wrap items-center gap-1" aria-label={t('plugins.sourceFilter')}>
-                {(['all', 'public', 'organization'] as const).map((source) => (
+                {sourceFilters.map(({ key, label }) => (
                   <button
-                    className={`h-7 rounded-full px-3 text-[12px] transition-colors ${sourceFilter === source ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
-                    key={source}
+                    className={`h-7 rounded-full px-3 text-[12px] transition-colors ${sourceFilter === key ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                    key={key}
                     type="button"
-                    aria-pressed={sourceFilter === source}
-                    onClick={() => setSourceFilter(source)}
+                    aria-pressed={sourceFilter === key}
+                    onClick={() => setSourceFilter(key)}
                   >
-                    {source === 'organization'
-                      ? t('plugins.organizationName', { name: organizationName })
-                      : t(`plugins.sources.${source}`)}
+                    {label}
                   </button>
                 ))}
               </div>

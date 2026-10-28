@@ -321,6 +321,9 @@ export default function App() {
                 appName={snapshot.appName}
                 plugins={plugins}
                 catalogPlugins={catalogPlugins}
+                catalogOrganizations={snapshot.catalogPlugins.flatMap((plugin) =>
+                  plugin.visibility === 'organization' && plugin.organization ? [plugin.organization] : [],
+                )}
                 installedLoading={
                   snapshot.installedPluginsStatus === 'loading' && snapshot.pluginCatalogStatus !== 'error'
                 }
