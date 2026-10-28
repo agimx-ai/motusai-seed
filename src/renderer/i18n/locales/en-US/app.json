@@ -296,6 +296,7 @@
       "system": "System"
     },
     "detail": {
+      "originalSummary": "Original summary",
       "time": "Exact time",
       "result": "Result",
       "source": "Source",

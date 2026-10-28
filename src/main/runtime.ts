@@ -1030,16 +1030,18 @@ export class SeedRuntime {
     }
     if (event.type === 'plugin.runtime.failed') {
       const plugin = this.installedPlugins.find((candidate) => candidate.id === event.packageId);
-      await this.store.auditSystem(
-        'plugin.runtime.start',
-        'failed',
-        `${plugin?.name.zh_Hans || '插件'}启动失败：${event.message}`,
-        'control',
-        {
+      await this.store.addAudit({
+        source: 'system',
+        operation: 'plugin.runtime.start',
+        outcome: 'failed',
+        summary: `${plugin?.name.zh_Hans || '插件'}启动失败：${event.message}`,
+        risk: 'control',
+        errorMessage: event.message,
+        metadata: {
           plugin_id: event.packageId,
           ...(plugin ? { plugin_name_en_us: plugin.name.en_US, plugin_name_zh_hans: plugin.name.zh_Hans } : {}),
         },
-      );
+      });
       await this.publishSnapshot();
       return;
     }

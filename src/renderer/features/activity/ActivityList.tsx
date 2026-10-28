@@ -316,6 +316,9 @@ function ActivityRow({
               <DetailField code label={t('activity.detail.component')} value={entry.component} />
               <DetailField code label={t('activity.detail.errorName')} value={entry.errorName} />
               <DetailField label={t('activity.detail.errorMessage')} value={entry.errorMessage} />
+              {!entry.errorMessage && entry.outcome === 'failed' && (
+                <DetailField label={t('activity.detail.originalSummary')} value={entry.summary} />
+              )}
               <DetailField label={t('activity.detail.inputLength')} value={metadataValue('input_length')} />
               <DetailField label={t('activity.detail.outputLength')} value={metadataValue('output_length')} />
               <DetailField label={t('activity.detail.attachments')} value={metadataValue('attachment_count')} />

@@ -135,3 +135,27 @@ it('shows full day totals across pages and ignores a page returned after changin
   expect(screen.getByText('7')).toBeTruthy();
   expect((screen.getByRole('button', { name: '加载下一页' }) as HTMLButtonElement).disabled).toBe(true);
 });
+
+it('shows the original summary for failed historical records without a structured error', () => {
+  vi.stubGlobal('motusSeed', {
+    snapshot: async () => ({ locale: 'zh-CN', languagePreference: 'zh-CN' }),
+    subscribe: () => () => {},
+    queryAudit: vi.fn().mockResolvedValue({ items: [], total: 0, dayCounts: {} }),
+  });
+  const entry: AuditEntry = {
+    id: 'legacy-failure',
+    timestamp: '2026-10-28T12:00:00Z',
+    source: 'system',
+    operation: 'plugin.runtime.start',
+    outcome: 'failed',
+    summary: '工作搭子启动失败：Cannot find module workmate-service',
+  };
+  render(
+    <SeedI18nProvider>
+      <ActivityPage entries={[entry]} appName="Seed" />
+    </SeedI18nProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '展开活动' }));
+  expect(screen.getByText('原始摘要')).toBeTruthy();
+  expect(screen.getByText(entry.summary)).toBeTruthy();
+});

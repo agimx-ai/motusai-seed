@@ -296,6 +296,7 @@
       "system": "系统"
     },
     "detail": {
+      "originalSummary": "原始摘要",
       "time": "准确时间",
       "result": "结果",
       "source": "来源",

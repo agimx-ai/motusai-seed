@@ -91,6 +91,23 @@ describe('one runtime with distinct plugin sources', () => {
     Object.assign(app, { isPackaged: false });
   });
 
+  it('persists the original plugin startup failure in the error field', async () => {
+    const h = fixture();
+    h.runtime.store.addAudit = vi.fn(async () => {});
+    h.runtime.publishSnapshot = vi.fn(async () => {});
+    const message = 'Cannot load plugin service: missing module';
+    await h.runtime.handleWorkerEvent({ type: 'plugin.runtime.failed', packageId: h.one.package_id, message });
+    expect(h.runtime.store.addAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'system',
+        operation: 'plugin.runtime.start',
+        outcome: 'failed',
+        errorMessage: message,
+        metadata: { plugin_id: h.one.package_id },
+      }),
+    );
+  });
+
   it('finishes activation before completing a reload or replacing the next plugin source', async () => {
     const h = fixture();
     let activate!: () => void;
