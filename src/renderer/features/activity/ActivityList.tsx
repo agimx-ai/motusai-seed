@@ -396,7 +396,7 @@ export function ActivityList({ entries, dayCounts }: { entries: AuditEntry[]; da
     <div className="pb-4">
       {groups.map((group) => (
         <section key={group.key}>
-          <div className="sticky top-0 z-[2] -mx-2 flex items-baseline gap-2 border-b border-border/60 bg-background px-2 py-3">
+          <div className="sticky top-0 z-[2] -mx-2 flex items-baseline gap-2 bg-background px-2 py-3">
             <h3 className="m-0 text-[12px] font-medium text-foreground">
               {dayLabel(group.entries[0].timestamp, locale, t('activity.today'), t('activity.yesterday'))}
             </h3>
