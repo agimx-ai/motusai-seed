@@ -18,7 +18,11 @@ import {
   type SelectControlOption,
 } from '@motus-ai/seed-sdk/react';
 import { ActivityList } from '../features/activity/ActivityList';
-import { filterActivityEntries } from '../features/activity/activity-model';
+import {
+  activityHierarchy,
+  groupActivityEntriesByDay,
+  filterActivityEntries,
+} from '../features/activity/activity-model';
 import { cx } from '../lib/display';
 
 const pageSize = 50;
@@ -230,6 +234,9 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
   const [nextCursor, setNextCursor] = useState<string>();
   const [loadingMore, setLoadingMore] = useState(false);
   const requestVersion = useRef(0);
+  const loadingPage = useRef<number | undefined>(undefined);
+  const [dayCounts, setDayCounts] = useState<Record<string, number>>();
+  const [refreshing, setRefreshing] = useState(true);
   const statusOptions: Array<SegmentedControlOption<AuditStatusFilter>> = (['all', 'attention'] as const).map(
     (value) => ({ value, label: t(`activity.filter.${value}`) }),
   );
@@ -241,6 +248,9 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
 
   useEffect(() => {
     const version = ++requestVersion.current;
+    setRefreshing(true);
+    setNextCursor(undefined);
+    setLoadingMore(false);
     const timer = window.setTimeout(
       () => {
         const bridge = window.motusSeed;
@@ -249,6 +259,15 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
           setResults(filtered.slice(0, pageSize));
           setTotal(filtered.length);
           setNextCursor(undefined);
+          setDayCounts(
+            Object.fromEntries(
+              groupActivityEntriesByDay(activityHierarchy(filtered).roots).map((group) => [
+                group.key,
+                group.entries.length,
+              ]),
+            ),
+          );
+          setRefreshing(false);
           return;
         }
         void bridge.queryAudit({ category, status, query, limit: pageSize }).then((page) => {
@@ -256,15 +275,22 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
           setResults(page.items);
           setTotal(page.total);
           setNextCursor(page.nextCursor);
+          setDayCounts(page.dayCounts);
+          setRefreshing(false);
         });
       },
       query.trim() ? 250 : 0,
     );
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      ++requestVersion.current;
+    };
   }, [category, entries, query, status]);
 
   const loadMore = async () => {
-    if (!nextCursor || !window.motusSeed || loadingMore) return;
+    const version = requestVersion.current;
+    if (!nextCursor || !window.motusSeed || refreshing || loadingPage.current === version) return;
+    loadingPage.current = version;
     setLoadingMore(true);
     try {
       const page = await window.motusSeed.queryAudit({
@@ -274,11 +300,17 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
         cursor: nextCursor,
         limit: pageSize,
       });
-      setResults((current) => [...current, ...page.items]);
+      if (version !== requestVersion.current) return;
+      setResults((current) => {
+        const known = new Set(current.map((entry) => entry.id));
+        return [...current, ...page.items.filter((entry) => !known.has(entry.id))];
+      });
+      setDayCounts(page.dayCounts);
       setTotal(page.total);
       setNextCursor(page.nextCursor);
     } finally {
-      setLoadingMore(false);
+      if (loadingPage.current === version) loadingPage.current = undefined;
+      if (version === requestVersion.current) setLoadingMore(false);
     }
   };
 
@@ -346,9 +378,9 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
         </div>
       ) : (
         <>
-          <ActivityList entries={results} />
+          <ActivityList entries={results} dayCounts={dayCounts} />
           <InfiniteScrollTrigger
-            hasMore={Boolean(nextCursor)}
+            hasMore={!refreshing && Boolean(nextCursor)}
             label={t('common.loadingMore')}
             loading={loadingMore}
             onLoadMore={() => void loadMore()}

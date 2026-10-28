@@ -386,7 +386,7 @@ function ActivityNode({
   );
 }
 
-export function ActivityList({ entries }: { entries: AuditEntry[] }) {
+export function ActivityList({ entries, dayCounts }: { entries: AuditEntry[]; dayCounts?: Record<string, number> }) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
   const { roots, childrenByParent } = useMemo(() => activityHierarchy(entries), [entries]);
@@ -400,7 +400,9 @@ export function ActivityList({ entries }: { entries: AuditEntry[] }) {
             <h3 className="m-0 text-[12px] font-medium text-foreground">
               {dayLabel(group.entries[0].timestamp, locale, t('activity.today'), t('activity.yesterday'))}
             </h3>
-            <span className="text-[10px] tabular-nums text-muted-foreground">{group.entries.length}</span>
+            {dayCounts?.[group.key] !== undefined && (
+              <span className="text-[10px] tabular-nums text-muted-foreground">{dayCounts[group.key]}</span>
+            )}
           </div>
           <div className="space-y-2 py-2">
             {group.entries.map((entry) => (

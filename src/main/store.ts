@@ -956,6 +956,16 @@ export class SeedStore {
       .clearSelect()
       .clearOrder()
       .count<{ total: number | string }>({ total: '*' });
+    // Count matching root activities across the full history, before applying the page cursor.
+    const dayExpression = "strftime('%Y-%m-%d', timestamp, 'localtime')";
+    const dayRows = (await countQuery
+      .clone()
+      .clearSelect()
+      .clearOrder()
+      .select(database.raw(`${dayExpression} as day`))
+      .count({ count: '*' })
+      .groupByRaw(dayExpression)) as unknown as Array<{ day: string; count: number | string }>;
+    const dayCounts = Object.fromEntries(dayRows.map((row) => [String(row.day), Number(row.count)]));
     const rowsQuery = applyFilters(
       withoutVisibleAncestor(database<AuditRow>('observation_records').select('*').where({ visibility: 'activity' })),
     );
@@ -1001,6 +1011,7 @@ export class SeedStore {
     return {
       items: [...pageRows, ...children].map(fromAuditRow),
       total: Number(totalValue),
+      dayCounts,
       ...(hasMore && last ? { nextCursor: encodeAuditCursor(last) } : {}),
     };
   }

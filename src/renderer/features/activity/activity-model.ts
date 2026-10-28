@@ -48,7 +48,7 @@ export function groupActivityEntriesByDay(entries: AuditEntry[]) {
   const groups = new Map<string, AuditEntry[]>()
   for (const entry of entries) {
     const date = new Date(entry.timestamp)
-    const key = Number.isNaN(date.getTime()) ? 'invalid' : `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
+    const key = Number.isNaN(date.getTime()) ? 'invalid' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     const group = groups.get(key)
     if (group) group.push(entry)
     else groups.set(key, [entry])

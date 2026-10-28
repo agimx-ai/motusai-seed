@@ -677,6 +677,44 @@ describe('SeedStore SQLite persistence', () => {
     await migrated.destroy();
   });
 
+  it('counts filtered root activities per local day independently of page cursors', async () => {
+    const directory = await temporaryDirectory();
+    const store = new SeedStore(directory, 'MotusAI Seed');
+    await store.load();
+    for (let index = 0; index < 4; index++) {
+      await store.addAudit({
+        source: 'agent',
+        operation: 'files.read_file',
+        outcome: index === 0 ? 'failed' : 'allowed',
+        summary: `记录 ${index}`,
+      });
+    }
+    const all = await store.queryAudit();
+    const database = createKnex({
+      client: 'better-sqlite3',
+      connection: { filename: store.databasePath },
+      useNullAsDefault: true,
+    });
+    try {
+      for (let index = 0; index < all.items.length; index++) {
+        // Local noon keeps the fixture on the intended local calendar day in every timezone.
+        const timestamp = new Date(2026, 9, index < 3 ? 27 : 26, 12).toISOString();
+        await database('observation_records').where({ id: all.items[index].id }).update({ timestamp });
+      }
+      const first = await store.queryAudit({ limit: 1 });
+      const second = await store.queryAudit({ limit: 1, cursor: first.nextCursor });
+      expect(first.dayCounts).toEqual({ '2026-10-27': 3, '2026-10-26': 1 });
+      expect(second.dayCounts).toEqual(first.dayCounts);
+      expect(second.items[0].id).not.toBe(first.items[0].id);
+      const attention = await store.queryAudit({ status: 'attention', limit: 1 });
+      expect(Object.values(attention.dayCounts).reduce((sum, count) => sum + count, 0)).toBe(1);
+      expect(attention.total).toBe(1);
+    } finally {
+      await database.destroy();
+      await store.close();
+    }
+  });
+
   it('searches and paginates the complete local activity history', async () => {
     const directory = await temporaryDirectory();
     const store = new SeedStore(directory, 'MotusAI Seed');
@@ -701,10 +739,13 @@ describe('SeedStore SQLite persistence', () => {
 
     const first = await store.queryAudit({ limit: 1 });
     expect(first.total).toBe(3);
+    expect(Object.values(first.dayCounts)).toEqual([3]);
     expect(first.items).toHaveLength(1);
     expect(first.nextCursor).toBeTruthy();
     const second = await store.queryAudit({ cursor: first.nextCursor, limit: 1 });
     expect(second.items).toHaveLength(1);
+    expect(second.dayCounts).toEqual(first.dayCounts);
+    expect(Object.values((await store.queryAudit({ status: 'attention' })).dayCounts)).toEqual([1]);
     expect((await store.queryAudit({ category: 'capabilities' })).items).toHaveLength(2);
     expect((await store.queryAudit({ category: 'capabilities', query: 'annual.md' })).items).toHaveLength(1);
     expect((await store.queryAudit({ risk: 'write' })).items).toHaveLength(2);

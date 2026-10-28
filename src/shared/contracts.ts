@@ -184,6 +184,7 @@ export type AuditQueryInput = {
 
 export type AuditPage = {
   items: AuditEntry[];
+  dayCounts: Record<string, number>;
   total: number;
   nextCursor?: string;
 };
