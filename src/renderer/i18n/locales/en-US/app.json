@@ -329,6 +329,8 @@
     "preventSleep": "Prevent system sleep while running",
     "preventSleepDescription": "Keep your computer awake while {{appName}} runs tasks",
     "theme": "Interface theme",
+    "visualStyle": "Visual style",
+    "themeMode": "Mode",
     "currentTheme": "Currently using the {{theme}} theme",
     "themeLight": "Light",
     "themeDark": "Dark",

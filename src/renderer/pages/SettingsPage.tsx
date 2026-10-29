@@ -1,15 +1,13 @@
-import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { SeedSnapshot } from '../../shared/contracts';
 import {
   ActionButton,
-  SegmentedControl,
   SelectControl,
-  type SegmentedControlOption,
   type SelectControlOption,
 } from '@motus-ai/seed-sdk/react';
 import { SettingsRow } from '../components/SettingsControls';
 import { ToggleSwitch } from '../components/ToggleSwitch';
+import { ThemePreviewControl } from '../components/ThemePreviewControl';
 import type { ResolvedTheme, ThemePreference } from '../hooks/use-theme';
 import { useSeedI18n, type SeedLanguagePreference } from '../i18n';
 
@@ -49,11 +47,6 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const { t } = useTranslation();
   const { languagePreference, setLanguagePreference } = useSeedI18n();
-  const themeOptions: Array<SegmentedControlOption<ThemePreference>> = [
-    { value: 'light', label: t('settings.themeLight'), icon: <Sun size={16} strokeWidth={1.8} /> },
-    { value: 'dark', label: t('settings.themeDark'), icon: <Moon size={16} strokeWidth={1.8} /> },
-    { value: 'system', label: t('settings.themeSystem'), icon: <Monitor size={16} strokeWidth={1.8} /> },
-  ];
   const languageOptions: Array<SelectControlOption<SeedLanguagePreference>> = [
     { value: 'system', label: t('settings.languageSystem') },
     { value: 'zh-CN', label: t('settings.languageZhCN') },
@@ -139,23 +132,16 @@ export function SettingsPage({
           />
         </div>
       </section>
+      <section className="mb-12">
+        <h2 className="mb-4 text-[14px] font-medium">{t('settings.visualStyle')}</h2>
+        <div className="flex min-h-[78px] flex-wrap items-center justify-between gap-5 rounded-[16px] border border-border bg-card px-4 py-2">
+          <strong className="text-[13px] font-medium text-foreground">{t('settings.themeMode')}</strong>
+          <ThemePreviewControl value={themePreference} resolvedTheme={resolvedTheme} onValueChange={onThemeChange} />
+        </div>
+      </section>
       <section>
         <h2 className="mb-4 text-[16px] font-medium">{t('nav.general')}</h2>
         <div className="rounded-[14px] border border-border bg-card px-5">
-          <SettingsRow
-            title={t('settings.theme')}
-            description={t('settings.currentTheme', {
-              theme: resolvedTheme === 'dark' ? t('settings.themeDark') : t('settings.themeLight'),
-            })}
-            action={
-              <SegmentedControl
-                value={themePreference}
-                options={themeOptions}
-                onValueChange={onThemeChange}
-                label={t('settings.theme')}
-              />
-            }
-          />
           <SettingsRow
             title={t('settings.language')}
             description={t('settings.languageDescription')}

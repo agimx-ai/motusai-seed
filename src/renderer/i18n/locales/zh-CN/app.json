@@ -329,6 +329,8 @@
     "preventSleep": "运行时防止系统休眠",
     "preventSleepDescription": "在 {{appName}} 运行任务时，让电脑保持唤醒状态",
     "theme": "界面主题",
+    "visualStyle": "视觉风格",
+    "themeMode": "模式",
     "currentTheme": "当前使用{{theme}}主题",
     "themeLight": "浅色",
     "themeDark": "深色",
