@@ -323,7 +323,8 @@
     "emptyDescription": "当 {{appName}} 连接、授权或执行文件操作后，记录会出现在这里。"
   },
   "settings": {
-    "connectionAndPermissions": "连接与权限",
+    "system": "系统",
+    "about": "关于",
     "systemNotifications": "系统通知",
     "systemNotificationsDescription": "通过系统通知提醒你，是否显示取决于系统通知设置。",
     "preventSleep": "运行时防止系统休眠",
@@ -339,7 +340,6 @@
     "launchAtLoginDescription": "保持 {{appName}} 在系统托盘中运行，随时接收本地能力请求。",
     "version": "版本",
     "language": "语言",
-    "languageDescription": "应用 UI 语言",
     "cleanPluginData": "清理插件数据",
     "pluginDevelopment": "插件开发模式",
     "pluginDevelopmentDescription": "加载并热更新当前设备上的开发插件。请仅运行可信代码；关闭后恢复已安装版本，保留插件数据。",

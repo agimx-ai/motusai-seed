@@ -323,7 +323,8 @@
     "emptyDescription": "Connection, authorization, and file operations from {{appName}} will appear here."
   },
   "settings": {
-    "connectionAndPermissions": "Connection & permissions",
+    "system": "System",
+    "about": "About",
     "systemNotifications": "System notifications",
     "systemNotificationsDescription": "Receive system notifications, subject to your system notification settings.",
     "preventSleep": "Prevent system sleep while running",
@@ -339,7 +340,6 @@
     "launchAtLoginDescription": "Keep {{appName}} running in the system tray and ready for local capability requests.",
     "version": "Version",
     "language": "Language",
-    "languageDescription": "App UI language",
     "cleanPluginData": "Clean Up Plugin Data",
     "pluginDevelopment": "Plugin development mode",
     "pluginDevelopmentDescription": "Load and hot-reload plugins you develop on this device. Only enable this for code you trust. Turning it off restores installed versions without deleting plugin data.",

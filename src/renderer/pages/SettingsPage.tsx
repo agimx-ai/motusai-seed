@@ -94,7 +94,27 @@ export function SettingsPage({
   return (
     <section className="mx-auto w-full max-w-[730px] pt-7 animate-[rise_.25s_ease_both]">
       <section className="mb-12">
-        <h2 className="mb-4 text-[16px] font-medium">{t('settings.connectionAndPermissions')}</h2>
+        <h2 className="mb-4 text-[14px] font-medium">{t('settings.visualStyle')}</h2>
+        <div className="rounded-[16px] border border-border bg-card px-4">
+          <div className="flex min-h-[78px] flex-wrap items-center justify-between gap-5 border-b border-border py-2">
+            <strong className="text-[13px] font-medium text-foreground">{t('settings.themeMode')}</strong>
+            <ThemePreviewControl value={themePreference} resolvedTheme={resolvedTheme} onValueChange={onThemeChange} />
+          </div>
+          <SettingsRow
+            title={t('settings.language')}
+            action={
+              <SelectControl
+                label={t('settings.language')}
+                value={languagePreference}
+                options={languageOptions}
+                onValueChange={setLanguagePreference}
+              />
+            }
+          />
+        </div>
+      </section>
+      <section className="mb-12">
+        <h2 className="mb-4 text-[14px] font-medium">{t('settings.system')}</h2>
         <div className="rounded-[14px] border border-border bg-card px-5">
           <SettingsRow
             title={t('settings.launchAtLogin')}
@@ -132,28 +152,9 @@ export function SettingsPage({
           />
         </div>
       </section>
-      <section className="mb-12">
-        <h2 className="mb-4 text-[14px] font-medium">{t('settings.visualStyle')}</h2>
-        <div className="flex min-h-[78px] flex-wrap items-center justify-between gap-5 rounded-[16px] border border-border bg-card px-4 py-2">
-          <strong className="text-[13px] font-medium text-foreground">{t('settings.themeMode')}</strong>
-          <ThemePreviewControl value={themePreference} resolvedTheme={resolvedTheme} onValueChange={onThemeChange} />
-        </div>
-      </section>
       <section>
-        <h2 className="mb-4 text-[16px] font-medium">{t('nav.general')}</h2>
+        <h2 className="mb-4 text-[14px] font-medium">{t('settings.about')}</h2>
         <div className="rounded-[14px] border border-border bg-card px-5">
-          <SettingsRow
-            title={t('settings.language')}
-            description={t('settings.languageDescription')}
-            action={
-              <SelectControl
-                label={t('settings.language')}
-                value={languagePreference}
-                options={languageOptions}
-                onValueChange={setLanguagePreference}
-              />
-            }
-          />
           <SettingsRow
             title={t('settings.version')}
             description={`${snapshot.appName} ${snapshot.appVersion} · ${formatRuntimePlatform(snapshot.platform, snapshot.architecture)} · ${updateDescription}`}
