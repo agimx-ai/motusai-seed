@@ -91,4 +91,40 @@ describe('SeedDistributionEvents', () => {
     expect(sockets).toHaveLength(2)
     events.stop()
   })
+
+  it.each(['resume', 'reconfigure', 'stop'] as const)(
+    'handles an aborted handshake when %s retires a real WebSocket',
+    async (action) => {
+      const sockets: WebSocket[] = []
+      const events = new SeedDistributionEvents(vi.fn(), vi.fn(), {
+        createSocket: (url) => {
+          const socket = new WebSocket(url)
+          sockets.push(socket)
+          return socket
+        },
+      })
+
+      try {
+        // Retire each socket synchronously, before any network connection can open.
+        events.configure('http://127.0.0.1:1/events')
+        expect(sockets[0].readyState).toBe(WebSocket.CONNECTING)
+
+        if (action === 'resume') {
+          events.reconnectNow()
+          events.reconnectNow()
+          expect(sockets).toHaveLength(3)
+        } else if (action === 'reconfigure') {
+          events.configure('http://127.0.0.1:1/other-events')
+          expect(sockets).toHaveLength(2)
+        }
+        events.stop()
+
+        // ws emits the handshake-abort error and close on the next tick.
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(sockets.every((socket) => socket.readyState === WebSocket.CLOSED)).toBe(true)
+      } finally {
+        events.stop()
+      }
+    },
+  )
 })

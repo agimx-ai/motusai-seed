@@ -99,6 +99,7 @@ export class SeedDistributionEvents {
     const socket = this.socket
     this.socket = null
     socket?.removeAllListeners()
+    socket?.on('error', () => {})
     if (terminate) socket?.terminate()
     else socket?.close()
   }
