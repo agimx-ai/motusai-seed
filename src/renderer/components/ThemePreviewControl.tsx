@@ -14,13 +14,18 @@ function ThemeWindow({ theme }: { theme: ResolvedTheme }) {
           <img src={theme === 'dark' ? appLogoDarkUrl : appLogoLightUrl} alt="" />
         </span>
         <span className="seed-theme-preview__content">
-          <span className="seed-theme-preview__line seed-theme-preview__line--first" />
-          <span className="seed-theme-preview__line seed-theme-preview__line--second" />
-          <span className="seed-theme-preview__line seed-theme-preview__line--third" />
-          <span className="seed-theme-preview__line seed-theme-preview__line--fourth" />
-          <span className="seed-theme-preview__line seed-theme-preview__line--fifth" />
-          <span className="seed-theme-preview__line seed-theme-preview__line--sixth" />
-          <span className="seed-theme-preview__composer"><span /></span>
+          <span className="seed-theme-preview__search" />
+          <span className="seed-theme-preview__installed">
+            {Array.from({ length: 5 }, (_, index) => <span key={index} />)}
+          </span>
+          <span className="seed-theme-preview__catalog">
+            {Array.from({ length: 4 }, (_, index) => (
+              <span className="seed-theme-preview__plugin" key={index}>
+                <span className="seed-theme-preview__plugin-icon" />
+                <span className="seed-theme-preview__plugin-label" />
+              </span>
+            ))}
+          </span>
         </span>
       </span>
     </span>
@@ -45,7 +50,7 @@ export function ThemePreviewControl({
   ].map((option) => ({
     ...option,
     icon: (
-      <span className={`seed-theme-preview seed-theme-preview--${option.value}`} title={option.label}>
+      <span className={`seed-theme-preview seed-theme-preview--${option.value}`}>
         {option.value !== 'dark' && <ThemeWindow theme="light" />}
         {option.value !== 'light' && <ThemeWindow theme="dark" />}
       </span>
