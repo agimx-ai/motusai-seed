@@ -10,7 +10,7 @@ const electronBinary = require('electron')
 const electronVersion = require('electron/package.json').version
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const compiledMainRoot = join(projectRoot, 'dist/electron')
-const developmentElectronBinary = prepareElectronDev(projectRoot, electronBinary, electronVersion)
+const developmentElectronBinary = await prepareElectronDev(projectRoot, electronBinary, electronVersion)
 
 let electronProcess
 let restartTimer

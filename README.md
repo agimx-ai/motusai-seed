@@ -52,6 +52,8 @@ Seed 是通用插件宿主，具体能力和界面由插件声明。从 [seed-sa
 
 ## 本地开发
 
+macOS 开发需要 Xcode 26 或更新版本。开发版与正式版使用同一个 `app-icon.icon`，由构建工具编译原生明暗图标；图标或编译器变化时会自动更新缓存的开发应用包。
+
 ```bash
 cp .env.example .env
 npm install

@@ -249,7 +249,6 @@ app.on('second-instance', (_event, commandLine) => {
 
 app.whenReady().then(async () => {
   registerPluginViewProtocol(session.defaultSession)
-  if (!app.isPackaged) app.dock?.setIcon(nativeImage.createFromPath(appAsset('app-icon.png')))
   app.setAboutPanelOptions({ applicationName: buildConfig.appName, applicationVersion: app.getVersion() })
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
