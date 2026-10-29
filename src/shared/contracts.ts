@@ -42,8 +42,6 @@ export type FilesystemPermission = 'read' | 'write';
 export type SeedLocale = 'zh-CN' | 'en-US';
 export type SeedLanguagePreference = 'system' | SeedLocale;
 export type SeedThemePreference = 'light' | 'dark' | 'system';
-export type SeedDockIconPreference = 'light' | 'dark' | 'system';
-export type SeedDockIconDesignGeneration = 26 | 27;
 /** Encrypted plugin-owned JSON; Core does not interpret configuration fields. */
 export type StoredPluginConfiguration = unknown;
 export function pluginConfigurationKey(pluginId: string, configurationId: string) {
@@ -223,8 +221,6 @@ export type SeedSnapshot = {
   languagePreference: SeedLanguagePreference;
   locale: SeedLocale;
   themePreference: SeedThemePreference;
-  dockIconPreference: SeedDockIconPreference;
-  dockIconDesignGeneration: SeedDockIconDesignGeneration;
   update: AppUpdateState;
   audio: {
     sessionId?: string;
@@ -393,7 +389,6 @@ export type SeedApi = {
   setSystemNotificationsEnabled(enabled: boolean): Promise<boolean>;
   setLanguagePreference(preference: SeedLanguagePreference): Promise<void>;
   setThemePreference(preference: SeedThemePreference): Promise<void>;
-  setDockIconPreference(preference: SeedDockIconPreference): Promise<void>;
   checkForUpdates(): Promise<boolean>;
   downloadUpdate(): Promise<boolean>;
   installUpdate(): Promise<boolean>;
@@ -452,7 +447,6 @@ export const ipcChannels = {
   systemNotificationsEnabled: 'seed:settings:system-notifications',
   languagePreference: 'seed:settings:language-preference',
   themePreference: 'seed:settings:theme-preference',
-  dockIconPreference: 'seed:settings:dock-icon-preference',
   checkForUpdates: 'seed:updates:check',
   downloadUpdate: 'seed:updates:download',
   installUpdate: 'seed:updates:install',

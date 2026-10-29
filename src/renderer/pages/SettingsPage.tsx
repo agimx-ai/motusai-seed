@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { SeedDockIconPreference, SeedSnapshot } from '../../shared/contracts';
+import type { SeedSnapshot } from '../../shared/contracts';
 import {
   ActionButton,
   SelectControl,
@@ -8,7 +8,6 @@ import {
 import { SettingsRow } from '../components/SettingsControls';
 import { ToggleSwitch } from '../components/ToggleSwitch';
 import { ThemePreviewControl } from '../components/ThemePreviewControl';
-import { DockIconControl } from '../components/DockIconControl';
 import type { ResolvedTheme, ThemePreference } from '../hooks/use-theme';
 import { useSeedI18n, type SeedLanguagePreference } from '../i18n';
 
@@ -17,7 +16,6 @@ type SettingsPageProps = {
   themePreference: ThemePreference;
   resolvedTheme: ResolvedTheme;
   onThemeChange: (preference: ThemePreference) => void;
-  onDockIconChange: (preference: SeedDockIconPreference) => void;
   onPreventSystemSleepChange: () => void;
   onLaunchAtLoginChange: () => void;
   notificationsBusy?: boolean;
@@ -39,7 +37,6 @@ export function SettingsPage({
   themePreference,
   resolvedTheme,
   onThemeChange,
-  onDockIconChange,
   onPreventSystemSleepChange,
   onLaunchAtLoginChange,
   notificationsBusy = false,
@@ -103,10 +100,6 @@ export function SettingsPage({
             <strong className="text-[13px] font-medium text-foreground">{t('settings.themeMode')}</strong>
             <ThemePreviewControl value={themePreference} resolvedTheme={resolvedTheme} onValueChange={onThemeChange} />
           </div>
-          {snapshot.platform === 'darwin' && <SettingsRow
-            title={t('settings.dockIcon')}
-            action={<DockIconControl value={snapshot.dockIconPreference ?? 'system'} designGeneration={snapshot.dockIconDesignGeneration} onValueChange={onDockIconChange} />}
-          />}
           <SettingsRow
             title={t('settings.language')}
             action={

@@ -10,15 +10,10 @@ function render(status: AppUpdateStatus = 'disabled', platform: NodeJS.Platform 
     launchAtLogin: false, preventSystemSleep: false, systemNotificationsEnabled: true,
     update: { status, currentVersion: '0.2.8', availableVersion: '0.2.9', percent: 25 },
   } as SeedSnapshot
-  return renderToStaticMarkup(<SeedI18nProvider><SettingsPage snapshot={snapshot} themePreference="system" resolvedTheme="light" onThemeChange={() => {}} onDockIconChange={() => {}} onPreventSystemSleepChange={() => {}} onLaunchAtLoginChange={() => {}} onSystemNotificationsChange={() => {}} onCheckForUpdates={() => {}} onDownloadUpdate={() => {}} onInstallUpdate={() => {}} /></SeedI18nProvider>)
+  return renderToStaticMarkup(<SeedI18nProvider><SettingsPage snapshot={snapshot} themePreference="system" resolvedTheme="light" onThemeChange={() => {}} onPreventSystemSleepChange={() => {}} onLaunchAtLoginChange={() => {}} onSystemNotificationsChange={() => {}} onCheckForUpdates={() => {}} onDownloadUpdate={() => {}} onInstallUpdate={() => {}} /></SeedI18nProvider>)
 }
 
 describe('Settings version row', () => {
-  it('shows the Dock appearance control only on macOS', () => {
-    expect(render()).toContain('aria-label="Dock 图标"');
-    expect(render('disabled', 'win32')).not.toContain('aria-label="Dock 图标"');
-    expect(render('disabled', 'linux')).not.toContain('aria-label="Dock 图标"');
-  });
   it('keeps only the update action, without a duplicate release notes entry', () => {
     const html = render()
     expect(html.match(/seed-action-button/g)).toHaveLength(1)

@@ -10,7 +10,6 @@ const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 const { app, BrowserWindow } = require("electron");
 const { renderImage } = require("./icon-rendering.cjs");
-const { generateDockIcons } = require("./generate-dock-icons.cjs");
 
 const projectDirectory = resolve(__dirname, "..");
 const resourcesDirectory = join(projectDirectory, "resources");
@@ -216,7 +215,6 @@ async function generate() {
         rmSync(temporaryDirectory, { recursive: true, force: true });
       }
     }
-    await generateDockIcons(window, appDirectory);
     console.log("Generated desktop icons.");
     if (process.platform !== "darwin") {
       console.warn(

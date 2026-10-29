@@ -194,7 +194,6 @@ describe('generic plugin SDK brokers', () => {
         systemNotificationsEnabled: () => true,
         languagePreference: () => 'en-US',
         themePreference: () => 'light',
-        dockIconPreference: () => 'system',
       },
       audioService: { snapshot: () => ({ state: 'stopping', duration_ms: 0, task_id: 'capture-task' }) },
       activeTaskIds: new Map([

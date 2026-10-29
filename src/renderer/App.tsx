@@ -396,9 +396,6 @@ export default function App() {
                 snapshot={snapshot}
                 themePreference={themePreference}
                 resolvedTheme={resolvedTheme}
-                onDockIconChange={(preference) =>
-                  void run('dock-icon-preference', (api) => api.setDockIconPreference(preference))
-                }
                 notificationsBusy={busy === 'system-notifications'}
                 onSystemNotificationsChange={() =>
                   void run('system-notifications', (api) =>
