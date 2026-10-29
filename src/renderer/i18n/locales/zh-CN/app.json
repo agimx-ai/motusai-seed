@@ -332,6 +332,7 @@
     "theme": "界面主题",
     "visualStyle": "视觉风格",
     "themeMode": "模式",
+    "dockIcon": "Dock 图标",
     "currentTheme": "当前使用{{theme}}主题",
     "themeLight": "浅色",
     "themeDark": "深色",

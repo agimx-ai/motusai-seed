@@ -90,6 +90,9 @@ export function registerIpc(runtime: SeedRuntime) {
   handle(ipcChannels.themePreference, (_event, preference) =>
     runtime.setThemePreference(z.enum(['light', 'dark', 'system']).parse(preference)),
   );
+  handle(ipcChannels.dockIconPreference, (_event, preference) =>
+    runtime.setDockIconPreference(z.enum(['system', 'light', 'dark']).parse(preference)),
+  );
   handle(ipcChannels.checkForUpdates, () => runtime.checkForUpdates());
   handle(ipcChannels.downloadUpdate, () => runtime.downloadUpdate());
   handle(ipcChannels.installUpdate, () => runtime.installUpdate());

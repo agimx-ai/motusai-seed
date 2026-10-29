@@ -301,6 +301,7 @@ describe('SeedStore SQLite persistence', () => {
     expect(store.preventSystemSleep()).toBe(false);
     expect(store.languagePreference()).toBe('system');
     expect(store.themePreference()).toBe('system');
+    expect(store.dockIconPreference()).toBe('system');
     expect((await store.queryAudit()).items).toEqual([]);
     await expect(readFile(store.databasePath)).resolves.toBeInstanceOf(Buffer);
     await store.close();
@@ -311,6 +312,7 @@ describe('SeedStore SQLite persistence', () => {
     const store = new SeedStore(directory, 'MotusAI Seed');
     await store.load();
     await store.setThemePreference('dark');
+    await store.setDockIconPreference('light');
     await store.setLanguagePreference('en-US');
     await store.setInstalledPluginState({ schema_version: 1, plugins: [] });
     await store.close();
@@ -318,6 +320,7 @@ describe('SeedStore SQLite persistence', () => {
     const reopened = new SeedStore(directory, 'MotusAI Seed');
     await reopened.load();
     expect(reopened.themePreference()).toBe('dark');
+    expect(reopened.dockIconPreference()).toBe('light');
     expect(reopened.languagePreference()).toBe('en-US');
     await expect(reopened.installedPluginState()).resolves.toEqual({ schema_version: 1, plugins: [] });
     await reopened.close();

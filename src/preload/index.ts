@@ -5,6 +5,7 @@ import type {
   SeedEvent,
   SeedLanguagePreference,
   SeedThemePreference,
+  SeedDockIconPreference,
   SeedWindowApi,
   TerminalLogUploadRange,
 } from '../shared/contracts';
@@ -37,6 +38,7 @@ const ipcChannels = {
   systemNotificationsEnabled: 'seed:settings:system-notifications',
   languagePreference: 'seed:settings:language-preference',
   themePreference: 'seed:settings:theme-preference',
+  dockIconPreference: 'seed:settings:dock-icon-preference',
   checkForUpdates: 'seed:updates:check',
   downloadUpdate: 'seed:updates:download',
   installUpdate: 'seed:updates:install',
@@ -97,6 +99,7 @@ const api: SeedApi = {
   setLanguagePreference: (preference: SeedLanguagePreference) =>
     ipcRenderer.invoke(ipcChannels.languagePreference, preference),
   setThemePreference: (preference: SeedThemePreference) => ipcRenderer.invoke(ipcChannels.themePreference, preference),
+  setDockIconPreference: (preference: SeedDockIconPreference) => ipcRenderer.invoke(ipcChannels.dockIconPreference, preference),
   checkForUpdates: () => ipcRenderer.invoke(ipcChannels.checkForUpdates),
   downloadUpdate: () => ipcRenderer.invoke(ipcChannels.downloadUpdate),
   installUpdate: () => ipcRenderer.invoke(ipcChannels.installUpdate),

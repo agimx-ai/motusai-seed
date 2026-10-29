@@ -99,6 +99,7 @@ describe('Plugin settings placement', () => {
           themePreference="system"
           resolvedTheme="dark"
           onThemeChange={() => {}}
+          onDockIconChange={() => {}}
           onPreventSystemSleepChange={() => {}}
           onLaunchAtLoginChange={() => {}}
           onSystemNotificationsChange={() => {}}

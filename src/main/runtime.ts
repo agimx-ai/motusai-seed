@@ -20,6 +20,7 @@ import type {
   SeedPluginRuntimeDefinition,
   SeedSnapshot,
   SeedThemePreference,
+  SeedDockIconPreference,
   TerminalLogUploadProgress,
   TerminalLogUploadRange,
   TerminalUserProfile,
@@ -27,6 +28,7 @@ import type {
   WorkerEvent,
 } from '../shared/contracts';
 import { resolveSeedLocale } from './i18n/locale';
+import { DockIconController, resolveDockIconDesignGeneration } from './dock-icon';
 import { fetchMcpSetupPrompt } from './mcp-setup-prompt';
 import { invokePluginSettings } from './plugin-settings';
 import { pluginCatalogV2Url } from './plugin-catalog-url';
@@ -101,6 +103,7 @@ function isAbortError(error: unknown) {
 }
 
 export class SeedRuntime {
+  private readonly dockIcon = new DockIconController();
   private resettingPluginData = false;
   private readonly pluginUninstallOperations = new Set<string>();
   private readonly pluginConfigurationWrites = new Map<string, Promise<unknown>>();
@@ -922,6 +925,11 @@ export class SeedRuntime {
 
   async initialize() {
     await this.store.load();
+    try {
+      this.dockIcon.apply(this.store.dockIconPreference());
+    } catch (error) {
+      this.diagnostics.record({ level: 'warn', source: 'main', event: 'dock_icon.restore_failed', message: String(error) });
+    }
     this.developmentStatus = new PluginDevelopmentStatusWriter(
       join(app.getPath('userData'), 'plugins/development'),
       app.getVersion(),
@@ -1239,6 +1247,8 @@ export class SeedRuntime {
       languagePreference: this.store.languagePreference(),
       locale: resolveSeedLocale(this.store.languagePreference()),
       themePreference: this.store.themePreference(),
+      dockIconPreference: this.store.dockIconPreference(),
+      dockIconDesignGeneration: resolveDockIconDesignGeneration(),
       update: this.updater.snapshot(),
       audio: {
         ...(audio.session_id ? { sessionId: audio.session_id } : {}),
@@ -1588,6 +1598,18 @@ export class SeedRuntime {
   async setThemePreference(preference: SeedThemePreference) {
     await this.store.setThemePreference(preference);
     this.updatePluginViewAppearance();
+    await this.publishSnapshot();
+  }
+
+  async setDockIconPreference(preference: SeedDockIconPreference) {
+    const previous = this.store.dockIconPreference();
+    this.dockIcon.apply(preference);
+    try {
+      await this.store.setDockIconPreference(preference);
+    } catch (error) {
+      this.dockIcon.apply(previous);
+      throw error;
+    }
     await this.publishSnapshot();
   }
 

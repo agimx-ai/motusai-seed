@@ -332,6 +332,7 @@
     "theme": "Interface theme",
     "visualStyle": "Visual style",
     "themeMode": "Mode",
+    "dockIcon": "Dock icon",
     "currentTheme": "Currently using the {{theme}} theme",
     "themeLight": "Light",
     "themeDark": "Dark",

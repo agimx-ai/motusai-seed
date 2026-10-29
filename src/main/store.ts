@@ -14,6 +14,7 @@ import type {
   LocalClientAuthorization,
   SeedLanguagePreference,
   SeedThemePreference,
+  SeedDockIconPreference,
   StoredPluginConfiguration,
   UsageSummary,
 } from '../shared/contracts';
@@ -33,6 +34,7 @@ type StoredConfig = {
   systemNotificationsEnabled: boolean;
   languagePreference: SeedLanguagePreference;
   themePreference: SeedThemePreference;
+  dockIconPreference: SeedDockIconPreference;
 };
 type SettingRow = { key: string; value: string };
 type LocalClientRow = {
@@ -94,6 +96,7 @@ const defaults = (): StoredConfig => ({
   systemNotificationsEnabled: true,
   languagePreference: 'system',
   themePreference: 'system',
+  dockIconPreference: 'system',
 });
 
 function toAuditRow(entry: AuditEntry): AuditRow {
@@ -397,6 +400,10 @@ export class SeedStore {
         settings.get('theme_preference') === 'light' || settings.get('theme_preference') === 'dark'
           ? (settings.get('theme_preference') as SeedThemePreference)
           : 'system',
+      dockIconPreference:
+        settings.get('dock_icon_preference') === 'light' || settings.get('dock_icon_preference') === 'dark'
+          ? (settings.get('dock_icon_preference') as SeedDockIconPreference)
+          : 'system',
     };
     this.recentAudit = await this.loadRecentAudit();
   }
@@ -502,6 +509,13 @@ export class SeedStore {
   async setThemePreference(preference: SeedThemePreference) {
     await this.setSetting('theme_preference', preference);
     this.value.themePreference = preference;
+  }
+  dockIconPreference() {
+    return this.value.dockIconPreference;
+  }
+  async setDockIconPreference(preference: SeedDockIconPreference) {
+    await this.setSetting('dock_icon_preference', preference);
+    this.value.dockIconPreference = preference;
   }
   private decodePluginStorage<T>(encrypted: string | undefined): Record<string, T> {
     if (encrypted === undefined) return {};
