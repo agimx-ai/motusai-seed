@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { BrowserWindow, ipcMain, session, systemPreferences } from 'electron';
+import { BrowserWindow, ipcMain, powerMonitor, session, systemPreferences } from 'electron';
 import { parseAudioCaptureSource, type AudioCaptureSource } from '../shared/audio-capture';
 import { SystemAudioCapture, type SystemAudioRecorderFactory } from './system-audio-capture';
 import { AudioPcmMixer } from './audio-pcm-mixer';
@@ -15,6 +15,9 @@ export type AudioStatus = {
   source: AudioCaptureSource;
   error?: string;
   task_id?: string;
+  suspension_reason?: 'system_sleep';
+  recovering?: boolean;
+  resumed_at?: number;
 };
 type PendingEvent = {
   resolve(value: Record<string, unknown>): void;
@@ -52,11 +55,21 @@ export class AudioService {
   private stoppingTaskId: string | undefined;
   private source: AudioCaptureSource = 'microphone';
   private captureGeneration = 0;
+  private inputGeneration = 0;
+  private inputSessionId = '';
+  private systemSleeping = false;
+  private resumeAfterSleep = false;
+  private userPaused = false;
+  private inputsNeedRestart = false;
+  private sleepTask: Promise<void> | null = null;
+  private recoveryTask: Promise<void> | null = null;
   private systemCapture: SystemAudioCapture | null = null;
   private readonly mixer = new AudioPcmMixer();
   private state: AudioState = 'idle';
   private failureResetTimer: ReturnType<typeof setTimeout> | null = null;
   private error = '';
+  private lastFailure: { packageId: string; status: AudioStatus } | null = null;
+  private resumedAt = 0;
   private startedAt = 0;
   private pausedAt = 0;
   private pausedTotalMs = 0;
@@ -81,6 +94,8 @@ export class AudioService {
     ipcMain.on('seed-audio:ready', this.handleReady);
     ipcMain.on('seed-audio:event', this.handleCaptureEvent);
     ipcMain.on('seed-audio:chunk', this.handleChunk);
+    powerMonitor.on('suspend', this.handleSuspend);
+    powerMonitor.on('resume', this.handleResume);
   }
 
   private trustedSender(event: Electron.IpcMainEvent) {
@@ -97,7 +112,7 @@ export class AudioService {
   private handleCaptureEvent = (event: Electron.IpcMainEvent, value: Record<string, unknown>) => {
     this.trustedSender(event);
     const sessionId = String(value.session_id || '');
-    if (!sessionId || sessionId !== this.sessionId) return;
+    if (!sessionId || sessionId !== (this.inputSessionId || this.sessionId)) return;
     const type = String(value.type || '');
     const pending = this.pendingEvents.get(type);
     if (pending) {
@@ -107,12 +122,12 @@ export class AudioService {
         pending.reject(codedError(String(value.message || '音频采集失败。'), 'audio_capture_failed'));
       else pending.resolve(value);
     }
-    if (type === 'error') this.fail(String(value.message || '音频采集失败。'));
+    if (type === 'error' && (!this.inputsNeedRestart || this.recoveryTask)) this.fail(String(value.message || '音频采集失败。'));
   };
 
   private handleChunk = (event: Electron.IpcMainEvent, sessionId: string, pcm: ArrayBuffer) => {
     this.trustedSender(event);
-    if (sessionId !== this.sessionId || !pcm?.byteLength) return;
+    if (sessionId !== (this.inputSessionId || this.sessionId) || !pcm?.byteLength) return;
     this.acceptPcm('microphone', Buffer.from(pcm));
   };
 
@@ -219,12 +234,12 @@ export class AudioService {
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
     window.webContents.on('render-process-gone', (_event, details) => {
-      if (this.window === window && this.source !== 'system' && this.state !== 'idle')
+      if (this.window === window && this.source !== 'system' && this.state !== 'idle' && !this.inputsNeedRestart)
         this.fail(`音频采集进程已退出：${details.reason}`);
     });
     window.on('closed', () => {
       if (this.window === window) this.window = null;
-      if (this.source !== 'system' && this.state !== 'idle') this.fail('音频采集窗口已关闭。');
+      if (this.source !== 'system' && this.state !== 'idle' && !this.inputsNeedRestart) this.fail('音频采集窗口已关闭。');
     });
     if (process.env.VITE_DEV_SERVER_URL)
       await window.loadURL(`${process.env.VITE_DEV_SERVER_URL.replace(/\/$/, '')}/src/renderer/hosts/audio/index.html`);
@@ -246,6 +261,8 @@ export class AudioService {
       source: this.source,
       duration_ms: this.durationMs(),
       ...(this.error ? { error: this.error } : {}),
+      ...(this.resumedAt ? { resumed_at: this.resumedAt } : {}),
+      ...(this.systemSleeping || this.recoveryTask ? { suspension_reason: 'system_sleep' as const, recovering: Boolean(this.recoveryTask) } : {}),
       ...(this.state === 'stopping' && this.stoppingTaskId ? { task_id: this.stoppingTaskId } : {}),
     };
   }
@@ -256,6 +273,8 @@ export class AudioService {
   }
 
   private fail(message: string) {
+    if (this.state === 'failed') return;
+    if (this.startedAt && !this.pausedAt) this.pausedAt = Date.now();
     void this.finishLocalRecording();
     void this.systemCapture?.stop().catch(() => undefined);
     this.systemCapture = null;
@@ -263,8 +282,9 @@ export class AudioService {
     if (this.failureResetTimer) clearTimeout(this.failureResetTimer);
     this.error = message;
     this.setState('failed');
+    this.lastFailure = { packageId: this.ownerPackageId, status: { ...this.snapshot(), suspension_reason: undefined, recovering: undefined } };
     if (this.window && this.sessionId && !this.window.isDestroyed())
-      this.window.webContents.send('seed-audio:command', { type: 'stop', session_id: this.sessionId });
+      this.window.webContents.send('seed-audio:command', { type: 'stop', session_id: this.inputSessionId || this.sessionId });
     this.pcmChunks = [];
     this.pcmBytes = 0;
     this.segmentOffsetBytes = 0;
@@ -279,11 +299,17 @@ export class AudioService {
     }
     this.failureResetTimer = setTimeout(() => {
       this.failureResetTimer = null;
-      if (this.state === 'failed') this.reset();
+      if (this.systemSleeping) throw codedError('系统正在休眠。', 'audio_system_sleeping');
+    if (this.state === 'failed') this.reset();
     }, failureResetMs);
   }
 
   private reset() {
+    this.resumeAfterSleep = false;
+    this.userPaused = false;
+    this.inputsNeedRestart = false;
+    this.inputSessionId = '';
+    this.inputGeneration += 1;
     void this.finishLocalRecording();
     void this.systemCapture?.stop().catch(() => undefined);
     this.systemCapture = null;
@@ -296,11 +322,13 @@ export class AudioService {
     this.pendingEvents.clear();
     if (this.failureResetTimer) clearTimeout(this.failureResetTimer);
     this.failureResetTimer = null;
+    this.sleepTask = null;
     this.sessionId = '';
     this.ownerPackageId = '';
     this.stoppingTaskId = undefined;
     this.source = 'microphone';
     this.error = '';
+    this.resumedAt = 0;
     this.startedAt = 0;
     this.pausedAt = 0;
     this.pausedTotalMs = 0;
@@ -318,6 +346,7 @@ export class AudioService {
     }
     const sessionId = String(argumentsValue.session_id || '').trim() || randomUUID();
     if (sessionId.length > 128) throw codedError('录音会话 ID 无效。', 'audio_session_invalid');
+    if (this.systemSleeping) throw codedError('系统正在休眠。', 'audio_system_sleeping');
     if (this.state === 'failed') this.reset();
     if (this.state !== 'idle') {
       if (
@@ -329,6 +358,7 @@ export class AudioService {
         return this.snapshot();
       throw codedError('另一段录音正在进行。', 'audio_session_busy');
     }
+    this.lastFailure = null;
     this.sessionId = sessionId;
     this.ownerPackageId = packageId;
     this.source = source;
@@ -345,29 +375,8 @@ export class AudioService {
     try {
       await this.durableStore?.create(packageId, sessionId, source);
       assertStarting();
-      if (source !== 'system') await this.ensureMicrophonePermission();
-      assertStarting();
-      if (source !== 'system') {
-        const window = await this.ensureWindow();
-        assertStarting();
-        const started = this.waitForCaptureEvent('started');
-        window.webContents.send('seed-audio:command', { type: 'start', session_id: sessionId });
-        await started;
-        assertStarting();
-      }
-      if (source !== 'microphone') {
-        const capture = new SystemAudioCapture(
-          (pcm) => {
-            if (this.captureGeneration === generation) this.acceptPcm('system', pcm);
-          },
-          (error) => {
-            if (this.captureGeneration === generation) this.fail(error.message);
-          },
-          this.systemRecorderFactory,
-        );
-        this.systemCapture = capture;
-        await capture.start();
-      }
+      this.inputSessionId = sessionId;
+      await this.startInputs(assertStarting);
       assertStarting();
       if (this.recordingsRoot) {
         const setup = this.recordingSaveTask.then(async () => {
@@ -403,11 +412,141 @@ export class AudioService {
     }
   }
 
+  private async startInputs(assertCurrent: () => void) {
+    const generation = this.inputGeneration;
+    const assertInput = () => {
+      assertCurrent();
+      if (generation !== this.inputGeneration)
+        throw codedError('音频采集已取消。', 'audio_capture_cancelled');
+    };
+    if (this.source !== 'system') await this.ensureMicrophonePermission();
+    assertInput();
+    if (this.source !== 'system') {
+      const window = await this.ensureWindow();
+      assertInput();
+      const started = this.waitForCaptureEvent('started');
+      window.webContents.send('seed-audio:command', { type: 'start', session_id: this.inputSessionId });
+      await started;
+      assertInput();
+    }
+    if (this.source !== 'microphone') {
+      const capture = new SystemAudioCapture(
+        (pcm) => { if (generation === this.inputGeneration) this.acceptPcm('system', pcm); },
+        (error) => { if (generation === this.inputGeneration) this.fail(error.message); },
+        this.systemRecorderFactory,
+      );
+      this.systemCapture = capture;
+      await capture.start();
+      assertInput();
+    }
+  }
+
+  private invalidateInputs() {
+    this.inputGeneration += 1;
+    this.resumeAfterSleep = false;
+    const pending = this.pendingEvents.get('started');
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.reject(codedError('音频采集已取消。', 'audio_capture_cancelled'));
+      this.pendingEvents.delete('started');
+    }
+  }
+
+  private handleSuspend = () => {
+    if (this.systemSleeping) return;
+    this.systemSleeping = true;
+    if (!['recording', 'paused'].includes(this.state)) {
+      if (this.state === 'starting') { this.invalidateStart(); this.fail('系统进入休眠，录音启动已中断。'); }
+      return;
+    }
+    const wasRecording = this.state === 'recording';
+    this.invalidateInputs();
+    this.resumeAfterSleep = (wasRecording || Boolean(this.recoveryTask)) && !this.userPaused;
+    this.inputsNeedRestart = true;
+    if (!this.pausedAt) this.pausedAt = Date.now();
+    // Gate both inputs synchronously: macOS can stop the tap before the microphone.
+    this.setState('paused');
+    this.appendPcm(this.mixer.flush());
+    this.mixer.clear();
+    const generation = this.captureGeneration;
+    const previous = this.sleepTask;
+    const task = (async () => {
+      await previous;
+      await this.stopInputs();
+      await this.segmentTask?.catch(() => undefined);
+      if (generation !== this.captureGeneration) return;
+      if (this.pcmBytes > this.segmentOffsetBytes) await this.captureSegment();
+      if (generation === this.captureGeneration)
+        await this.durableStore?.updateState(this.ownerPackageId, this.sessionId, 'paused');
+    })();
+    this.sleepTask = task;
+    void task.catch((error) => {
+      if (generation === this.captureGeneration) this.fail(error instanceof Error ? error.message : String(error));
+    });
+  };
+
+  private handleResume = () => {
+    this.systemSleeping = false;
+    if (this.resumeAfterSleep && this.state === 'paused') void this.restartAfterSleep();
+    else this.stateChanged(this.snapshot());
+  };
+
+  private restartAfterSleep(): Promise<void> {
+    if (this.recoveryTask) return this.recoveryTask;
+    const generation = ++this.inputGeneration;
+    const sessionId = this.sessionId;
+    const assertCurrent = () => {
+      if (this.inputGeneration !== generation || this.sessionId !== sessionId || this.state !== 'paused' || this.systemSleeping)
+        throw codedError('音频采集已取消。', 'audio_capture_cancelled');
+    };
+    const task = Promise.resolve().then(async () => {
+      await this.sleepTask;
+      assertCurrent();
+      // Each input incarnation has its own IPC token; late pre-sleep chunks are rejected.
+      this.inputSessionId = randomUUID();
+      this.mixer.clear();
+      await this.startInputs(assertCurrent);
+      assertCurrent();
+      await this.durableStore?.updateState(this.ownerPackageId, sessionId, 'recording');
+      assertCurrent();
+      this.pausedTotalMs += Math.max(0, Date.now() - this.pausedAt);
+      this.pausedAt = 0;
+      this.inputsNeedRestart = false;
+      this.resumedAt = Date.now();
+      this.resumeAfterSleep = false;
+      this.setState('recording');
+    }).catch((error) => {
+      if (generation === this.inputGeneration) {
+        this.resumeAfterSleep = false;
+        this.fail(error instanceof Error ? error.message : String(error));
+      }
+    }).finally(() => {
+      if (this.recoveryTask === task) {
+        this.recoveryTask = null;
+        this.stateChanged(this.snapshot());
+        if (this.resumeAfterSleep && !this.systemSleeping && this.state === 'paused') void this.restartAfterSleep();
+      }
+    });
+    this.recoveryTask = task;
+    this.stateChanged(this.snapshot());
+    return task;
+  }
+
   private async pause() {
+    if (this.state === 'recording' || this.state === 'paused') this.userPaused = true;
+    if (this.state === 'paused' && this.inputsNeedRestart) {
+      if (this.recoveryTask) {
+        this.invalidateInputs();
+        this.sleepTask = this.stopInputs();
+        await this.sleepTask;
+      }
+      this.resumeAfterSleep = false;
+      return this.snapshot();
+    }
     if (this.state !== 'recording') throw codedError('当前没有可暂停的录音。', 'audio_session_not_recording');
     if (this.source !== 'system' && this.window) {
       const paused = this.waitForCaptureEvent('paused');
-      this.window.webContents.send('seed-audio:command', { type: 'pause', session_id: this.sessionId });
+      this.window.webContents.send('seed-audio:command', { type: 'pause', session_id: this.inputSessionId || this.sessionId });
       await paused;
     }
     this.appendPcm(this.mixer.flush());
@@ -421,10 +560,18 @@ export class AudioService {
 
   private async resume() {
     if (this.state !== 'paused') throw codedError('当前没有已暂停的录音。', 'audio_session_not_paused');
+    if (this.systemSleeping) throw codedError('系统正在休眠。', 'audio_system_sleeping');
+    this.userPaused = false;
+    if (this.inputsNeedRestart) {
+      this.resumeAfterSleep = true;
+      await this.recoveryTask;
+      if (this.state === 'paused' && !this.systemSleeping) await this.restartAfterSleep();
+      return this.snapshot();
+    }
     this.mixer.clear();
     if (this.source !== 'system' && this.window) {
       const resumed = this.waitForCaptureEvent('resumed');
-      this.window.webContents.send('seed-audio:command', { type: 'resume', session_id: this.sessionId });
+      this.window.webContents.send('seed-audio:command', { type: 'resume', session_id: this.inputSessionId || this.sessionId });
       await resumed;
     }
     this.pausedTotalMs += Math.max(0, Date.now() - this.pausedAt);
@@ -514,6 +661,8 @@ export class AudioService {
       throw codedError('当前没有可停止的录音。', 'audio_session_not_recording');
     this.stoppingTaskId = taskId;
     this.setState('stopping');
+    this.invalidateInputs();
+    await this.sleepTask;
     const durationMs = this.durationMs();
     await this.stopInputs();
     await this.segmentTask;
@@ -531,7 +680,10 @@ export class AudioService {
   }
 
   private async cancel() {
+    this.lastFailure = null;
     this.invalidateStart();
+    this.invalidateInputs();
+    await this.sleepTask?.catch(() => undefined);
     const sessionId = this.sessionId;
     const packageId = this.ownerPackageId;
     if (this.state === 'failed') {
@@ -551,6 +703,8 @@ export class AudioService {
 
   private async interrupt() {
     this.invalidateStart();
+    this.invalidateInputs();
+    await this.sleepTask?.catch(() => undefined);
     const sessionId = this.sessionId;
     const packageId = this.ownerPackageId;
     if (!sessionId || !packageId) return { session_id: sessionId, state: 'interrupted' };
@@ -575,11 +729,12 @@ export class AudioService {
   }
 
   private async stopInputs() {
-    await this.systemCapture?.stop();
+    const capture = this.systemCapture;
     this.systemCapture = null;
+    await capture?.stop();
     if (this.source !== 'system' && this.window && !this.window.isDestroyed() && this.sessionId) {
       const stopped = this.waitForCaptureEvent('stopped', 1_000);
-      this.window.webContents.send('seed-audio:command', { type: 'stop', session_id: this.sessionId });
+      this.window.webContents.send('seed-audio:command', { type: 'stop', session_id: this.inputSessionId || this.sessionId });
       await stopped.catch(() => undefined);
     }
   }
@@ -611,7 +766,8 @@ export class AudioService {
     if (operation === 'capture.stop') return await this.stop(taskId);
     if (operation === 'capture.cancel') return await this.cancel();
     if (operation === 'capture.interrupt') return await this.interrupt();
-    if (operation === 'capture.status') return this.snapshot();
+    if (operation === 'capture.status')
+      return this.state === 'idle' && this.lastFailure?.packageId === packageId ? this.lastFailure.status : this.snapshot();
     if (operation === 'capture.sessions') {
       const activeSessionId = this.ownerPackageId === packageId ? this.sessionId : '';
       return { sessions: (await this.durableStore?.list(packageId, activeSessionId)) || [] };
@@ -670,5 +826,7 @@ export class AudioService {
     ipcMain.removeListener('seed-audio:ready', this.handleReady);
     ipcMain.removeListener('seed-audio:event', this.handleCaptureEvent);
     ipcMain.removeListener('seed-audio:chunk', this.handleChunk);
+    powerMonitor.removeListener('suspend', this.handleSuspend);
+    powerMonitor.removeListener('resume', this.handleResume);
   }
 }

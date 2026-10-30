@@ -1525,6 +1525,9 @@ export default class AudioService extends PluginService {
 - 音频格式为 PCM16、单声道、16 kHz
 - `microphone` 支持 macOS、Windows 和 Linux
 - `system` / `mixed` 支持 macOS 14.2+ 和 Windows
+- 系统休眠会同步暂停采集，`capture.status` 返回 `state: paused`、`suspension_reason: system_sleep`；唤醒重建输入期间另有 `recovering: true`。此前正在录音的会话自动继续，用户主动暂停的会话保持暂停，停止或取消后不会恢复。
+- 休眠恢复沿用同一 `session_id`、持久分段及已收到的采样，`duration_ms` 排除睡眠和重建输入的时间；`resumed_at` 是最近一次恢复成功的 Unix 毫秒时间，可用于客户端心跳宽限。
+- 消费方应通过心跳／定时状态查询同步采集状态；`capture.status` 为原插件保留最近一次采集失败及原始 `error`，直到新会话开始或取消，不应把失败当成仍在录音。
 
 ### 测试后端方法
 

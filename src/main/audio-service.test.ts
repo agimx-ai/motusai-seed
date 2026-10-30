@@ -11,6 +11,7 @@ const { ipcMain } = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   BrowserWindow: class {},
   ipcMain,
+  powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
   session: {},
   systemPreferences: {},
 }))
@@ -355,5 +356,175 @@ describe('AudioService segmented capture', () => {
 
     expect(internal.pcmBaseOffsetBytes).toBe(16_000 * 2 * (48 * 8 - 1))
     expect(webContents.send).not.toHaveBeenCalledWith('seed-audio:command', expect.objectContaining({ type: 'stop' }))
+  })
+})
+
+describe('AudioService system sleep lifecycle', () => {
+  async function setup(source: 'microphone' | 'system' | 'mixed' = 'mixed') {
+    const recorders: Array<EventEmitter & { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }> = []
+    const factory = vi.fn(async () => {
+      const recorder = Object.assign(new EventEmitter(), {
+        start: vi.fn(async () => {
+          recorder.emit('metadata', { sampleRate: 16_000, channelsPerFrame: 1, bitsPerChannel: 16, isFloat: false, encoding: 'pcm_s16le' })
+          recorder.emit('data', { data: Buffer.alloc(640) })
+        }), stop: vi.fn(async () => undefined),
+      })
+      recorders.push(recorder)
+      return recorder
+    })
+    const service = new AudioService(undefined, undefined, factory)
+    const internal = service as any
+    const webContents = { send: vi.fn((_channel, command) => {
+      const type = { start: 'started', stop: 'stopped', pause: 'paused', resume: 'resumed' }[command.type as string]
+      internal.handleCaptureEvent({ sender: webContents }, { type, session_id: command.session_id })
+    }) }
+    internal.window = { webContents, isDestroyed: () => false, destroy: vi.fn() }
+    vi.spyOn(internal, 'ensureWindow').mockResolvedValue(internal.window)
+    vi.spyOn(internal, 'ensureMicrophonePermission').mockResolvedValue()
+    await service.invoke({ operation: 'capture.start', source, session_id: 'sleep-session' }, 'sleep-plugin')
+    const frame = Buffer.alloc(640, 1)
+    const feed = () => {
+      if (source !== 'system') internal.handleChunk({ sender: webContents }, internal.inputSessionId, frame.buffer)
+      if (source !== 'microphone') recorders.at(-1)!.emit('data', { data: frame })
+    }
+    return { service, internal, webContents, recorders, factory, feed }
+  }
+
+  it.each(['microphone', 'system', 'mixed'] as const)('retains the %s capture and PCM timeline across sleep, rejecting old input incarnations', async (source) => {
+    const { service, internal, webContents, recorders, feed } = await setup(source)
+    try {
+      feed()
+      const first = await service.invoke({ operation: 'capture.segment' }, 'sleep-plugin') as { audio_session_id: string; end_ms: number }
+      expect(first.end_ms).toBe(20)
+      const oldToken = internal.inputSessionId
+      internal.handleSuspend()
+      const pausedDuration = service.snapshot().duration_ms
+      expect(service.snapshot()).toMatchObject({ state: 'paused', suspension_reason: 'system_sleep' })
+      // A microphone that keeps producing during macOS suspension cannot trip the mixer anymore.
+      internal.handleChunk({ sender: webContents }, oldToken, new ArrayBuffer(96_000))
+      await internal.sleepTask
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now + 20_000)
+      expect(service.snapshot().duration_ms).toBeLessThan(pausedDuration + 100)
+      internal.handleResume()
+      await internal.recoveryTask
+      expect(service.snapshot()).toMatchObject({ state: 'recording', session_id: 'sleep-session', source })
+      expect(service.snapshot().suspension_reason).toBeUndefined()
+      expect(service.snapshot().duration_ms).toBeLessThan(pausedDuration + 1000)
+      expect(recorders.length).toBe(source === 'microphone' ? 0 : 2)
+      internal.handleChunk({ sender: webContents }, oldToken, new ArrayBuffer(96_000))
+      internal.handleCaptureEvent({ sender: webContents }, { type: 'error', session_id: oldToken, message: 'late old error' })
+      feed()
+      const second = await service.invoke({ operation: 'capture.segment' }, 'sleep-plugin') as { end_ms: number }
+      expect(second.end_ms).toBe(40)
+      expect(service.consume(first.audio_session_id, 'sleep-plugin').pcm.length).toBe(640)
+      expect(service.snapshot().state).toBe('recording')
+    } finally { vi.restoreAllMocks(); await service.destroy() }
+  })
+
+  it('does not restart a user-paused recording until explicitly resumed', async () => {
+    const { service, internal, factory } = await setup()
+    try {
+      await service.invoke({ operation: 'capture.pause' }, 'sleep-plugin')
+      internal.handleSuspend()
+      await internal.sleepTask
+      internal.handleResume()
+      expect(factory).toHaveBeenCalledTimes(1)
+      expect(service.snapshot()).toMatchObject({ state: 'paused' })
+      await service.invoke({ operation: 'capture.resume' }, 'sleep-plugin')
+      expect(factory).toHaveBeenCalledTimes(2)
+      expect(service.snapshot().state).toBe('recording')
+    } finally { vi.restoreAllMocks(); await service.destroy() }
+  })
+
+  it.each(['capture.cancel', 'capture.stop'] as const)('%s during sleep prevents wake from restarting inputs', async (operation) => {
+    const { service, internal, factory, feed } = await setup()
+    try {
+      feed()
+      internal.handleSuspend()
+      await service.invoke({ operation }, 'sleep-plugin')
+      internal.handleResume()
+      expect(service.snapshot().state).toBe('idle')
+      expect(factory).toHaveBeenCalledTimes(1)
+    } finally { await service.destroy() }
+  })
+
+  it('can cancel a pending wake and rejects a late native recorder without resurrecting capture', async () => {
+    const { service, internal, factory, recorders } = await setup()
+    try {
+      internal.handleSuspend()
+      await internal.sleepTask
+      let resolve!: (recorder: typeof recorders[number]) => void
+      factory.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+      internal.handleResume()
+      const recovering = internal.recoveryTask
+      await vi.waitFor(() => expect(resolve).toBeTypeOf('function'))
+      await service.invoke({ operation: 'capture.cancel' }, 'sleep-plugin')
+      const late = Object.assign(new EventEmitter(), { start: vi.fn(), stop: vi.fn(async () => undefined) })
+      resolve(late)
+      await recovering
+      expect(late.start).not.toHaveBeenCalled()
+      expect(late.stop).toHaveBeenCalledOnce()
+      expect(service.snapshot().state).toBe('idle')
+    } finally { await service.destroy() }
+  })
+
+  it('recovers after a second sleep interrupts a pending wake', async () => {
+    const { service, internal, factory, recorders } = await setup()
+    try {
+      internal.handleSuspend()
+      await internal.sleepTask
+      let resolve!: (recorder: typeof recorders[number]) => void
+      factory.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+      internal.handleResume()
+      const firstWake = internal.recoveryTask
+      await vi.waitFor(() => expect(resolve).toBeTypeOf('function'))
+      internal.handleSuspend()
+      await internal.sleepTask
+      internal.handleResume()
+      const late = Object.assign(new EventEmitter(), { start: vi.fn(), stop: vi.fn(async () => undefined) })
+      resolve(late)
+      await firstWake
+      await vi.waitFor(() => expect(service.snapshot().state).toBe('recording'))
+      expect(factory).toHaveBeenCalledTimes(3)
+      expect(late.start).not.toHaveBeenCalled()
+    } finally { await service.destroy() }
+  })
+
+  it('honors a user pause while wake is pending, then allows an explicit resume', async () => {
+    const { service, internal, factory, recorders } = await setup()
+    try {
+      internal.handleSuspend()
+      await internal.sleepTask
+      let resolve!: (recorder: typeof recorders[number]) => void
+      factory.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+      internal.handleResume()
+      const recovering = internal.recoveryTask
+      await vi.waitFor(() => expect(resolve).toBeTypeOf('function'))
+      await service.invoke({ operation: 'capture.pause' }, 'sleep-plugin')
+      const late = Object.assign(new EventEmitter(), { start: vi.fn(), stop: vi.fn(async () => undefined) })
+      resolve(late)
+      await recovering
+      expect(service.snapshot().state).toBe('paused')
+      expect(factory).toHaveBeenCalledTimes(2)
+      await service.invoke({ operation: 'capture.resume' }, 'sleep-plugin')
+      expect(service.snapshot().state).toBe('recording')
+      expect(factory).toHaveBeenCalledTimes(3)
+    } finally { await service.destroy() }
+  })
+
+  it('retains the actual wake failure for the owning plugin after the transient host failure resets', async () => {
+    const { service, internal, factory } = await setup()
+    try {
+      internal.handleSuspend()
+      await internal.sleepTask
+      factory.mockRejectedValueOnce(new Error('Output device unavailable after wake'))
+      internal.handleResume()
+      await internal.recoveryTask
+      expect(service.snapshot()).toMatchObject({ state: 'failed', error: 'Output device unavailable after wake' })
+      internal.reset()
+      expect(await service.invoke({ operation: 'capture.status' }, 'sleep-plugin')).toMatchObject({ state: 'failed', error: 'Output device unavailable after wake' })
+      expect(await service.invoke({ operation: 'capture.status' }, 'other-plugin')).toMatchObject({ state: 'idle' })
+    } finally { await service.destroy() }
   })
 })

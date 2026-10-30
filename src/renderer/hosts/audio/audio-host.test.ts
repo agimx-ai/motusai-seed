@@ -4,7 +4,7 @@ import type { AudioCaptureCommand } from '../../../shared/audio-capture'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
-async function host(getUserMedia = vi.fn(async () => mediaStream())) {
+async function host(getUserMedia = vi.fn(async () => mediaStream()), producePcm = true) {
   vi.resetModules()
   let listener!: (value: AudioCaptureCommand) => void
   const order: string[] = []
@@ -22,7 +22,9 @@ async function host(getUserMedia = vi.fn(async () => mediaStream())) {
     destination = {}
     constructor(public options: unknown) { contexts.push(this) }
   }
+  const worklets: FakeWorklet[] = []
   class FakeWorklet {
+    constructor() { worklets.push(this) }
     port = {
       onmessage: null as ((event: unknown) => void) | null,
       close: vi.fn(),
@@ -31,7 +33,7 @@ async function host(getUserMedia = vi.fn(async () => mediaStream())) {
         this.port.onmessage?.({ data: { type: 'flushed' } })
       })),
     }
-    connect = vi.fn()
+    connect = vi.fn(() => { if (producePcm) queueMicrotask(() => this.port.onmessage?.({ data: { type: 'pcm', pcm: new ArrayBuffer(640) } })) })
     disconnect = vi.fn()
   }
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } })
@@ -40,7 +42,7 @@ async function host(getUserMedia = vi.fn(async () => mediaStream())) {
   window.AudioContext = FakeContext as unknown as typeof AudioContext
   window.seedAudioCapture = { ready: vi.fn(), emit, chunk, subscribe: (value) => { listener = value; return () => undefined } }
   await import('./index')
-  return { listener, emit, chunk, contexts, order }
+  return { listener, emit, chunk, contexts, order, worklets }
 }
 
 function mediaStream() {
@@ -49,6 +51,17 @@ function mediaStream() {
 }
 
 describe('AudioWorklet capture lifecycle', () => {
+  it('reports microphone readiness only after the context is resumed and actual PCM arrives', async () => {
+    const { listener, emit, worklets } = await host(undefined, false)
+    listener({ type: 'start', session_id: 'waiting-for-device' })
+    await vi.waitFor(() => expect(worklets).toHaveLength(1))
+    expect(emit).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'started' }))
+    worklets[0].port.onmessage?.({ data: { type: 'pcm', pcm: new ArrayBuffer(640) } })
+    await vi.waitFor(() => expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'started' })))
+    listener({ type: 'stop', session_id: 'waiting-for-device' })
+    await vi.waitFor(() => expect(emit).toHaveBeenCalledWith({ type: 'stopped', session_id: 'waiting-for-device' }))
+  })
+
   it('flushes remaining PCM before stopped and keeps pause/resume in the same context', async () => {
     const { listener, emit, contexts, order } = await host()
     listener({ type: 'start', session_id: 'one' })

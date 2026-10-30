@@ -71,10 +71,23 @@ async function start(command: Extract<AudioCaptureCommand, { type: 'start' }>, c
   const node = new AudioWorkletNode(audioContext, 'seed-pcm-capture', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] })
   processor = node
   let accepting = true
+  let resumed = false
+  let receivedPcm = false
+  let started = false
+  const notifyStarted = () => {
+    if (!started && accepting && resumed && receivedPcm && currentGeneration === generation) {
+      started = true
+      window.seedAudioCapture.emit({ type: 'started', session_id: command.session_id, sample_rate: 16_000, channels: 1, format: 'pcm16' })
+    }
+  }
   let flushed: (() => void) | null = null
   node.port.onmessage = (event: MessageEvent<{ type: string; pcm?: ArrayBuffer }>) => {
     if (event.data.type === 'flushed') { flushed?.(); return }
-    if (accepting && sessionId === command.session_id && event.data.pcm?.byteLength) window.seedAudioCapture.chunk(command.session_id, event.data.pcm)
+    if (accepting && sessionId === command.session_id && event.data.pcm?.byteLength) {
+      window.seedAudioCapture.chunk(command.session_id, event.data.pcm)
+      receivedPcm = true
+      notifyStarted()
+    }
   }
   const flush = () => new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, 250)
@@ -97,7 +110,8 @@ async function start(command: Extract<AudioCaptureCommand, { type: 'start' }>, c
   node.connect(audioContext.destination)
   await audioContext.resume()
   if (currentGeneration !== generation) return
-  window.seedAudioCapture.emit({ type: 'started', session_id: sessionId, sample_rate: 16_000, channels: 1, format: 'pcm16' })
+  resumed = true
+  notifyStarted()
 }
 
 async function handle(command: AudioCaptureCommand) {
