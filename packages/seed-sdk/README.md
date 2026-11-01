@@ -174,8 +174,15 @@ await buildPlugin({
 
 ### `ServiceApp`
 
+通过 `app.user.getProfile(signal?)` 读取当前 Seed 账号的公开展示资料：
+
+```ts
+const profile = await this.app.user.getProfile(this.signal);
+```
+
 | 属性 | 常用接口 / 返回值 | 用途 |
 | --- | --- | --- |
+| `user` | `getProfile(signal?): Promise<SeedUserProfile \| null>` | 读取当前用户的昵称与公开头像地址 |
 | `package` | `package_id`、`version`、`data_path` | 当前插件身份与数据目录 |
 | `settings` | `PluginSettingsStore` | 后端配置记录 |
 | `secrets` | `get(key): Promise<string \| undefined>`、`set(key, value)`、`delete(key)` | 凭据存储；写入 / 删除返回 `Promise<void>` |

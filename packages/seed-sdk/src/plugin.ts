@@ -24,6 +24,7 @@ import { PluginSettingsStore } from './settings.js';
 import { createPluginEventClient, type PluginEventService } from './plugin-events.js';
 import type { PluginResources, PluginFilePicker } from './resources.js';
 import { createSystemNotificationClient, type SystemNotificationService } from './notifications.js';
+import { createUserProfileClient, type SeedUserService } from './user-profile.js';
 
 export type PluginManifest = {
   id: string;
@@ -86,6 +87,7 @@ export type PluginServices = {
 };
 
 export type ServiceApp = PluginServices & {
+  user: SeedUserService;
   settings: PluginSettingsStore;
   events: PluginEventService;
   notifications: SystemNotificationService;
@@ -169,6 +171,7 @@ export class PluginService extends Component {
     super();
     this.app = {
       ...app,
+      user: createUserProfileClient((service, args) => app.invokeHost(service, args), this.signal),
       capabilities: {
         list: () => app.capabilities.list(),
         invoke: (input) => app.capabilities.invoke(input),

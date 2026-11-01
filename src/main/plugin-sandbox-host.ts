@@ -80,6 +80,7 @@ export function requiredPermissions(service: string, argumentsValue: Record<stri
   if (service === 'seed.plugin-secret') return [];
   if (service === 'seed.plugin-data') return [];
   if (service === 'seed.plugin-settings') return [];
+  if (service === 'seed.user-profile') return [];
   if (service === 'seed.plugin-event') return [];
   if (service === 'seed.plugin-events') return [];
   // The shared broker checks the caller's declared network permissions.

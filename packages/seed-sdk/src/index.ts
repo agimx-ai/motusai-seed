@@ -1,6 +1,7 @@
 export { pluginDevelopmentStatusFile, type PluginDevelopmentStatus } from './development-status.js';
 export { Component, type Disposer } from './component.js';
 export { Events, type EventRef } from './events.js';
+export type { SeedUserProfile, SeedUserService } from './user-profile.js';
 export type {
   PluginBreadcrumb,
   PluginNavigation,

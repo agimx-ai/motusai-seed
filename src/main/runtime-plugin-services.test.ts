@@ -48,6 +48,38 @@ function fixture(kind = 'sandboxed-web') {
 }
 describe('generic plugin SDK brokers', () => {
   it.each(['native-host', 'sandboxed-web'])(
+    'returns only the current public profile to an active %s plugin',
+    async (kind) => {
+      const { runtime, call } = fixture(kind);
+      runtime.user = {
+        id: 'private-id',
+        displayName: '测试用户',
+        email: 'private@example.test',
+        avatarDataUrl: 'https://example.test/avatar.webp',
+        accessToken: 'private-token',
+      };
+      const expected = { display_name: '测试用户', avatar_url: 'https://example.test/avatar.webp' };
+      await expect(
+        call('one', 'seed.user-profile', { operation: 'read', package_id: 'com.example.two' }),
+      ).resolves.toEqual(expected);
+      await expect(call('one', 'seed.user-profile', { operation: 'read', user_id: 'another-user' })).rejects.toThrow();
+      runtime.user.avatarDataUrl = 'file:///private/image.png';
+      await expect(call('one', 'seed.user-profile', { operation: 'read' })).resolves.toEqual({
+        ...expected,
+        avatar_url: null,
+      });
+      runtime.user = undefined;
+      await expect(call('one', 'seed.user-profile', { operation: 'read' })).resolves.toBeNull();
+      runtime.pluginIsAuthorized.mockReturnValue(false);
+      await expect(call('one', 'seed.user-profile', { operation: 'read' })).rejects.toMatchObject({
+        code: 'broker_permission_denied',
+      });
+      await expect(call('missing', 'seed.user-profile', { operation: 'read' })).rejects.toMatchObject({
+        code: 'broker_permission_denied',
+      });
+    },
+  );
+  it.each(['native-host', 'sandboxed-web'])(
     'opens HTTP LAN and HTTPS pages in the system browser for %s',
     async (kind) => {
       const { runtime, call } = fixture(kind);

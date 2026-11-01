@@ -29,6 +29,7 @@ import type {
 import { resolveSeedLocale } from './i18n/locale';
 import { fetchMcpSetupPrompt } from './mcp-setup-prompt';
 import { invokePluginSettings } from './plugin-settings';
+import { pluginUserProfile } from './plugin-user-profile';
 import { pluginCatalogV2Url } from './plugin-catalog-url';
 import { PluginCapabilityCatalog } from './plugin-capability-catalog';
 import { PluginEventBroker } from './plugin-event-broker';
@@ -395,6 +396,11 @@ export class SeedRuntime {
       'seed.plugin-settings',
       async (argumentsValue) =>
         await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.plugin-settings', argumentsValue),
+    ],
+    [
+      'seed.user-profile',
+      async (argumentsValue) =>
+        await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.user-profile', argumentsValue),
     ],
     [
       'seed.plugin-capabilities',
@@ -2581,6 +2587,19 @@ export class SeedRuntime {
     trace?: DiagnosticTraceContext,
   ): Promise<unknown> {
     assertActive?.();
+    if (service === 'seed.user-profile') {
+      const plugin = this.runtimePlugins.find(
+        (candidate) => candidate.package_id === packageId && candidate.api_version === 2 && candidate.has_service,
+      );
+      if (!plugin || !this.pluginIsAuthorized(packageId))
+        throw Object.assign(new Error('Plugin user profile access is unavailable.'), {
+          code: 'broker_permission_denied',
+        });
+      z.object({ operation: z.literal('read') })
+        .strict()
+        .parse(Object.fromEntries(Object.entries(argumentsValue).filter(([key]) => key !== 'package_id')));
+      return pluginUserProfile(this.user);
+    }
     if (service === 'seed.network.resolve-proxy') {
       const plugin = this.runtimePlugins.find(
         (candidate) => candidate.package_id === packageId && candidate.has_service,
