@@ -43,9 +43,25 @@ function fixture() {
   };
 }
 describe('announcement inbox', () => {
+  it('loads text content without requesting a media URL or downloading a background', async () => {
+    const { inbox, fetcher } = fixture();
+    const { background_url: _background, ...copy } = item;
+    const text = {
+      ...copy,
+      background_type: 'text',
+      description: { 'zh-CN': '## 更新\n\n- **新功能**', 'en-US': '## Updates\n\n- **New feature**' },
+    };
+    fetcher.mockResolvedValueOnce(Response.json({ items: [text], next_cursor: null }));
+    await inbox.refresh();
+    expect(inbox.snapshot()[0]).toMatchObject({ background_type: 'text', description: text.description });
+    expect(await inbox.background(id)).toBe('');
+    expect(fetcher).toHaveBeenCalledOnce();
+    await inbox.dismiss(id);
+    expect(inbox.snapshot()).toEqual([]);
+  });
   it('defaults existing content to immersive and accepts only the two supported templates', () => {
-    expect(announcementSchema.parse(item).template).toBe('immersive');
-    expect(announcementSchema.parse({ ...item, template: 'image-above' }).template).toBe('image-above');
+    expect(announcementSchema.parse(item)).toMatchObject({ template: 'immersive' });
+    expect(announcementSchema.parse({ ...item, template: 'image-above' })).toMatchObject({ template: 'image-above' });
     expect(announcementSchema.safeParse({ ...item, template: 'unknown' }).success).toBe(false);
   });
   it('does not remove unread content if local persistence fails', async () => {
@@ -163,4 +179,53 @@ describe('announcement inbox', () => {
     expect(inbox.snapshot()).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+});
+
+describe('announcement video source', () => {
+  const url = `https://cloud.example/api/v1/announcements/${id}/background/${id}.mp4`;
+  it('returns only a trusted media URL without downloading video across IPC', async () => {
+    const { inbox, fetcher } = fixture();
+    fetcher.mockResolvedValueOnce(
+      Response.json({ items: [{ ...item, background_type: 'video', background_url: url }], next_cursor: null }),
+    );
+    await inbox.refresh();
+    expect(await inbox.background(id)).toBe(url);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  it.each([
+    url.replace('cloud.example', 'evil.example'),
+    url + '?other=1',
+    url + '#hash',
+    url.replace('https://', 'https://user:pass@'),
+    url.replace('.mp4', '.svg'),
+    url.replace(`${id}.mp4`, 'other.mp4'),
+  ])('rejects an untrusted video URL %s', async (background_url) => {
+    const { inbox, fetcher } = fixture();
+    fetcher.mockResolvedValueOnce(
+      Response.json({ items: [{ ...item, background_type: 'video', background_url }], next_cursor: null }),
+    );
+    await inbox.refresh();
+    await expect(inbox.background(id)).rejects.toThrow('Untrusted');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+});
+
+it('accepts a minimal video announcement and validates its cover against the distribution origin', async () => {
+  const { inbox, fetcher } = fixture();
+  const background_url = `https://cloud.example/api/v1/announcements/${id}/background/${id}.mp4`;
+  const poster_url = `https://cloud.example/api/v1/announcements/${id}/poster/${id}.png`;
+  fetcher.mockResolvedValueOnce(
+    Response.json({ items: [{ id, background_type: 'video', background_url, poster_url }], next_cursor: null }),
+  );
+  await inbox.refresh();
+  expect(await inbox.background(id)).toBe(background_url);
+  expect(inbox.snapshot()[0]).toEqual({ id, background_type: 'video', background_url, poster_url });
+  fetcher.mockResolvedValueOnce(
+    Response.json({
+      items: [{ id, background_type: 'video', background_url, poster_url: 'https://evil.example/cover.png' }],
+      next_cursor: null,
+    }),
+  );
+  await inbox.refresh();
+  await expect(inbox.background(id)).rejects.toThrow('Untrusted');
 });

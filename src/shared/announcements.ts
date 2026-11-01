@@ -13,15 +13,13 @@ const localized = (max: number, required = true) =>
       .min(required ? 1 : 0)
       .max(max),
   });
-export const announcementSchema = z
+const announcementCopySchema = z
   .object({
     id: z.uuid(),
-    template: z.enum(['immersive', 'image-above']).default('immersive'),
     title: localized(100),
     description: localized(600),
     button_label: localized(60, false),
     dismiss_label: localized(60),
-    background_url: z.url(),
     action: z
       .discriminatedUnion('kind', [
         z.object({
@@ -55,6 +53,25 @@ export const announcementSchema = z
           });
       }
   });
+const imageAnnouncementSchema = announcementCopySchema.safeExtend({
+  template: z.enum(['immersive', 'image-above']).default('immersive'),
+  background_url: z.url(),
+  background_type: z.literal('image').optional(),
+});
+const textAnnouncementSchema = announcementCopySchema.safeExtend({
+  background_type: z.literal('text'),
+  description: localized(20_000),
+});
+export const announcementSchema = z.union([
+  z.object({
+    id: z.uuid(),
+    background_type: z.literal('video'),
+    background_url: z.url(),
+    poster_url: z.url().optional(),
+  }),
+  textAnnouncementSchema,
+  imageAnnouncementSchema,
+]);
 export const announcementPageSchema = z.object({
   items: z.array(announcementSchema).max(100),
   next_cursor: z.string().regex(/^\d+$/).nullable(),

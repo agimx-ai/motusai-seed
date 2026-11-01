@@ -1290,7 +1290,7 @@ export class SeedRuntime {
   }
   async activateAnnouncement(id: string) {
     const item = this.announcements.snapshot().find((entry) => entry.id === id);
-    if (!this.user || !item) return;
+    if (!this.user || !item || item.background_type === 'video') return;
     if (item.action?.kind === 'plugin')
       await this.requestNavigation({
         destination: 'plugins',

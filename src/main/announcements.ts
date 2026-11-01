@@ -84,10 +84,35 @@ export class AnnouncementInbox {
   async background(id: string) {
     const item = this.items.find((entry) => entry.id === id);
     if (!item) throw new Error('Announcement no longer available');
+    if (item.background_type === 'text') return '';
     const feed = announcementFeedUrl(await this.options.eventsUrl());
     const url = new URL(item.background_url);
     if (url.origin !== feed.origin || !url.pathname.startsWith(`/api/v1/announcements/${id}/background/`))
       throw new Error('Untrusted announcement background');
+    if (item.background_type === 'video') {
+      if (
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        !new RegExp(`^/api/v1/announcements/${id}/background/[0-9a-f-]{36}\\.(mp4|webm)$`).test(url.pathname)
+      )
+        throw new Error('Untrusted announcement video');
+      if (item.poster_url) {
+        const poster = new URL(item.poster_url);
+        if (
+          poster.origin !== feed.origin ||
+          poster.username ||
+          poster.password ||
+          poster.search ||
+          poster.hash ||
+          !new RegExp(`^/api/v1/announcements/${id}/poster/[0-9a-f-]{36}\\.(png|jpg|webp)$`).test(poster.pathname)
+        )
+          throw new Error('Untrusted announcement video poster');
+      }
+      // Video is streamed by Chromium with byte ranges, never copied across IPC as base64.
+      return url.href;
+    }
     const response = await (this.options.fetch ?? fetch)(url, {
       redirect: 'error',
       signal: AbortSignal.timeout(15_000),

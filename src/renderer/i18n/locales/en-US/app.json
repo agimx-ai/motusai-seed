@@ -1,5 +1,10 @@
 {
   "announcements": {
+    "replayVideo": "Replay background video",
+    "videoLabel": "Product introduction video",
+    "pauseVideo": "Pause background video",
+    "playVideo": "Play background video",
+    "retryVideo": "Retry background video",
     "close": "Close announcement",
     "navigation": "Browse announcements",
     "previous": "Previous announcement",

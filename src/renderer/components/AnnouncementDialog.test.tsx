@@ -35,6 +35,38 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe('fixed announcement template', () => {
+  it('renders Markdown in the narrow text dialog without requesting a background and keeps dismissal', async () => {
+    const { background_url: _background, template: _template, ...copy } = announcement;
+    render(
+      <AnnouncementDialog
+        announcements={[
+          {
+            ...copy,
+            background_type: 'text',
+            description: {
+              'zh-CN': '## 新功能\n\n- **重点**\n- 第二点\n\n<script>alert(1)</script>',
+              'en-US': '## New feature\n\n- **Highlight**',
+            },
+          },
+        ]}
+        locale="zh-CN"
+      />,
+    );
+    await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
+    const dialog = document.querySelector('dialog')!;
+    expect(dialog.dataset.template).toBe('text');
+    expect(dialog.className).toContain('w-[min(820px,calc(100vw-64px))]');
+    expect(dialog.className).toContain('overflow-y-auto');
+    expect(screen.getByRole('heading', { name: '新功能', level: 2 })).toBeTruthy();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByText('重点').getAttribute('data-streamdown')).toBe('strong');
+    expect(dialog.querySelector('script')).toBeNull();
+    expect(dialog.querySelector('video, img[src^="data:image/png"]')).toBeNull();
+    expect(window.motusSeed.announcementBackground).not.toHaveBeenCalled();
+    expect(screen.getByText('MotusAI Seed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '知道了' }));
+    await waitFor(() => expect(window.motusSeed.dismissAnnouncement).toHaveBeenCalledWith(id));
+  });
   it.each(['immersive', 'image-above'] as const)('renders %s using the shared action buttons', async (template) => {
     render(<AnnouncementDialog announcements={[{ ...announcement, template }]} locale="zh-CN" />);
     await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
@@ -69,21 +101,14 @@ describe('fixed announcement template', () => {
     expect(immersiveTitle.className).toContain('text-[clamp(34px,4.2cqw,42px)]');
     expect(immersiveDescription.className).toContain('text-[clamp(18px,2cqw,20px)]');
 
-    view.rerender(
-      <AnnouncementDialog announcements={[{ ...announcement, template: 'image-above' }]} locale="zh-CN" />,
-    );
+    view.rerender(<AnnouncementDialog announcements={[{ ...announcement, template: 'image-above' }]} locale="zh-CN" />);
     const imageAboveTitle = screen.getByRole('heading', { level: 1 });
     const imageAboveDescription = screen.getByText('录音结束，直接获得转写结果。');
     expect(imageAboveTitle.className).toContain('text-[clamp(28px,3.9cqw,32px)]');
     expect(imageAboveDescription.className).toContain('text-[clamp(16px,2.1cqw,17px)]');
   });
   it('keeps image-above announcements inside the viewport without an inner scrollbar', async () => {
-    render(
-      <AnnouncementDialog
-        announcements={[{ ...announcement, template: 'image-above' }]}
-        locale="zh-CN"
-      />,
-    );
+    render(<AnnouncementDialog announcements={[{ ...announcement, template: 'image-above' }]} locale="zh-CN" />);
     await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
     const dialog = document.querySelector('dialog')!;
     const card = dialog.firstElementChild as HTMLElement;
@@ -269,7 +294,9 @@ describe('announcement navigation', () => {
     fireEvent.click(next());
     const retry = await screen.findByRole('button', { name: 'announcements.retryImage' });
     fireEvent.click(retry);
-    await waitFor(() => expect(document.querySelector('img[src^="data:image/png"]')?.getAttribute('src')).toContain('SECOND'));
+    await waitFor(() =>
+      expect(document.querySelector('img[src^="data:image/png"]')?.getAttribute('src')).toContain('SECOND'),
+    );
     expect(screen.queryByRole('button', { name: 'announcements.retryImage' })).toBeNull();
   });
 
@@ -292,4 +319,56 @@ describe('announcement navigation', () => {
     expect(document.querySelector('img[src^="data:image/png"]')?.getAttribute('src')).toContain('FIRST');
     expect(window.motusSeed.dismissAnnouncement).not.toHaveBeenCalled();
   });
+});
+
+it('uses video instead of the image background, and switches back to image', async () => {
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  const url = 'https://cloud.example/video.mp4';
+  vi.mocked(window.motusSeed.announcementBackground).mockResolvedValueOnce(url);
+  const view = render(
+    <AnnouncementDialog
+      announcements={[{ ...announcement, background_type: 'video', background_url: url }]}
+      locale="en-US"
+    />,
+  );
+  await waitFor(() => expect(document.querySelector('video')?.getAttribute('src')).toBe(url));
+  expect(document.querySelector('dialog > div > img')).toBeNull();
+  expect(document.querySelector('dialog')!.dataset.template).toBe('video');
+  expect(screen.queryByRole('heading')).toBeNull();
+  expect(screen.queryByText('Learn more')).toBeNull();
+  expect(screen.queryByText('Got it')).toBeNull();
+  expect(document.querySelector('[class*="linear-gradient"]')).toBeNull();
+  expect(screen.getByText('MotusAI Seed').closest('header')).toBeTruthy();
+  expect(screen.getByRole('dialog', { name: 'announcements.videoLabel' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'announcements.close' }).className).toContain('bg-card/65');
+
+  view.rerender(<AnnouncementDialog announcements={[announcement]} locale="en-US" />);
+  await waitFor(() => expect(document.querySelector('dialog > div > img')).toBeTruthy());
+  expect(document.querySelector('video')).toBeNull();
+  vi.restoreAllMocks();
+});
+
+it('renders a minimal video record without image text and closes by Escape', async () => {
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  const url = 'https://cloud.example/video.mp4';
+  vi.mocked(window.motusSeed.announcementBackground).mockResolvedValue(url);
+  const view = render(
+    <AnnouncementDialog
+      announcements={[
+        { id, background_type: 'video', background_url: url, poster_url: 'https://cloud.example/cover.png' },
+      ]}
+      locale="zh-CN"
+    />,
+  );
+  await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
+  expect(document.querySelector('dialog')!.dataset.template).toBe('video');
+  expect(screen.queryByText(announcement.title['zh-CN'])).toBeNull();
+  expect(screen.queryByText(announcement.description['zh-CN'])).toBeNull();
+  const event = new Event('cancel', { cancelable: true });
+  fireEvent(document.querySelector('dialog')!, event);
+  await waitFor(() => expect(window.motusSeed.dismissAnnouncement).toHaveBeenCalledWith(id));
+  view.unmount();
+  vi.restoreAllMocks();
 });

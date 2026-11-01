@@ -21,10 +21,12 @@ const directives = (value: string) =>
 describe('product and isolated service host content security policy', () => {
   it('allows HTTP and HTTPS product images without granting scripts, connections, or service access', () => {
     const product = directives(pluginHostContentSecurityPolicy('product', response));
+    expect(product['media-src']).toEqual(["'self'", 'http:', 'https:']);
     expect(product['img-src']).toEqual(["'self'", 'data:', 'seed-plugin:', 'http:', 'https:']);
     expect(product['script-src']).toEqual(["'self'", 'seed-plugin:']);
     expect(product['connect-src']).toEqual(['seed-plugin:']);
     const service = directives(pluginHostContentSecurityPolicy('service', response));
+    expect(service['media-src']).toBeUndefined();
     expect(service['img-src']).toEqual(["'self'", 'data:']);
     expect(service['connect-src']).toEqual(["'none'"]);
   });
