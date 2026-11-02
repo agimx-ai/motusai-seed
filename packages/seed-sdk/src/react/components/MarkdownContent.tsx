@@ -1,13 +1,46 @@
-import { Streamdown } from 'streamdown';
+import { createContext, useContext, useMemo, type ComponentProps, type ReactNode } from 'react';
+import { Streamdown, defaultRehypePlugins, type Components, type StreamdownProps } from 'streamdown';
+
+export type MarkdownImage = { src: string; alt: string; title?: string };
+type ImageRenderer = (image: MarkdownImage) => ReactNode;
+const ImageRendererContext = createContext<ImageRenderer | undefined>(undefined);
+function ReferencedImage({ src = '', alt = '', title }: ComponentProps<'img'>) {
+  const render = useContext(ImageRendererContext);
+  if (!src) return <span>{alt}</span>;
+  return <>{render?.({ src, alt, ...(title ? { title } : {}) }) ?? <span>{alt}</span>}</>;
+}
+
+const noProtocols: readonly string[] = [];
 
 /** Shared renderer, not a declaration interpreter. Links stay inert inside the isolated surface. */
-export function MarkdownContent({ children, streaming = false }: { children: string; streaming?: boolean }) {
+export function MarkdownContent({ children, streaming = false, renderImage, imageProtocols = noProtocols }: {
+  children: string;
+  streaming?: boolean;
+  /** Resolve and render explicitly referenced images within the caller's resource scope. No automatic loading. */
+  renderImage?: ImageRenderer;
+  /** Additional image-only protocols passed to renderImage, never to browser img src or ordinary links. */
+  imageProtocols?: readonly string[];
+}) {
+  const rehypePlugins = useMemo<StreamdownProps['rehypePlugins']>(() => {
+    if (!renderImage) return undefined;
+    const sanitize = defaultRehypePlugins.sanitize;
+    if (!Array.isArray(sanitize)) throw new Error('Markdown sanitizer configuration is unavailable.');
+    const [plugin, schema] = sanitize;
+    const protocols = imageProtocols.filter((protocol) => /^[a-z][a-z0-9+.-]*$/i.test(protocol));
+    return Object.entries(defaultRehypePlugins).filter(([name]) => name !== 'raw').map(([name, value]) => name === 'sanitize'
+      ? [plugin, { ...schema, protocols: { ...schema.protocols, src: [...(schema.protocols?.src || []), ...protocols] } }]
+      : value);
+  }, [Boolean(renderImage), imageProtocols]);
+  const images = renderImage ? { img: ReferencedImage } as Components : {};
   return (
+    <ImageRendererContext.Provider value={renderImage}>
     <div className="text-[13px] leading-6 text-foreground">
       <Streamdown
         mode={streaming ? 'streaming' : 'static'}
         skipHtml
+        rehypePlugins={rehypePlugins}
         components={{
+          ...images,
           h1: ({ children }) => <h1 className="mb-3 mt-0 text-[20px] font-semibold">{children}</h1>,
           h2: ({ children }) => <h2 className="mb-2 mt-6 text-[16px] font-semibold">{children}</h2>,
           h3: ({ children }) => <h3 className="mb-2 mt-5 text-[14px] font-semibold">{children}</h3>,
@@ -35,5 +68,6 @@ export function MarkdownContent({ children, streaming = false }: { children: str
         {children}
       </Streamdown>
     </div>
+    </ImageRendererContext.Provider>
   );
 }
