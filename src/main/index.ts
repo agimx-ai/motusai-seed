@@ -8,6 +8,7 @@ import { buildConfig } from '../shared/build-config.generated'
 import { ipcChannels, type SeedLanguagePreference } from '../shared/contracts'
 import { registerIpc } from './ipc'
 import { nativeMenuLabel, nativeMenuMessages } from './i18n/native-menu'
+import { textContextMenu } from './text-context-menu'
 import { SeedRuntime } from './runtime'
 import { parseSeedDeepLink, seedDeepLinkFromArguments } from './deep-link'
 import { ObservationStore, errorDetails } from './observation-store'
@@ -137,6 +138,10 @@ function createWindow() {
       webSecurity: true,
       spellcheck: false,
     },
+  })
+  window.webContents.on('context-menu', (_event, params) => {
+    const items = textContextMenu(params, nativeMenuMessages(languagePreference))
+    if (items.length) Menu.buildFromTemplate(items).popup({ window })
   })
   if (process.platform !== 'darwin') {
     window.webContents.on('before-input-event', (event, input) => {

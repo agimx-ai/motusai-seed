@@ -1,4 +1,12 @@
 @layer components {
+  .seed-selectable-text {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .seed-selectable-text :where(button, select, [role='button'], [role='switch'], [role='checkbox'], [role='slider'], img) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
   .seed-dialog::backdrop {
     background: rgb(0 0 0 / 20%);
     backdrop-filter: blur(2px);
