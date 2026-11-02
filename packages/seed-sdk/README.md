@@ -463,6 +463,28 @@ export default class GreetingService extends PluginService {
 
 ---
 
+### 通用样式
+
+可直接用于 DOM 和 React 视图。
+
+| 样式类 | 用途 |
+| --- | --- |
+| `seed-selectable-text` | 允许选中容器内的文字，适用于消息、报告等正文；按钮、选择控件和图片保持不可选中 |
+
+DOM：
+
+```html
+<div class="seed-selectable-text">报告正文</div>
+```
+
+React：
+
+```tsx
+<div className="seed-selectable-text">报告正文</div>
+```
+
+---
+
 ### `toast` 使用示例
 
 ```ts
@@ -1577,8 +1599,6 @@ console.log({ packagePath, sha256, bytes: size });
 ```
 
 ### 自定义样式和资源
-
-需要用户选中并复制的文字容器可以添加通用样式类 `seed-selectable-text`，DOM 和 React 视图均适用。例如 `<div className="seed-selectable-text">报告正文</div>`。它允许局部选择文字，不改变页面其他区域的默认行为；容器内的按钮、选择控件和图片仍不可选中。原生复制命令继续处理所选文字，该样式不提供剪贴板读取能力。
 
 ```js
 import { buildPlugin } from '@motus-ai/seed-sdk/tools';
