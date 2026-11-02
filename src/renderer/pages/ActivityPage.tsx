@@ -1,4 +1,4 @@
-import { CloudUpload, ListFilter, MoreHorizontal, Trash2 } from 'lucide-react';
+import { CloudUpload, FileArchive, ListFilter, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -173,6 +173,11 @@ export function ActivityActions({
         }
         open={confirmingUpload}
         title={t('activity.uploadLogsTitle')}
+        icon={
+          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-muted text-foreground">
+            <FileArchive size={17} strokeWidth={1.8} />
+          </span>
+        }
       >
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-4">

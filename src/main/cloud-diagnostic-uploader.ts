@@ -7,6 +7,7 @@ import { Readable, type Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import * as archiverModule from 'archiver'
 import type { AuditEntry, TerminalLogUploadProgress, TerminalLogUploadResult } from '../shared/contracts'
+import { snapshotDiagnosticJsonl } from './diagnostic-jsonl'
 
 type UploadSession = { upload_id: string; status: 'uploading' | 'completed' | 'aborted'; part_size: number; part_count: number; missing_parts: number[] }
 type Pending = { accountId: string; days: number; createdAt: string; idempotencyKey: string; fileSize: number; fileSha256: string; appVersion: string; uploadId?: string }
@@ -15,7 +16,7 @@ type UploadInput = {
   cloudUrl: string; accessToken: string; accountId: string; workDirectory: string; days: number
   appName: string; appVersion: string; platform: NodeJS.Platform
   entries: Iterable<AuditEntry> | AsyncIterable<AuditEntry>; entryCount: number
-  plugins?: PluginInventoryEntry[]; crashDumpDirectory?: string; latestRecordingDirectory?: string; startAt: string; endAt: string
+  plugins?: PluginInventoryEntry[]; crashDumpDirectory?: string; latestRecordingDirectory?: string; pluginDataDirectory?: string; startAt: string; endAt: string
 }
 type UploadOptions = { signal?: AbortSignal; onProgress?: (progress: TerminalLogUploadProgress) => void }
 type ZipArchive = Transform & { append(body: Buffer | Readable, options: { name: string; date: Date }): void; finalize(): Promise<void> }
@@ -126,7 +127,7 @@ async function snapshotLatestRecording(source: string | undefined, destination: 
   return files.map((file) => ({ name: file.name, path: join(destination, file.name), size: file.metadata.size }))
 }
 
-export async function createCloudDiagnosticArchive(input: Pick<UploadInput, 'appName' | 'appVersion' | 'platform' | 'entries' | 'entryCount' | 'plugins' | 'crashDumpDirectory' | 'latestRecordingDirectory' | 'startAt' | 'endAt'>, temporaryParent = tmpdir()) {
+export async function createCloudDiagnosticArchive(input: Pick<UploadInput, 'appName' | 'appVersion' | 'platform' | 'entries' | 'entryCount' | 'plugins' | 'crashDumpDirectory' | 'latestRecordingDirectory' | 'pluginDataDirectory' | 'startAt' | 'endAt'>, temporaryParent = tmpdir(), signal?: AbortSignal) {
   const directory = await mkdtemp(join(temporaryParent, 'motusai-seed-diagnostics-'))
   const path = join(directory, 'diagnostics.zip')
   const generatedAt = new Date()
@@ -135,7 +136,11 @@ export async function createCloudDiagnosticArchive(input: Pick<UploadInput, 'app
     const recordingDirectory = join(directory, 'recordings', 'latest')
     const recordings = await snapshotLatestRecording(input.latestRecordingDirectory, recordingDirectory)
     const recordingBytes = recordings.reduce((total, recording) => total + recording.size, 0)
-    const crashDumps = await recentCrashDumps(input.crashDumpDirectory, input.startAt, input.endAt, Math.max(0, 448 * 1024 * 1024 - recordingBytes))
+    const jsonlDirectory = join(directory, 'plugin-jsonl')
+    const jsonlFiles = await snapshotDiagnosticJsonl(input.pluginDataDirectory, jsonlDirectory, input.startAt, input.endAt,
+      diagnosticUploadMaxBytes - recordingBytes, signal)
+    const jsonlBytes = jsonlFiles.reduce((total, file) => total + file.size, 0)
+    const crashDumps = await recentCrashDumps(input.crashDumpDirectory, input.startAt, input.endAt, Math.max(0, 448 * 1024 * 1024 - recordingBytes - jsonlBytes))
     const archive = archiveFactory()
     const writing = pipeline(archive, createWriteStream(path, { mode: 0o600 }))
     archive.append(json({
@@ -146,14 +151,18 @@ export async function createCloudDiagnosticArchive(input: Pick<UploadInput, 'app
       activity_range: { start_at: input.startAt, end_at: input.endAt }, record_count: input.entryCount,
       crash_dump_count: crashDumps.length,
       recording_file_count: recordings.length,
+      plugin_jsonl_file_count: jsonlFiles.length,
+      plugin_jsonl_selection: 'complete_files_with_records_in_activity_range',
     }), { name: 'system/manifest.json', date: archiveDate })
     archive.append(entriesJson(input.entries), { name: 'activity/records.json', date: archiveDate })
     archive.append(json({ plugins: input.plugins || [] }), { name: 'plugins/inventory.json', date: archiveDate })
     for (const recording of recordings) archive.append(createReadStream(recording.path), { name: `recordings/latest/${recording.name}`, date: archiveDate })
+    for (const file of jsonlFiles) archive.append(createReadStream(file.path), { name: `plugins/data/${file.name}`, date: archiveDate })
     for (const dump of crashDumps) archive.append(createReadStream(dump.path), { name: `crashes/${dump.name}`, date: archiveDate })
     await archive.finalize()
     await writing
     await rm(join(directory, 'recordings'), { recursive: true, force: true })
+    await rm(jsonlDirectory, { recursive: true, force: true })
     const fileSize = (await stat(path)).size
     assertDiagnosticArchiveSize(fileSize)
     return { path, directory, fileSize, fileSha256: await fileSha256(path), generatedAt }
@@ -226,7 +235,7 @@ export class CloudDiagnosticUploader {
     }
     if (!pending) {
       options.onProgress?.({ phase: 'preparing', percent: 0, transferred: 0, total: 0 })
-      const archive = await createCloudDiagnosticArchive(input, directory)
+      const archive = await createCloudDiagnosticArchive(input, directory, options.signal)
       try {
         await rm(archivePath, { force: true })
         await rename(archive.path, archivePath)

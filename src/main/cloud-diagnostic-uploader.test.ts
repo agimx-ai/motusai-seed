@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, open, readFile, readdir, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, open, readFile, readdir, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as unzipper from 'unzipper'
@@ -54,6 +54,105 @@ describe('cloud diagnostic uploader', () => {
       const audit = zip.files.find((file) => file.path === 'activity/records.json')
       expect(JSON.parse((await audit!.buffer()).toString()).entries).toEqual(entries)
     } finally { await rm(archive.directory, { recursive: true, force: true }) }
+  })
+
+  it('selects complete plugin JSONL files by record time, retaining earlier context and relative paths', async () => {
+    const root = await recordingRoot()
+    const pluginDataDirectory = join(root, 'plugin-data')
+    const sessions = join(pluginDataDirectory, 'com.example.agent', 'contexts', 'chat', 'state', 'sessions')
+    await mkdir(sessions, { recursive: true })
+    const content = [
+      { type: 'session', timestamp: '2026-07-01T00:00:00.000Z', id: 'existing-session' },
+      { type: 'message', timestamp: input('/unused').startAt, message: { role: 'user', content: 'First boundary' } },
+      { type: 'message', timestamp: input('/unused').endAt, message: { role: 'assistant', content: 'Last boundary' } },
+    ].map((record) => JSON.stringify(record)).join('\n') + '\n'
+    const sessionPath = join(sessions, 'old-start.jsonl')
+    await writeFile(sessionPath, content)
+    // A copied file's mtime is not a session's activity time.
+    await utimes(sessionPath, new Date('2026-07-01'), new Date('2026-07-01'))
+    await writeFile(join(sessions, 'inactive.jsonl'), JSON.stringify({ timestamp: '2026-08-23T23:59:59.999Z' }) + '\n')
+    await writeFile(join(sessions, 'future.jsonl'), JSON.stringify({ timestamp: '2026-08-31T00:00:00.000Z' }) + '\n')
+    await writeFile(join(sessions, 'nested-time.jsonl'), JSON.stringify({ message: { timestamp: input('/unused').startAt } }) + '\n')
+    await writeFile(join(sessions, 'settings.json'), JSON.stringify({ secret: 'not diagnostic JSONL', timestamp: input('/unused').startAt }))
+    const archive = await createCloudDiagnosticArchive({ ...input('/unused'), pluginDataDirectory })
+    try {
+      const zip = await unzipper.Open.buffer(await readFile(archive.path))
+      const collected = zip.files.filter((file) => file.path.startsWith('plugins/data/'))
+      expect(collected.map((file) => file.path)).toEqual([
+        'plugins/data/com.example.agent/contexts/chat/state/sessions/old-start.jsonl',
+      ])
+      expect((await collected[0]!.buffer()).toString()).toBe(content)
+      expect(await readFile(sessionPath, 'utf8')).toBe(content)
+      const manifest = JSON.parse((await zip.files.find((file) => file.path === 'system/manifest.json')!.buffer()).toString())
+      expect(manifest).toMatchObject({ plugin_jsonl_file_count: 1, plugin_jsonl_selection: 'complete_files_with_records_in_activity_range' })
+      expect(JSON.stringify(manifest)).not.toContain(root)
+      expect(await readdir(archive.directory)).toEqual(['diagnostics.zip'])
+    } finally { await rm(archive.directory, { recursive: true, force: true }) }
+  })
+
+  it('keeps a full JSONL snapshot when an active session is appended during archive generation', async () => {
+    const root = await recordingRoot()
+    const pluginDataDirectory = join(root, 'plugin-data')
+    await mkdir(join(pluginDataDirectory, 'com.example.agent'), { recursive: true })
+    const session = join(pluginDataDirectory, 'com.example.agent', 'session.jsonl')
+    const original = JSON.stringify({ timestamp: entries[0]!.timestamp, content: 'Original context' }) + '\n'
+    await writeFile(session, original)
+    async function* activity() {
+      await appendFile(session, JSON.stringify({ timestamp: '2026-08-31T00:00:00.000Z', content: 'Later append' }) + '\n')
+      yield entries[0]!
+    }
+    const archive = await createCloudDiagnosticArchive({ ...input('/unused'), pluginDataDirectory, entries: activity() })
+    try {
+      const zip = await unzipper.Open.buffer(await readFile(archive.path))
+      expect((await zip.files.find((file) => file.path.endsWith('/session.jsonl'))!.buffer()).toString()).toBe(original)
+      expect(await readFile(session, 'utf8')).toContain('Later append')
+      expect(await readdir(archive.directory)).toEqual(['diagnostics.zip'])
+    } finally { await rm(archive.directory, { recursive: true, force: true }) }
+  })
+
+  it.skipIf(process.platform === 'win32')('does not follow JSONL file or directory links outside plugin data', async () => {
+    const root = await recordingRoot()
+    const pluginDataDirectory = join(root, 'plugin-data')
+    const outside = join(root, 'outside')
+    await mkdir(pluginDataDirectory)
+    await mkdir(outside)
+    await writeFile(join(outside, 'private.jsonl'), JSON.stringify({ timestamp: entries[0]!.timestamp, content: 'External data' }))
+    await symlink(join(outside, 'private.jsonl'), join(pluginDataDirectory, 'linked.jsonl'))
+    await symlink(outside, join(pluginDataDirectory, 'linked-directory'), 'dir')
+    const archive = await createCloudDiagnosticArchive({ ...input('/unused'), pluginDataDirectory })
+    try {
+      const zip = await unzipper.Open.buffer(await readFile(archive.path))
+      expect(zip.files.some((file) => file.path.startsWith('plugins/data/'))).toBe(false)
+    } finally { await rm(archive.directory, { recursive: true, force: true }) }
+    await expect(createCloudDiagnosticArchive({ ...input('/unused'), pluginDataDirectory: join(pluginDataDirectory, 'linked-directory') }, root))
+      .rejects.toThrow('插件诊断数据目录无效')
+    expect((await readdir(root)).some((name) => name.startsWith('motusai-seed-diagnostics-'))).toBe(false)
+  })
+
+  it('rejects oversized active JSONL snapshots before copying payloads or uploading', async () => {
+    const root = await recordingRoot()
+    const pluginDataDirectory = join(root, 'plugin-data')
+    await mkdir(pluginDataDirectory)
+    const session = join(pluginDataDirectory, 'session.jsonl')
+    await writeFile(session, JSON.stringify({ timestamp: entries[0]!.timestamp }) + '\n')
+    const handle = await open(session, 'r+')
+    try { await handle.truncate(diagnosticUploadMaxBytes + 1) } finally { await handle.close() }
+    const fetcher = vi.fn()
+    await expect(new CloudDiagnosticUploader(fetcher).upload({ ...input(join(root, 'uploads')), pluginDataDirectory }))
+      .rejects.toThrow('512 MiB')
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(await readdir(join(root, 'uploads', createHash('sha256').update('user-1').digest('hex')))).toEqual([])
+  })
+
+  it('cancels JSONL preparation without retaining a temporary package', async () => {
+    const root = await recordingRoot()
+    const pluginDataDirectory = join(root, 'plugin-data')
+    await mkdir(pluginDataDirectory)
+    const controller = new AbortController()
+    controller.abort()
+    await expect(createCloudDiagnosticArchive({ ...input('/unused'), pluginDataDirectory }, root, controller.signal))
+      .rejects.toMatchObject({ name: 'AbortError' })
+    expect(await readdir(root)).toEqual(['plugin-data'])
   })
 
   it('includes only the three latest WAVs byte-for-byte, without history, unrelated files or retained snapshots', async () => {
@@ -207,6 +306,11 @@ describe('cloud diagnostic uploader', () => {
     const workDirectory = await mkdtemp(join(tmpdir(), 'seed-upload-test-'))
     const latestRecordingDirectory = await saveRecording(join(workDirectory, 'recordings'))
     const expectedAudio = await readFile(join(latestRecordingDirectory, 'mixed.wav'))
+    const pluginDataDirectory = join(workDirectory, 'plugin-data')
+    await mkdir(pluginDataDirectory)
+    const sessionPath = join(pluginDataDirectory, 'session.jsonl')
+    const expectedSession = JSON.stringify({ timestamp: entries[0]!.timestamp, content: 'Original session' }) + '\n'
+    await writeFile(sessionPath, expectedSession)
     const stored = new Map<number, Uint8Array>()
     const sent: number[] = []
     const ids: string[] = []
@@ -246,15 +350,17 @@ describe('cloud diagnostic uploader', () => {
         expect(createHash('sha256').update(combined).digest('hex')).toBe(fileSha)
         const zip = await unzipper.Open.buffer(combined)
         expect(await zip.files.find((file) => file.path === 'recordings/latest/mixed.wav')!.buffer()).toEqual(expectedAudio)
+        expect((await zip.files.find((file) => file.path === 'plugins/data/session.jsonl')!.buffer()).toString()).toBe(expectedSession)
         return response({ upload_id: session().upload_id, status: 'completed' })
       }
       throw new Error(`Unexpected request: ${init?.method} ${path}`)
     }) as unknown as typeof fetch
     try {
-      await expect(new CloudDiagnosticUploader(fetcher).upload({ ...input(workDirectory), latestRecordingDirectory })).rejects.toThrow('network interrupted')
+      await expect(new CloudDiagnosticUploader(fetcher).upload({ ...input(workDirectory), latestRecordingDirectory, pluginDataDirectory })).rejects.toThrow('network interrupted')
       expect(sent).toEqual([1])
       await saveRecording(join(workDirectory, 'recordings'), 'mixed', 20)
-      const result = await new CloudDiagnosticUploader(fetcher).upload({ ...input(workDirectory), entries: [], latestRecordingDirectory })
+      await appendFile(sessionPath, JSON.stringify({ timestamp: entries[0]!.timestamp, content: 'Later change' }) + '\n')
+      const result = await new CloudDiagnosticUploader(fetcher).upload({ ...input(workDirectory), entries: [], latestRecordingDirectory, pluginDataDirectory })
       expect(result.status).toBe('completed')
       expect(ids).toHaveLength(2)
       expect(ids[0]).toBe(ids[1])

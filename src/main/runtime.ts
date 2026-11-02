@@ -1716,6 +1716,7 @@ export class SeedRuntime {
           })),
           crashDumpDirectory: app.getPath('crashDumps'),
           latestRecordingDirectory: join(app.getPath('userData'), 'recordings', 'latest'),
+          pluginDataDirectory: join(app.getPath('userData'), 'plugin-data'),
           startAt,
           endAt,
         },
