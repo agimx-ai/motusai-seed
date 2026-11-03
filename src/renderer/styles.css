@@ -142,7 +142,7 @@
 
   .seed-overview .seed-mcp-connect {
     /* Use spare window height while keeping the companion and bubbles fixed. */
-    translate: 0 clamp(40px, calc(20dvh - 92px), 136px);
+    translate: 0 clamp(56px, calc(20dvh - 76px), 152px);
   }
 
   .seed-companion-stage {
