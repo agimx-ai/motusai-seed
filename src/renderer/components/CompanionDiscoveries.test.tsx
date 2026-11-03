@@ -4,12 +4,23 @@ import { createInstance } from 'i18next'
 import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { seedI18nResources } from '../i18n/resources'
-import { companionDiscoveries, discoveryFrontLook, discoveryIdleDelay, discoveryTiming } from '../lib/companion-discoveries'
+import type { CompanionDiscovery } from '../../shared/companion-discoveries'
+import { prepareDiscoveries, discoveryFrontLook, discoveryIdleDelay, discoveryTiming } from '../lib/companion-discoveries'
 import { BotEngine, type BotFrame } from '../lib/bloub/engine'
 import { bloubStateForPresentation } from '../lib/bloub/presentation'
 import type { CompanionVisualState } from '../lib/companion'
 import { CompanionDiscoveries } from './CompanionDiscoveries'
 import { SeedlingMascot } from './SeedlingMascot'
+
+
+const discoveryItems = [
+  { corner: 'top-left', enabled: true, title: { 'zh-CN': '让 MotusAI 主动关心你', 'en-US': 'Let MotusAI look out for you' }, url: 'https://motusseed.com/guides/use-personal-assistant' },
+  { corner: 'bottom-left', enabled: true, title: { 'zh-CN': '让 AI 记住你的偏好', 'en-US': 'Let AI remember your preferences' }, url: 'https://motusseed.com/guides/use-global-memory' },
+  { corner: 'top-right', enabled: true, title: { 'zh-CN': '把 MotusAI 带进微信', 'en-US': 'Bring MotusAI into WeChat' }, url: 'https://motusseed.com/guides/use-motusai-in-weixin' },
+  { corner: 'bottom-right', enabled: true, title: { 'zh-CN': '把 MotusAI 带进企业微信', 'en-US': 'Bring MotusAI into WeCom' }, url: 'https://motusseed.com/guides/use-motusai-in-wecom' },
+] as const
+const items: CompanionDiscovery[] = discoveryItems.map((item) => ({ ...item, title: { ...item.title } }))
+const companionDiscoveries = prepareDiscoveries(items)
 
 const i18n = createInstance()
 void i18n.init({ lng: 'zh-CN', fallbackLng: 'zh-CN', defaultNS: 'app', resources: seedI18nResources, initAsync: false })
@@ -33,7 +44,7 @@ afterEach(() => {
 function advance(ms: number) { act(() => vi.advanceTimersByTime(ms)) }
 
 function page(state: CompanionVisualState = 'idle') {
-  return <I18nextProvider i18n={i18n}><CompanionDiscoveries state={state} label="和伙伴互动" /></I18nextProvider>
+  return <I18nextProvider i18n={i18n}><CompanionDiscoveries state={state} label="和伙伴互动" items={items} /></I18nextProvider>
 }
 
 function visibleBubble(container: HTMLElement) {
@@ -55,7 +66,7 @@ describe('companion discovery rotation', () => {
       const links = view.getAllByRole('link')
       expect(links).toHaveLength(index + 1)
       expect(links[index]!.closest('.seed-discovery')?.getAttribute('data-corner')).toBe(item.corner)
-      expect(links[index]!.getAttribute('href')).toBe(item.href)
+      expect(links[index]!.getAttribute('href')).toBe(item.url)
       expect(links[index]!.getAttribute('target')).toBe('_blank')
       const tails = view.container.querySelectorAll('.seed-discovery[data-looking="true"]')
       expect(tails).toHaveLength(1)
@@ -81,6 +92,49 @@ describe('companion discovery rotation', () => {
     advance(discoveryTiming.look)
     expect(view.getAllByRole('link')).toHaveLength(1)
     expect(visibleBubble(view.container)?.dataset.corner).toBe('top-left')
+  })
+
+  it('keeps the current cycle stable and applies changed or disabled introductions on the next cycle', () => {
+    const changed = items.map((item, index) => ({ ...item, enabled: index === 3, title: { ...item.title, 'zh-CN': '新的介绍' } }))
+    const view = render(page())
+    advance(discoveryIdleDelay)
+    advance(discoveryTiming.look)
+    view.rerender(<I18nextProvider i18n={i18n}><CompanionDiscoveries state="idle" label="和伙伴互动" items={changed} /></I18nextProvider>)
+    expect(view.getByRole('link').textContent).toContain(items[0]!.title['zh-CN'])
+    for (let index = 0; index < 4; index++) {
+      advance(discoveryTiming.visible)
+      if (index < 3) advance(discoveryTiming.look)
+    }
+    advance(discoveryTiming.front)
+    advance(discoveryTiming.wink)
+    advance(discoveryTiming.rest)
+    advance(discoveryTiming.leaving)
+    advance(discoveryTiming.gap)
+    advance(discoveryTiming.look)
+    expect(view.getAllByRole('link')).toHaveLength(1)
+    expect(view.getByRole('link').textContent).toContain('新的介绍')
+    expect(visibleBubble(view.container)?.dataset.corner).toBe('bottom-right')
+  })
+
+  it('starts when content arrives and removes every introduction when all positions are disabled', () => {
+    const renderItems = (values: typeof items) => <I18nextProvider i18n={i18n}><CompanionDiscoveries state="idle" label="和伙伴互动" items={values} /></I18nextProvider>
+    const view = render(renderItems([]))
+    advance(discoveryIdleDelay + 10_000)
+    expect(view.queryAllByRole('link')).toHaveLength(0)
+    view.rerender(renderItems(items))
+    advance(discoveryTiming.look)
+    expect(view.getAllByRole('link')).toHaveLength(1)
+    view.rerender(renderItems(items.map((item) => ({ ...item, enabled: false }))))
+    for (let index = 0; index < 4; index++) {
+      advance(discoveryTiming.visible)
+      if (index < 3) advance(discoveryTiming.look)
+    }
+    advance(discoveryTiming.front)
+    advance(discoveryTiming.wink)
+    advance(discoveryTiming.rest)
+    advance(discoveryTiming.leaving)
+    advance(discoveryTiming.gap + 20_000)
+    expect(view.queryAllByRole('link')).toHaveLength(0)
   })
 
   it('preserves reading time through hover, keyboard focus and backgrounding', () => {

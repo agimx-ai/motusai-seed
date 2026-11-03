@@ -93,13 +93,7 @@
       "vscode": "VS Code（GitHub Copilot）"
     },
     "discoveries": {
-      "label": "发现 Seed 新用法",
-      "items": {
-        "assistant": "让 MotusAI 主动关心你",
-        "memory": "让 AI 记住你的偏好",
-        "weixin": "把 MotusAI 带进微信",
-        "wecom": "把 MotusAI 带进企业微信"
-      }
+      "label": "发现 Seed 新用法"
     }
   },
   "signIn": {

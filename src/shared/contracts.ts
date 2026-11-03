@@ -26,6 +26,7 @@ export type SeedDistribution = {
 
 export type SeedDistributionEvent =
   | { ver: 1; type: 'announcement.changed'; dist_id: string; revision: string; occurred_at: string }
+  | { ver: 1; type: 'client.discoveries.changed'; dist_id: string; revision: string; occurred_at: string }
   | { ver: 1; type: 'plugin.catalog.changed'; dist_id: string; revision: string; occurred_at: string }
   | {
       ver: 1;
@@ -191,6 +192,7 @@ export type AuditPage = {
 
 export type SeedSnapshot = {
   announcements?: import('./announcements').SeedAnnouncement[];
+  companionDiscoveries?: import('./companion-discoveries').CompanionDiscovery[];
   appName: string;
   appVersion: string;
   platform: NodeJS.Platform;

@@ -71,6 +71,7 @@ import { SidecarProcessService } from './sidecar-process-service';
 import { discoverDistribution } from './distribution-discovery';
 import { SeedDistributionEvents } from './distribution-events';
 import { AnnouncementInbox } from './announcements';
+import { CompanionDiscoveryFeed } from './companion-discoveries';
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization';
 import { entitlementRefreshChangesRuntime, pluginInstallNeedsReload } from './entitlement-refresh';
 import { selectDevelopmentOverrides } from './plugin-source-selection';
@@ -179,6 +180,7 @@ export class SeedRuntime {
   private readonly updater: SeedUpdater;
   private readonly distributionEvents: SeedDistributionEvents;
   private readonly announcements: AnnouncementInbox;
+  private readonly companionDiscoveries: CompanionDiscoveryFeed;
   private readonly logUploader = new CloudDiagnosticUploader();
   private readonly creditBilling = new CreditBillingClient(this.seedCloudUrl, (rejectedToken) =>
     this.cloudAccessToken(rejectedToken),
@@ -771,6 +773,12 @@ export class SeedRuntime {
       (event) => void this.handleDistributionEvent(event).catch(() => undefined),
       () => void this.reconcileDistributionState().catch(() => undefined),
     );
+    this.companionDiscoveries = new CompanionDiscoveryFeed({
+      eventsUrl: async () => (await this.currentDistribution()).events_url,
+      readCache: () => this.store.readCompanionDiscoveries(buildConfig.distributionId),
+      writeCache: (value) => this.store.writeCompanionDiscoveries(buildConfig.distributionId, value),
+      changed: () => { void this.publishSnapshot(); },
+    });
     this.announcements = new AnnouncementInbox({
       userId: () => this.user?.id,
       eventsUrl: async () => (await this.currentDistribution()).events_url,
@@ -928,6 +936,7 @@ export class SeedRuntime {
 
   async initialize() {
     await this.store.load();
+    await this.companionDiscoveries.loadCache();
     this.developmentStatus = new PluginDevelopmentStatusWriter(
       join(app.getPath('userData'), 'plugins/development'),
       app.getVersion(),
@@ -958,6 +967,7 @@ export class SeedRuntime {
     if (this.user || this.developmentPlugins) this.configureWorker();
     this.updater.start();
     void this.currentDistribution().catch(() => undefined);
+    void this.companionDiscoveries.refresh();
     this.startupStatus = 'ready';
     await this.publishSnapshot();
     void this.refreshStartupCloudState(storedCloudSession).catch(() => undefined);
@@ -1222,6 +1232,7 @@ export class SeedRuntime {
       auth: this.authStatus,
       ...(this.user ? { user: this.user } : {}),
       announcements: this.user ? this.announcements.snapshot() : [],
+      companionDiscoveries: this.companionDiscoveries.snapshot(),
       plugins: this.installedPlugins
         .filter((plugin) => this.pluginIsAuthorized(plugin.id))
         .map((plugin) => {
@@ -1921,6 +1932,10 @@ export class SeedRuntime {
 
   private async handleDistributionEvent(event: SeedDistributionEvent) {
     if (event.dist_id !== buildConfig.distributionId) return;
+    if (event.type === 'client.discoveries.changed') {
+      await this.companionDiscoveries.refresh();
+      return;
+    }
     if (event.type === 'announcement.changed') {
       await this.announcements.refresh();
       return;
@@ -1951,6 +1966,7 @@ export class SeedRuntime {
 
   private async reconcileDistributionState() {
     await this.currentDistribution(true);
+    await this.companionDiscoveries.refresh();
     if (this.user)
       await Promise.all([this.refreshPluginCatalog().catch(() => undefined), this.announcements.refresh()]);
     await this.updater.check().catch(() => false);

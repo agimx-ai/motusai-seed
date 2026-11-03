@@ -421,6 +421,15 @@ export class SeedStore {
     return rows.map(fromAuditRow);
   }
 
+  async readCompanionDiscoveries(distributionId: string): Promise<string | undefined> {
+    const row = await this.getDatabase()<SettingRow>('app_settings').where({ key: `companion_discoveries:${distributionId}` }).first('value');
+    return row?.value;
+  }
+
+  async writeCompanionDiscoveries(distributionId: string, value: string) {
+    await this.setSetting(`companion_discoveries:${distributionId}`, value);
+  }
+
   async readAnnouncementIds(userId: string): Promise<string[]> {
     const prefix = `announcement_read:${userId}:`;
     const rows = await this.getDatabase()<SettingRow>('app_settings').where('key', 'like', `${prefix}%`).select('key');

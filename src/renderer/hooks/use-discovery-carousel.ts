@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { companionDiscoveries, discoveryTiming, type DiscoveryPhase } from '../lib/companion-discoveries'
+import { discoveryTiming, type DiscoveryPhase, type PreparedDiscovery } from '../lib/companion-discoveries'
 
 type Cursor = { index: number; phase: DiscoveryPhase }
 
-export function useDiscoveryCarousel(enabled: boolean, reducedMotion: boolean) {
+export function useDiscoveryCarousel(enabled: boolean, reducedMotion: boolean, incoming: PreparedDiscovery[]) {
+  const [items, setItems] = useState(incoming)
+  const incomingRef = useRef(incoming)
+  incomingRef.current = incoming
   const [cursor, setCursor] = useState<Cursor>({ index: 0, phase: 'look' })
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -30,7 +33,7 @@ export function useDiscoveryCarousel(enabled: boolean, reducedMotion: boolean) {
       remaining.current = discoveryTiming[cursor.phase]
       timedCursor.current = cursor
     }
-    if (!enabled || reducedMotion || hovered || focused || !visible) return
+    if (!enabled || reducedMotion || hovered || focused || !visible || !items.length) return
     const startedAt = performance.now()
     let completed = false
     const timer = window.setTimeout(() => {
@@ -38,7 +41,7 @@ export function useDiscoveryCarousel(enabled: boolean, reducedMotion: boolean) {
       const next: Cursor = cursor.phase === 'look'
         ? { ...cursor, phase: 'visible' }
         : cursor.phase === 'visible'
-          ? cursor.index < companionDiscoveries.length - 1
+          ? cursor.index < items.length - 1
             ? { index: cursor.index + 1, phase: 'look' }
             : { ...cursor, phase: 'front' }
           : cursor.phase === 'front' ? { ...cursor, phase: 'wink' }
@@ -46,18 +49,24 @@ export function useDiscoveryCarousel(enabled: boolean, reducedMotion: boolean) {
               : cursor.phase === 'rest' ? { ...cursor, phase: 'leaving' }
                 : cursor.phase === 'leaving' ? { index: 0, phase: 'gap' }
                   : { index: 0, phase: 'look' }
+      if (cursor.phase === 'leaving') setItems(incomingRef.current)
       setCursor(next)
     }, remaining.current)
     return () => {
       window.clearTimeout(timer)
       if (!completed) remaining.current = Math.max(0, remaining.current - (performance.now() - startedAt))
     }
-  }, [cursor, enabled, reducedMotion, hovered, focused, visible])
+  }, [cursor, enabled, reducedMotion, hovered, focused, visible, items.length])
+
+  useEffect(() => {
+    if (!items.length || reducedMotion) setItems(incoming)
+  }, [incoming, items.length, reducedMotion])
 
   return {
-    discovery: companionDiscoveries[cursor.index]!,
+    items,
+    discovery: items[cursor.index],
     phase: reducedMotion ? 'visible' as const : cursor.phase,
-    revealedCount: reducedMotion ? companionDiscoveries.length
+    revealedCount: reducedMotion ? items.length
       : cursor.phase === 'gap' ? 0 : cursor.phase === 'look' ? cursor.index : cursor.index + 1,
     visible,
     setHovered,

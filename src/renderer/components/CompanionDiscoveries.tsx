@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useDiscoveryCarousel } from '../hooks/use-discovery-carousel'
 import { useReducedMotion } from '../hooks/use-reduced-motion'
 import type { CompanionVisualState } from '../lib/companion'
-import { companionDiscoveries, discoveryFrontLook, discoveryIdleDelay } from '../lib/companion-discoveries'
+import type { CompanionDiscovery } from '../../shared/companion-discoveries'
+import { prepareDiscoveries, discoveryFrontLook, discoveryIdleDelay, type PreparedDiscovery } from '../lib/companion-discoveries'
 import { SeedlingMascot } from './SeedlingMascot'
 
 function bubbleOutline(width: number, height: number, looking: boolean) {
@@ -28,13 +29,13 @@ function bubbleOutline(width: number, height: number, looking: boolean) {
 }
 
 function DiscoveryBubble({ discovery, phase, looking, setHovered, setFocused }: {
-  discovery: typeof companionDiscoveries[number]
+  discovery: PreparedDiscovery
   phase: 'look' | 'visible' | 'leaving'
   looking: boolean
   setHovered: (value: boolean) => void
   setFocused: (value: boolean) => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const bubbleRef = useRef<HTMLAnchorElement>(null)
   const [bubbleSize, setBubbleSize] = useState({ width: 260, height: 46 })
 
@@ -62,20 +63,21 @@ function DiscoveryBubble({ discovery, phase, looking, setHovered, setFocused }: 
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false)
       }}>
-      <a ref={bubbleRef} className="seed-discovery-link" href={discovery.href} target="_blank" rel="noopener noreferrer">
+      <a ref={bubbleRef} className="seed-discovery-link" href={discovery.url} target="_blank" rel="noopener noreferrer">
         <svg className="seed-discovery-outline" viewBox={`0 0 ${bubbleSize.width + 48} ${bubbleSize.height + 48}`}
           aria-hidden="true" focusable="false">
           <path d={bubbleOutline(bubbleSize.width, bubbleSize.height, looking)} transform="translate(24 24)" vectorEffect="non-scaling-stroke" />
         </svg>
         <span className="seed-discovery-title">
-          {t(`overview.discoveries.items.${discovery.id}`)}
+          {discovery.title[i18n.resolvedLanguage?.startsWith('en') ? 'en-US' : 'zh-CN']}
           <ArrowUpRight size={12} strokeWidth={1.5} aria-hidden="true" />
         </span>
       </a>
   </div>
 }
 
-export function CompanionDiscoveries({ state, label }: { state: CompanionVisualState; label: string }) {
+export function CompanionDiscoveries({ state, label, items }: { state: CompanionVisualState; label: string; items: CompanionDiscovery[] }) {
+  const prepared = useMemo(() => prepareDiscoveries(items), [items])
   const reducedMotion = useReducedMotion()
   const [interacting, setInteracting] = useState(false)
   const [settled, setSettled] = useState(false)
@@ -89,7 +91,7 @@ export function CompanionDiscoveries({ state, label }: { state: CompanionVisualS
   }, [idle])
 
   const enabled = idle && settled
-  const carousel = useDiscoveryCarousel(enabled, reducedMotion)
+  const carousel = useDiscoveryCarousel(enabled, reducedMotion, prepared)
   const handleInteractionChange = useCallback((active: boolean) => {
     setInteracting(active)
     if (active) carousel.restart()
@@ -97,15 +99,15 @@ export function CompanionDiscoveries({ state, label }: { state: CompanionVisualS
   const revealedCount = interacting ? 0 : carousel.revealedCount
   const finishing = ['front', 'wink', 'rest', 'leaving', 'gap'].includes(carousel.phase)
   const look = enabled && carousel.visible && !reducedMotion
-    ? finishing ? discoveryFrontLook : carousel.discovery.look : null
+    ? finishing ? discoveryFrontLook : carousel.discovery?.look ?? null : null
 
   return <div className="seed-companion-stage" data-discovery-phase={carousel.phase} data-interacting={interacting}>
     <SeedlingMascot state={state} label={label} look={look}
       idleAnimation={enabled && carousel.visible && carousel.phase === 'wink' ? 'wink' : undefined}
       onInteractionChange={handleInteractionChange} />
-    {companionDiscoveries.map((discovery, index) => <DiscoveryBubble key={discovery.id} discovery={discovery}
+    {carousel.items.map((discovery, index) => <DiscoveryBubble key={discovery.corner} discovery={discovery}
       phase={index >= revealedCount ? 'look' : carousel.phase === 'leaving' ? 'leaving' : 'visible'}
-      looking={look !== null && !finishing && index < revealedCount && discovery.id === carousel.discovery.id}
+      looking={look !== null && !finishing && index < revealedCount && discovery.corner === carousel.discovery?.corner}
       setHovered={carousel.setHovered} setFocused={carousel.setFocused} />)}
   </div>
 }

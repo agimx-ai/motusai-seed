@@ -11,6 +11,8 @@ import workbuddyIcon from '@lobehub/icons-static-svg/icons/workbuddy-color.svg'
 import dshIcon from '@lobehub/icons-static-svg/icons/deepseek-color.svg'
 import vscodeIcon from '../assets/vscode.svg'
 
+const emptyDiscoveries: NonNullable<SeedSnapshot['companionDiscoveries']> = []
+
 const clients = [
   // Match the visible marks rather than their SVG canvas dimensions.
   { name: 'Claude Code', icon: claudeIcon, iconSize: 'size-5.5' },
@@ -55,7 +57,7 @@ export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
 
   return <section className="seed-overview flex min-h-full flex-col items-center justify-center gap-6 text-center animate-[rise_.25s_ease_both]">
     <div className="flex flex-col items-center">
-      <CompanionDiscoveries state={state} label={`${t('overview.interact')} · ${statusText}`} />
+      <CompanionDiscoveries state={state} label={`${t('overview.interact')} · ${statusText}`} items={snapshot.companionDiscoveries ?? emptyDiscoveries} />
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">{statusText}</p>
     </div>
     <div className="seed-mcp-connect flex w-full max-w-104 flex-col items-center gap-6">

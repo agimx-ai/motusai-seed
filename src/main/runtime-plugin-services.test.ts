@@ -227,6 +227,7 @@ describe('generic plugin SDK brokers', () => {
         languagePreference: () => 'en-US',
         themePreference: () => 'light',
       },
+      companionDiscoveries: { snapshot: () => [] },
       audioService: { snapshot: () => ({ state: 'stopping', duration_ms: 0, task_id: 'capture-task' }) },
       activeTaskIds: new Map([
         ['first', 'capture-task'],
