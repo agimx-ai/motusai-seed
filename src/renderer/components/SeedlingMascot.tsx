@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { buildConfig } from '../../shared/build-config.generated'
 import { companionInteraction, type CompanionInteraction, type CompanionVisualState } from '../lib/companion'
 import { NOTIF_BLUE, type DotRender } from '../lib/bloub/decor'
-import { BotEngine, type BotFrame } from '../lib/bloub/engine'
+import { BotEngine, type BotFrame, type Look } from '../lib/bloub/engine'
+import { useReducedMotion } from '../hooks/use-reduced-motion'
 import { bloubStateForPresentation } from '../lib/bloub/presentation'
 import { DEMI_VIEWBOX, RAYON } from '../lib/bloub/repere'
 import { mixHex } from '../lib/bloub/skins'
@@ -11,6 +12,9 @@ import { POSES } from '../lib/bloub/states'
 type SeedlingMascotProps = {
   state: CompanionVisualState
   label: string
+  look?: Look | null
+  idleAnimation?: 'wink'
+  onInteractionChange?: (active: boolean) => void
 }
 
 type ActiveInteraction = { name: CompanionInteraction; id: number }
@@ -33,19 +37,6 @@ function usePalette() {
   return palette
 }
 
-function useReducedMotion() {
-  const isReduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    || document.documentElement.dataset.reducedMotion === 'true'
-  const [reduced, setReduced] = useState(isReduced)
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const update = () => setReduced(isReduced())
-    query.addEventListener('change', update)
-    return () => query.removeEventListener('change', update)
-  }, [])
-  return reduced
-}
-
 function dotElement(dot: DotRender, key: string, ink: string, paper: string) {
   const fill = dot.color ?? (dot.depth === undefined ? ink : mixHex(paper, ink, dot.depth))
   return dot.d
@@ -53,10 +44,11 @@ function dotElement(dot: DotRender, key: string, ink: string, paper: string) {
     : <circle key={key} cx={dot.x} cy={dot.y} r={dot.r} fill={fill} opacity={dot.opacity} />
 }
 
-export function SeedlingMascot({ state, label }: SeedlingMascotProps) {
+export function SeedlingMascot({ state, label, look, idleAnimation, onInteractionChange }: SeedlingMascotProps) {
   const [interaction, setInteraction] = useState<ActiveInteraction | null>(null)
-  const targetState = bloubStateForPresentation(state, interaction?.name)
   const reducedMotion = useReducedMotion()
+  const idleOverlay = state === 'idle' && !interaction && !reducedMotion
+  const targetState = idleOverlay && idleAnimation ? idleAnimation : bloubStateForPresentation(state, interaction?.name)
   const { ink, paper } = usePalette()
   const engineRef = useRef<BotEngine | null>(null)
   if (!engineRef.current) engineRef.current = new BotEngine(RAYON, targetState)
@@ -68,6 +60,24 @@ export function SeedlingMascot({ state, label }: SeedlingMascotProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const uid = useId().replace(/:/g, '')
   const maskId = `bloub-mask-${uid}`
+  const directedLook = useRef(false)
+
+  useEffect(() => {
+    onInteractionChange?.(interaction !== null)
+  }, [interaction, onInteractionChange])
+
+  useEffect(() => {
+    // A look is only an idle overlay. Original states and click reactions always
+    // render with their own gaze, through the same continuously running engine.
+    if (idleOverlay && look) {
+      engine.setLook(look, clock.current)
+      directedLook.current = true
+    } else if (directedLook.current) {
+      const immediate = !idleOverlay
+      engine.setLook(null, clock.current - (immediate ? BotEngine.LOOK_MORPH : 0))
+      directedLook.current = false
+    }
+  }, [engine, look, targetState, idleOverlay])
 
   useEffect(() => {
     engine.setState(targetState, clock.current)

@@ -91,6 +91,15 @@
       "retry": "Retry",
       "clients": "Supported clients",
       "vscode": "VS Code (GitHub Copilot)"
+    },
+    "discoveries": {
+      "label": "Discover more with Seed",
+      "items": {
+        "assistant": "Let MotusAI look out for you",
+        "memory": "Let AI remember your preferences",
+        "weixin": "Bring MotusAI into WeChat",
+        "wecom": "Bring MotusAI into WeCom"
+      }
     }
   },
   "signIn": {

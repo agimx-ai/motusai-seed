@@ -3,7 +3,7 @@ import { Check, Copy, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ActionButton } from '@motus-ai/seed-sdk/react'
 import type { SeedSnapshot } from '../../shared/contracts'
-import { SeedlingMascot } from '../components/SeedlingMascot'
+import { CompanionDiscoveries } from '../components/CompanionDiscoveries'
 import { companionPresentation } from '../lib/companion'
 import claudeIcon from '@lobehub/icons-static-svg/icons/claudecode-color.svg'
 import codexIcon from '@lobehub/icons-static-svg/icons/codex.svg'
@@ -53,12 +53,12 @@ export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
   }
   const CopyIcon = copyState === 'copied' ? Check : copyState === 'failed' ? RotateCcw : Copy
 
-  return <section className="flex min-h-full flex-col items-center justify-center gap-6 text-center animate-[rise_.25s_ease_both]">
+  return <section className="seed-overview flex min-h-full flex-col items-center justify-center gap-6 text-center animate-[rise_.25s_ease_both]">
     <div className="flex flex-col items-center">
-      <SeedlingMascot state={state} label={`${t('overview.interact')} · ${statusText}`} />
+      <CompanionDiscoveries state={state} label={`${t('overview.interact')} · ${statusText}`} />
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">{statusText}</p>
     </div>
-    <div className="seed-mcp-connect flex w-full max-w-104 translate-y-6 flex-col items-center gap-6">
+    <div className="seed-mcp-connect flex w-full max-w-104 flex-col items-center gap-6">
       <div className="relative grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--border)_75%,var(--input))] bg-card p-1.5">
         <span className="seed-mcp-border-beam" aria-hidden="true" />
         <p className="col-start-2 m-0 min-w-0 text-center text-[length:var(--text-input-font-size)] text-foreground">{t('overview.mcp.instruction')}</p>
