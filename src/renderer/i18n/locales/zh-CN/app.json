@@ -35,6 +35,7 @@
   },
   "nav": {
     "mainNavigation": "主导航",
+    "quickActions": "快捷操作",
     "expandSection": "展开{{name}}",
     "collapseSection": "收起{{name}}",
     "overview": "伙伴",

@@ -35,6 +35,7 @@
   },
   "nav": {
     "mainNavigation": "Main navigation",
+    "quickActions": "Quick actions",
     "expandSection": "Expand {{name}}",
     "collapseSection": "Collapse {{name}}",
     "overview": "Companion",

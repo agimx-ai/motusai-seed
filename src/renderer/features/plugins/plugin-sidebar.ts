@@ -5,7 +5,7 @@ export type PluginPageTarget = Readonly<{ view: string; params?: Readonly<Record
 export type PluginSidebarRoute = PluginPageTarget & { key: string; pluginId: string; title: string };
 type Owner = { ready: boolean; items: Map<string, PluginSidebarItem> };
 const idPattern = /^[a-z][a-z0-9._-]{0,127}$/;
-const hostSlots = new Set(['overview', 'plugins', 'activity']);
+const hostSlots = new Set(['overview', 'plugins', 'activity', 'quick-actions']);
 const empty: readonly PluginSidebarEntry[] = Object.freeze([]);
 
 /** Owns only generic navigation metadata. Plugin data and page rendering stay in the plugin. */
@@ -41,6 +41,7 @@ export class PluginSidebarRegistry {
     };
     return {
       api: {
+        supportsHost: (host) => hostSlots.has(host),
         register: (item) => {
           assertCurrent();
           if (owner.items.has(item.id)) throw new Error('Duplicate plugin navigation item: ' + item.id);
@@ -140,6 +141,8 @@ export class PluginSidebarRegistry {
       if ('host' in item.parent) {
         if (Object.keys(item.parent).length !== 1 || !hostSlots.has(item.parent.host))
           throw new Error('Unknown navigation extension position.');
+        if (item.parent.host === 'quick-actions' && (!item.onSelect || item.badge !== undefined))
+          throw new Error('Quick actions must be standalone menu actions.');
       } else {
         if (Object.keys(item.parent).length !== 1 || !idPattern.test(item.parent.item))
           throw new Error('Invalid plugin navigation parent.');
@@ -167,6 +170,8 @@ export class PluginSidebarRegistry {
         seen.add(parent.item);
         if (++depth > 4) throw new Error('Plugin navigation is too deeply nested.');
         parent = candidates.get(parent.item)?.parent;
+        if (parent && 'host' in parent && parent.host === 'quick-actions')
+          throw new Error('Quick actions cannot contain navigation items.');
       }
     }
     return Object.freeze({

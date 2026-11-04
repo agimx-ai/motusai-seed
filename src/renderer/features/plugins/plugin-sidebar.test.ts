@@ -2,6 +2,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { PluginSidebarRegistry } from './plugin-sidebar';
 
 describe('plugin sidebar ownership and routing', () => {
+  it('supports quick actions and removes them with their owning frontend', () => {
+    const registry = new PluginSidebarRegistry();
+    const owner = registry.attach('com.example.one');
+    const parent = { host: 'quick-actions' };
+    const onSelect = vi.fn();
+    expect(owner.api.supportsHost?.(parent.host)).toBe(true);
+    const handle = owner.api.register({ id: 'new', title: 'New', parent, onSelect });
+    expect(() => owner.api.register({ id: 'page', title: 'Page', parent, view: 'page' })).toThrow('menu actions');
+    expect(() => owner.api.register({ id: 'child', title: 'Child', parent: { item: 'new' } })).toThrow('cannot contain');
+    handle.update({ title: 'Create' });
+    expect(registry.snapshot()[0].title).toBe('Create');
+    expect(registry.open('com.example.one:new')).toBe(true);
+    owner.dispose();
+    expect(registry.open('com.example.one:new')).toBe(false);
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
   it('runs sidebar actions without changing the route and cleans them up with their owner', async () => {
     const registry = new PluginSidebarRegistry();
     const owner = registry.attach('com.example.one');

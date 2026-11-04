@@ -45,6 +45,11 @@ app.whenReady().then(async () => {
             const root = this.addNavigationItem({ id: 'root', title: '${name}', icon: 'folder', ${parent ? `parent: { host: '${parent}' },` : ''} });
             const page = this.addNavigationItem({ id: 'record', title: '${name} record', icon: 'messages-square', view: 'page', parent: { item: 'root' }, params: { record: '123' }, badge: 2 });
             this.addNavigationItem({ id: 'broken', title: '${name} broken', view: 'page', parent: { item: 'root' }, params: { record: 'broken' } });
+            if (!this.app.sidebar?.supportsHost?.('quick-actions')) throw new Error('Missing quick actions host');
+            this.addNavigationItem({
+              id: 'create', title: '${name} create', icon: 'message-circle', parent: { host: 'quick-actions' },
+              onSelect: () => { document.body.dataset.quickAction = '${name}'; },
+            });
             this.registerEvent(this.app.events.on('appearance-change', () => page.update({ title: this.app.locale === 'en-US' ? '${name} record' : '${name} 记录' })));
           }
         }
@@ -79,6 +84,24 @@ app.whenReady().then(async () => {
     };
     const clickLabel = label => evaluate(`(()=>{const label=[...document.querySelectorAll('aside button span')].find(el=>el.textContent===${JSON.stringify(label)});if(!label)throw Error('Missing navigation button');label.closest('button').click()})()`);
     await wait(`document.querySelector('aside')?.textContent.includes('documents record') && document.querySelector('aside')?.textContent.includes('monitor record')`);
+    const quickTrigger = 'aside button[aria-haspopup="menu"][aria-label="Quick actions"]';
+    const quickMenu = `document.querySelector('[role="menu"][aria-label="Quick actions"], [role="menu"][aria-label="快捷操作"]')`;
+    const openQuickActions = () => evaluate(`document.querySelector(${JSON.stringify(quickTrigger)}).click()`);
+    assert.equal(await evaluate(`!document.querySelector('aside nav')?.textContent.includes('documents create')`), true);
+    await openQuickActions();
+    await wait(`document.activeElement?.textContent === 'documents create'`);
+    await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))`);
+    await wait(`document.activeElement?.textContent === 'monitor create'`);
+    await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await wait(`document.activeElement === document.querySelector(${JSON.stringify(quickTrigger)}) && !${quickMenu}`);
+    await openQuickActions();
+    await wait(`!!${quickMenu}`);
+    await evaluate(`document.querySelector('main').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))`);
+    await wait(`!${quickMenu}`);
+    await openQuickActions();
+    await wait(`!!${quickMenu}`);
+    await evaluate(`[...${quickMenu}.querySelectorAll('button')].find(item => item.textContent === 'monitor create').click()`);
+    await wait(`document.body.dataset.quickAction === 'monitor' && !${quickMenu}`);
     assert.equal(await evaluate(`!![...document.querySelectorAll('aside button')].find(el=>el.textContent.includes('documents record'))?.querySelector('svg.lucide-messages-square')`), true);
     assert.equal(await evaluate('!!document.querySelector("[data-plugin-view-surface]")'), false, 'Navigation registered before any plugin detail was opened');
     await clickLabel('documents record');
@@ -102,6 +125,26 @@ app.whenReady().then(async () => {
       await wait(`document.documentElement.lang === ${JSON.stringify(locale)} && document.documentElement.dataset.theme === ${JSON.stringify(theme)} && document.querySelector('aside')?.textContent.includes(${JSON.stringify(title)})`);
       assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'), false);
       await writeFile(join(screenshots, `${theme}-${width}-${locale}.png`), (await owner.webContents.capturePage()).toPNG());
+      const triggerSelector = `aside button[aria-label="${locale === 'en-US' ? 'Quick actions' : '快捷操作'}"]`;
+      await evaluate(`document.querySelector(${JSON.stringify(triggerSelector)}).click()`);
+      await wait(`!!${quickMenu}`);
+      assert.equal(await evaluate(`(() => {
+        const sidebar = document.querySelector('aside').getBoundingClientRect();
+        const trigger = document.querySelector(${JSON.stringify(triggerSelector)}).getBoundingClientRect();
+        const popup = ${quickMenu};
+        const menu = popup.getBoundingClientRect();
+        const pointer = popup.querySelector('svg').getBoundingClientRect();
+        const center = trigger.left + trigger.width / 2;
+        const centered = Math.abs(center - menu.left - menu.width / 2) < 1;
+        const pointed = Math.abs(center - pointer.left - pointer.width / 2) < 1 && pointer.top < menu.top;
+        return centered && pointed && menu.right > sidebar.right && menu.right <= innerWidth - 8;
+      })()`), true);
+      if (width === 960) {
+        await evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        await writeFile(join(screenshots, `quick-actions-${theme}-${locale}.png`), (await owner.webContents.capturePage({ x: 0, y: 30, width: 320, height: 160 })).toPNG());
+      }
+      await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+      await wait(`!${quickMenu}`);
     }
     owner.maximize(); await wait('innerWidth > 1280');
     owner.unmaximize(); await wait('innerWidth === 1280');
@@ -112,6 +155,9 @@ app.whenReady().then(async () => {
     monitorInstalled.enabled = false;
     owner.webContents.send('seed:event', { type: 'snapshot.changed', snapshot: structuredClone(snapshot) });
     await wait(`!document.querySelector('aside')?.textContent.includes('monitor record') && !document.querySelector('[data-fixture="monitor"]')`);
+    await openQuickActions();
+    await wait(`!!${quickMenu}`);
+    assert.equal(await evaluate(`${quickMenu}.textContent`), 'documents create');
     await monitor.view.destroy();
     assert.deepEqual(errors, []);
     process.stdout.write('Sidebar smoke passed: two unrelated SDK plugins, background registration, host and top-level groups, isolated view routing/state, no redundant toolbar, disable cleanup, light/dark, Chinese/English, 960/1280, maximize/restore and native scrolling.\nScreenshots: ' + screenshots + '\n');

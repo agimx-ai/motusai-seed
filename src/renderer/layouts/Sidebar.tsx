@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SeedSnapshot } from '../../shared/contracts';
 import { SidebarNavigation } from './SidebarNavigation';
+import { SidebarQuickActions } from './SidebarQuickActions';
 import type { PluginSidebarEntry } from '../features/plugins/plugin-sidebar';
 import { UserAvatar } from '../components/UserAvatar';
 import { SidebarToggleButton } from '../components/SidebarToggleButton';
@@ -189,6 +190,7 @@ export function Sidebar({
                 )}
               </button>
             </Tooltip>
+            <SidebarQuickActions collapsed={collapsed} />
             {window.motusWindow.platform !== 'darwin' && (
               <SidebarToggleButton className="h-6 w-6" collapsed={false} onToggle={onToggle} />
             )}

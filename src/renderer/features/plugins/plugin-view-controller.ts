@@ -77,6 +77,7 @@ export class PluginViewController {
     };
     this.app = {
       sidebar: {
+        supportsHost: (host) => this.sidebar?.api.supportsHost?.(host) ?? false,
         register: (item) => {
           this.assertActive();
           if (!this.sidebar) throw new Error('Plugin has not started.');

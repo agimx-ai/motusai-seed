@@ -5,7 +5,7 @@ export type PluginSidebarItem = {
   title: string;
   /** Lucide icon name, for example "message-circle". */
   icon?: string;
-  /** Omit for a top-level contribution. Host positions: overview, plugins, activity. */
+  /** Omit for a top-level contribution. Host positions include quick-actions for onSelect actions. */
   parent?: { host: string } | { item: string };
   /** A type registered with Plugin.registerView. Omit for an expandable group. */
   view?: string;
@@ -24,6 +24,8 @@ export type PluginSidebarHandle = {
 
 export type PluginSidebar = {
   register(item: PluginSidebarItem): PluginSidebarHandle;
+  /** Check whether the host provides a navigation position. Feature-detect on older clients. */
+  supportsHost?(host: string): boolean;
   /** Opens one of this plugin's registered pages through the product navigation. */
   open(id: string): Promise<boolean>;
 };

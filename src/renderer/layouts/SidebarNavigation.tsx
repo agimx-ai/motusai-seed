@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { cx, type View } from '../lib/display';
 import { pluginSidebar, type PluginSidebarEntry } from '../features/plugins/plugin-sidebar';
 
-function EntryIcon({ name }: { name?: string }) {
+export function SidebarEntryIcon({ name }: { name?: string }) {
   const key = name?.replace(/(^|-)([a-z])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
   const Icon = key ? (icons[key as keyof typeof icons] ?? Circle) : Circle;
   return <Icon size={17} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />;
@@ -106,7 +106,7 @@ export function SidebarNavigation({
     node(
       entry.key,
       entry.title,
-      <EntryIcon name={entry.icon} />,
+      <SidebarEntryIcon name={entry.icon} />,
       view === 'plugin-view' && entry.key === selectedKey,
       entries.filter(
         (child) =>

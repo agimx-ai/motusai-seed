@@ -305,6 +305,7 @@ export default class GreetingService extends PluginService {
 
 - 打开页面时，先用 `this.registerView()` 注册页面，再在入口上指定对应的 `view`。需要区分多条记录时，通过 `params` 传入记录 ID。
 - 打开弹窗等操作用 `onSelect`，点击后用户留在当前页面。
+- 要把操作放到通知铃铛旁的「+」菜单，先用 `this.app.sidebar?.supportsHost?.('quick-actions')` 检查支持，再为操作指定 `parent: { host: 'quick-actions' }`。例如用 `onSelect` 打开插件自己的新建弹窗。
 - 标题、顺序或未读数变化时，用注册返回的句柄更新入口。要从插件内打开一个已注册的入口，可调用 `this.app.sidebar.open(id)`。
 
 在 `onload()` 注册入口。已启用的官方插件会在用户进入 Seed 后提供入口，社区插件会在用户首次打开插件时注册入口。发布插件时，将 `minAppVersion` 设为首个支持该接口的客户端版本。

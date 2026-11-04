@@ -532,7 +532,8 @@
 
 .seed-account-menu {
   border-color: var(--overlay-border);
-  background: rgba(247, 251, 252, 0.94);
+  --sidebar-menu-surface: rgba(247, 251, 252, 0.94);
+  background: var(--sidebar-menu-surface);
   box-shadow: var(--overlay-shadow);
   backdrop-filter: blur(20px) saturate(1.15);
   --sidebar-menu-divider: rgba(30, 50, 58, 0.09);
@@ -553,16 +554,16 @@
 }
 
 :root[data-theme='dark'] .seed-account-menu {
-  background: rgba(39, 55, 63, 0.95);
+  --sidebar-menu-surface: rgba(39, 55, 63, 0.95);
   --sidebar-menu-divider: rgba(255, 255, 255, 0.09);
 }
 
 :root[data-platform='darwin'][data-theme='dark'] .seed-account-menu {
-  background: rgba(32, 32, 32, 0.84);
+  --sidebar-menu-surface: rgba(32, 32, 32, 0.84);
 }
 
 :root[data-platform='win32'][data-theme='dark'] .seed-account-menu {
-  background: rgba(32, 32, 32, 0.84);
+  --sidebar-menu-surface: rgba(32, 32, 32, 0.84);
 }
 
 /* App assets follow the explicit theme, including a manual override of system appearance. */
