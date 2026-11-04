@@ -1,10 +1,12 @@
 import { Blocks, ChevronDown, ChevronRight, Circle, History, Sprout, icons } from 'lucide-react';
+import { ThemedIcon } from '@motus-ai/seed-sdk/react';
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cx, type View } from '../lib/display';
 import { pluginSidebar, type PluginSidebarEntry } from '../features/plugins/plugin-sidebar';
 
-export function SidebarEntryIcon({ name }: { name?: string }) {
+export function SidebarEntryIcon({ name, sources }: { name?: string; sources?: PluginSidebarEntry['iconSources'] }) {
+  if (sources) return <ThemedIcon iconDataUrl={sources.light} iconDarkDataUrl={sources.dark} className="h-[17px] w-[17px]" />;
   const key = name?.replace(/(^|-)([a-z])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
   const Icon = key ? (icons[key as keyof typeof icons] ?? Circle) : Circle;
   return <Icon size={17} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />;
@@ -106,7 +108,7 @@ export function SidebarNavigation({
     node(
       entry.key,
       entry.title,
-      <SidebarEntryIcon name={entry.icon} />,
+      <SidebarEntryIcon name={entry.icon} sources={entry.iconSources} />,
       view === 'plugin-view' && entry.key === selectedKey,
       entries.filter(
         (child) =>

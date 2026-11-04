@@ -3,8 +3,10 @@ export type PluginSidebarItem = {
   /** Stable within the owning plugin. */
   id: string;
   title: string;
-  /** Lucide icon name, for example "message-circle". */
+  /** Lucide icon name, for example "message-circle". Used when no SVG is supplied or on older clients. */
   icon?: string;
+  /** Package-relative paths to declared SVG resources. Light is reused when dark is omitted. */
+  iconAsset?: Readonly<{ light: string; dark?: string }>;
   /** Omit for a top-level contribution. Host positions include quick-actions for onSelect actions. */
   parent?: { host: string } | { item: string };
   /** A type registered with Plugin.registerView. Omit for an expandable group. */

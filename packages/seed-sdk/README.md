@@ -308,6 +308,7 @@ export default class GreetingService extends PluginService {
 - 打开弹窗等操作用 `onSelect`，点击后用户留在当前页面。
 - 要把操作放到通知铃铛旁的「+」菜单，先用 `this.app.sidebar?.supportsHost?.('quick-actions')` 检查支持，再为操作指定 `parent: { host: 'quick-actions' }`。例如用 `onSelect` 打开插件自己的新建弹窗。
 - 标题、顺序或未读数变化时，用注册返回的句柄更新入口。要从插件内打开一个已注册的入口，可调用 `this.app.sidebar.open(id)`。
+- 默认用 `icon` 指定 Lucide 图标名。也可以用 `iconAsset: { light, dark? }` 指定插件已声明的 SVG 资源路径。省略 `dark` 时，两种主题共用 `light`。旧版 Seed 会使用 `icon`。
 
 在 `onload()` 注册入口。已启用的官方插件会在用户进入 Seed 后提供入口，社区插件会在用户首次打开插件时注册入口。发布插件时，将 `minAppVersion` 设为首个支持该接口的客户端版本。
 

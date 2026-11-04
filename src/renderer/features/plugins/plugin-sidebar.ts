@@ -1,9 +1,10 @@
-import type { PluginSidebar, PluginSidebarItem } from '@motus-ai/seed-sdk';
+import type { PluginResources, PluginSidebar, PluginSidebarItem } from '@motus-ai/seed-sdk';
 
-export type PluginSidebarEntry = Readonly<PluginSidebarItem & { key: string; pluginId: string }>;
+type RegisteredItem = PluginSidebarItem & { iconSources?: Readonly<{ light: string; dark?: string }> };
+export type PluginSidebarEntry = Readonly<RegisteredItem & { key: string; pluginId: string }>;
 export type PluginPageTarget = Readonly<{ view: string; params?: Readonly<Record<string, string>> }>;
 export type PluginSidebarRoute = PluginPageTarget & { key: string; pluginId: string; title: string };
-type Owner = { items: Map<string, PluginSidebarItem> };
+type Owner = { items: Map<string, RegisteredItem>; resolveResource?: PluginResources['url'] };
 const idPattern = /^[a-z][a-z0-9._-]{0,127}$/;
 const hostSlots = new Set(['overview', 'plugins', 'activity', 'quick-actions']);
 const empty: readonly PluginSidebarEntry[] = Object.freeze([]);
@@ -37,8 +38,8 @@ export class PluginSidebarRegistry {
     };
   }
 
-  attach(pluginId: string): { api: PluginSidebar; dispose(): void } {
-    const owner: Owner = { items: new Map() };
+  attach(pluginId: string, resolveResource?: PluginResources['url']): { api: PluginSidebar; dispose(): void } {
+    const owner: Owner = { items: new Map(), resolveResource };
     this.owners.set(pluginId, owner);
     this.publish();
     const assertCurrent = () => {
@@ -113,7 +114,7 @@ export class PluginSidebarRegistry {
     return true;
   }
 
-  private validate(item: PluginSidebarItem, owner: Owner): PluginSidebarItem {
+  private validate(item: PluginSidebarItem, owner: Owner): RegisteredItem {
     if (
       !idPattern.test(item.id) ||
       typeof item.title !== 'string' ||
@@ -121,7 +122,7 @@ export class PluginSidebarRegistry {
       item.title.length > 160 ||
       (item.view !== undefined && !idPattern.test(item.view)) ||
       (item.onSelect !== undefined && (typeof item.onSelect !== 'function' || item.view !== undefined)) ||
-      (item.icon !== undefined && !idPattern.test(item.icon)) ||
+      (item.icon !== undefined && (typeof item.icon !== 'string' || !idPattern.test(item.icon))) ||
       (item.order !== undefined && (!Number.isFinite(item.order) || Math.abs(item.order) > 10000)) ||
       (item.badge !== undefined && (!Number.isSafeInteger(item.badge) || item.badge < 0))
     )
@@ -178,8 +179,22 @@ export class PluginSidebarRegistry {
           throw new Error('Quick actions cannot contain navigation items.');
       }
     }
+    const { iconAsset } = item;
+    let iconSources: RegisteredItem['iconSources'];
+    if (iconAsset !== undefined) {
+      const resolveResource = owner.resolveResource;
+      if (!resolveResource || !iconAsset || typeof iconAsset.light !== 'string' || !iconAsset.light.endsWith('.svg') ||
+          (iconAsset.dark !== undefined && (typeof iconAsset.dark !== 'string' || !iconAsset.dark.endsWith('.svg'))))
+        throw new Error('Plugin navigation icons must reference declared SVG resources.');
+      iconSources = Object.freeze({
+        light: resolveResource(iconAsset.light),
+        dark: iconAsset.dark === undefined ? undefined : resolveResource(iconAsset.dark),
+      });
+    }
     return Object.freeze({
       ...item,
+      iconAsset: iconAsset && Object.freeze({ light: iconAsset.light, dark: iconAsset.dark }),
+      iconSources,
       ...(item.parent ? { parent: Object.freeze({ ...item.parent }) } : {}),
       ...(item.params ? { params: Object.freeze({ ...item.params }) } : {}),
     });

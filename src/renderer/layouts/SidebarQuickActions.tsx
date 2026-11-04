@@ -166,7 +166,7 @@ export function SidebarQuickActions({ collapsed }: { collapsed: boolean }) {
                   }
                 }}
               >
-                <SidebarEntryIcon name={entry.icon} />
+                <SidebarEntryIcon name={entry.icon} sources={entry.iconSources} />
                 <span className="truncate">{entry.title}</span>
               </button>
             ))}

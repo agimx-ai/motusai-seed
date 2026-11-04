@@ -251,7 +251,8 @@ export class PluginViewController {
     this.assertActive();
     if (this.plugin) throw new Error('Plugin view controller already started.');
     this.app.i18n = createPluginI18n(manifest.translations, this.app.locale);
-    this.sidebar = pluginSidebar.attach(manifest.id);
+    const resources = this.app.resources;
+    this.sidebar = pluginSidebar.attach(manifest.id, resources?.url.bind(resources));
     const plugin = (this.plugin = new Constructor(this.app, manifest));
     try {
       await plugin.load();

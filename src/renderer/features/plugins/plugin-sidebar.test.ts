@@ -1,7 +1,28 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createPluginResources } from '@motus-ai/seed-sdk';
 import { PluginSidebarRegistry } from './plugin-sidebar';
 
 describe('plugin sidebar ownership and routing', () => {
+  it('resolves only SVGs declared by the owner and preserves the icon after a rejected update', () => {
+    const registry = new PluginSidebarRegistry();
+    const resources = createPluginResources('seed-plugin://example/main.js', ['light.svg', 'dark.svg', 'other.png']);
+    const owner = registry.attach('com.example.one', resources.url);
+    const iconAsset = { light: 'light.svg', dark: 'dark.svg' };
+    const handle = owner.api.register({ id: 'room', title: 'Room', icon: 'messages-square', iconAsset });
+    iconAsset.light = 'undeclared.svg';
+    expect(() => handle.update({ iconAsset })).toThrow('not declared');
+    expect(() => handle.update({ iconAsset: { light: 'other.png' } })).toThrow('declared SVG');
+    expect(() => handle.update({ iconAsset: { light: 'https://example.org/icon.svg' } })).toThrow('not declared');
+    handle.update({ title: 'Renamed room' });
+    expect(registry.snapshot()[0]).toMatchObject({
+      title: 'Renamed room',
+      iconSources: { light: 'seed-plugin://example/light.svg', dark: 'seed-plugin://example/dark.svg' },
+    });
+    handle.update({ iconAsset: undefined });
+    expect(registry.snapshot()[0].iconSources).toBeUndefined();
+    expect(registry.snapshot()[0].icon).toBe('messages-square');
+  });
+
   it('supports quick actions and removes them with their owning frontend', () => {
     const registry = new PluginSidebarRegistry();
     const owner = registry.attach('com.example.one');

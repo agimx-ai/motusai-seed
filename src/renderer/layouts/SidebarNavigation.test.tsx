@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import i18next from 'i18next';
 import { I18nextProvider } from 'react-i18next';
+import { createPluginResources } from '@motus-ai/seed-sdk';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { seedI18nResources } from '../i18n/resources';
 import { pluginSidebar } from '../features/plugins/plugin-sidebar';
@@ -13,7 +14,8 @@ afterEach(() => {
   dispose.splice(0).forEach((release) => release());
 });
 function fixture() {
-  const owner = pluginSidebar.attach('com.example.docs');
+  const resources = createPluginResources('seed-plugin://docs/main.js', ['light.svg', 'dark.svg']);
+  const owner = pluginSidebar.attach('com.example.docs', resources.url);
   dispose.push(owner.dispose);
   const other = pluginSidebar.attach('com.example.status');
   dispose.push(other.dispose);
@@ -55,6 +57,16 @@ describe('host-rendered plugin navigation', () => {
     const button = screen.getByRole('button', { name: 'Inbox, 2' });
     expect(button.querySelector('svg.lucide-messages-square')).not.toBeNull();
     expect(button.querySelectorAll('img')).toHaveLength(0);
+  });
+  it('renders theme variants from the owning plugin and supports a single SVG', () => {
+    const { handle } = fixture();
+    const button = screen.getByRole('button', { name: 'Inbox, 2' });
+    act(() => handle.update({ iconAsset: { light: 'light.svg', dark: 'dark.svg' } }));
+    expect(button.querySelector('.seed-themed-icon-light')?.getAttribute('src')).toBe('seed-plugin://docs/light.svg');
+    expect(button.querySelector('.seed-themed-icon-dark')?.getAttribute('src')).toBe('seed-plugin://docs/dark.svg');
+    act(() => handle.update({ iconAsset: { light: 'light.svg' } }));
+    expect(button.querySelectorAll('img')).toHaveLength(1);
+    expect(button.querySelector('img')?.className).not.toContain('seed-themed-icon-light');
   });
   it('renders separate extension positions and routes through owner-scoped metadata', () => {
     const { open, navigate } = fixture();
