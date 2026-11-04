@@ -24,6 +24,7 @@ import {
   filterActivityEntries,
 } from '../features/activity/activity-model';
 import { cx } from '../lib/display';
+import { HeaderActionButton } from '../components/HeaderActionButton';
 
 const pageSize = 50;
 
@@ -90,22 +91,18 @@ export function ActivityActions({
   return (
     <>
       <div className="relative [-webkit-app-region:no-drag]" ref={containerRef}>
-        <button
+        <HeaderActionButton
           aria-controls={open ? menuId : undefined}
           aria-expanded={open}
           aria-haspopup="menu"
           aria-label={t('activity.moreActions')}
-          className={cx(
-            'grid place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground [-webkit-app-region:no-drag]',
-            open && 'bg-muted text-foreground',
-            isWindows ? 'h-8 w-8' : 'h-9 w-9',
-          )}
+          className={cx(open && 'bg-muted text-foreground')}
           onClick={() => setOpen((value) => !value)}
           ref={triggerRef}
           type="button"
         >
           <MoreHorizontal size={18} />
-        </button>
+        </HeaderActionButton>
         {open && (
           <div
             className={cx(

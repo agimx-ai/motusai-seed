@@ -39,9 +39,9 @@ export function registerIpc(runtime: SeedRuntime) {
     if (!window) throw new Error('Plugin view requires the product window.');
     return runtime.mountPluginView(window, mountPluginViewSchema.parse(input));
   });
-  handle(ipcChannels.unmountPluginView, (event, token) => {
+  handle(ipcChannels.unmountPluginView, (event, token, release) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    if (window) runtime.unmountPluginView(window, z.string().uuid().parse(token));
+    if (window) return runtime.unmountPluginView(window, z.string().uuid().parse(token), z.boolean().optional().parse(release));
   });
   handle(ipcChannels.snapshot, () => runtime.snapshot());
   handle(ipcChannels.copyMcpSetupPrompt, () => runtime.copyMcpSetupPrompt());

@@ -2,6 +2,7 @@ import type { PluginBreadcrumb, PluginNavigation, PluginNavigationOptions } from
 
 export type PluginBreadcrumbState = {
   path: readonly PluginBreadcrumb[];
+  actions?: readonly { id: string; label: string; icon: string; onClick(): void }[];
   busy: boolean;
   navigate(id: string | null): Promise<boolean>;
 };
@@ -11,6 +12,7 @@ export type PluginHeaderNavigation = PluginBreadcrumbState & { pluginId: string 
 type Scope = {
   options: PluginNavigationOptions;
   path: readonly PluginBreadcrumb[];
+  actions: readonly { id: string; label: string; icon: string; onClick(): void }[];
   revision: number;
   pending?: AbortController;
   dispose(): void;
@@ -34,6 +36,7 @@ export class PluginNavigationController {
         const scope: Scope = {
           options,
           path: [],
+          actions: [],
           revision: 0,
           dispose: () => {
             options.signal.removeEventListener('abort', scope.dispose);
@@ -48,6 +51,24 @@ export class PluginNavigationController {
         options.signal.addEventListener('abort', scope.dispose, { once: true });
         this.publish(scope);
         return {
+          setActions: (actions) => {
+            if (!this.current(scope)) throw new Error('Plugin navigation is no longer active.');
+            const next = actions.map(({ id, label, icon, onClick }) =>
+              Object.freeze({
+                id, label, icon,
+                onClick: () => {
+                  if (!this.current(scope) || scope.actions !== next) return;
+                  try {
+                    onClick();
+                  } catch (error) {
+                    this.report(error);
+                  }
+                },
+              }),
+            );
+            scope.actions = next;
+            this.publish(scope);
+          },
           setPath: (path) => {
             if (!this.current(scope)) throw new Error('Plugin navigation is no longer active.');
             const ids = new Set<string>();
@@ -80,6 +101,7 @@ export class PluginNavigationController {
     if (!this.current(scope)) return;
     this.change({
       path: scope.path,
+      actions: scope.actions,
       busy: !!scope.pending,
       navigate: async (id) => {
         try {

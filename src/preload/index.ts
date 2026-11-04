@@ -76,7 +76,7 @@ const api: SeedApi = {
       ipcRenderer.removeListener(ipcChannels.pluginViewEvent, receive);
     };
   },
-  unmountPluginView: (token) => ipcRenderer.invoke(ipcChannels.unmountPluginView, token),
+  unmountPluginView: (token, release) => ipcRenderer.invoke(ipcChannels.unmountPluginView, token, release),
   listOrphanedPluginData: () => ipcRenderer.invoke(ipcChannels.listOrphanedPluginData),
   resetOrphanedPluginData: (ids) => ipcRenderer.invoke(ipcChannels.resetOrphanedPluginData, ids),
   snapshot: () => ipcRenderer.invoke(ipcChannels.snapshot),

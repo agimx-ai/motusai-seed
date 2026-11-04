@@ -1,8 +1,9 @@
-import { Bell, Blocks, CircleGauge, History, LoaderCircle, LogOut, Settings, Sprout, X } from 'lucide-react';
+import { Bell, CircleGauge, LoaderCircle, LogOut, Settings, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SeedSnapshot } from '../../shared/contracts';
-import { NavItem } from '../components/NavItem';
+import { SidebarNavigation } from './SidebarNavigation';
+import type { PluginSidebarEntry } from '../features/plugins/plugin-sidebar';
 import { UserAvatar } from '../components/UserAvatar';
 import { SidebarToggleButton } from '../components/SidebarToggleButton';
 import { CreditUsageButton } from '../components/CreditUsageButton';
@@ -16,10 +17,12 @@ const accountMenuSurfaceClass =
 type SidebarProps = {
   collapsed: boolean;
   view: View;
+  selectedNavigationKey?: string;
   snapshot: SeedSnapshot;
   loggingOut: boolean;
   pluginUpdateCount: number;
   onNavigate: (view: View) => void;
+  onOpenPlugin: (entry: PluginSidebarEntry) => void;
   onShowPluginUpdates: () => void;
   onLogout: () => void;
   onDownloadUpdate: () => void;
@@ -31,10 +34,12 @@ type SidebarProps = {
 export function Sidebar({
   collapsed,
   view,
+  selectedNavigationKey,
   snapshot,
   loggingOut,
   pluginUpdateCount,
   onNavigate,
+  onOpenPlugin,
   onShowPluginUpdates,
   onLogout,
   onDownloadUpdate,
@@ -193,26 +198,7 @@ export function Sidebar({
           <SettingsNavigation view={view} onNavigate={navigate} />
         ) : (
           <>
-            <nav className="grid gap-0.5">
-              <NavItem
-                active={view === 'overview'}
-                icon={<Sprout size={17} strokeWidth={1.8} />}
-                label={t('nav.overview')}
-                onClick={() => navigate('overview')}
-              />
-              <NavItem
-                active={view === 'plugins'}
-                icon={<Blocks size={17} strokeWidth={1.8} />}
-                label={t('nav.plugins')}
-                onClick={() => navigate('plugins')}
-              />
-              <NavItem
-                active={view === 'activity'}
-                icon={<History size={17} strokeWidth={1.8} />}
-                label={t('nav.activity')}
-                onClick={() => navigate('activity')}
-              />
-            </nav>
+            <SidebarNavigation view={view} selectedKey={selectedNavigationKey} onNavigate={navigate} onOpenPlugin={onOpenPlugin} />
             <div className="relative -mx-4 mt-auto border-t border-border">
               {showLowCredits && (
                 <div className={accountMenuSurfaceClass}>

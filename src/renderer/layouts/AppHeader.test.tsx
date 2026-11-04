@@ -22,6 +22,20 @@ async function fixture(navigation?: PluginHeaderNavigation, locale = 'zh-CN', pl
 }
 
 describe('product header breadcrumbs', () => {
+  it('renders plugin actions in the same header on all platforms', () => {
+    const onClick = vi.fn();
+    window.motusWindow = { platform: 'win32' } as any;
+    window.motusSeed = { snapshot: async () => ({ locale: 'zh-CN', languagePreference: 'zh-CN' }), subscribe: () => () => {} } as any;
+    const plugin = { id: 'com.example.generic' } as SeedInstalledPlugin;
+    render(<SeedI18nProvider><AppHeader sidebarCollapsed={false} view="plugin-view" selectedPlugin={plugin} pageTitle="群聊"
+      pluginNavigation={{ pluginId: plugin.id, path: [], busy: false, navigate: vi.fn(), actions: [{ id: 'invite', label: '邀请', icon: 'user-plus', onClick }] }}
+      refreshing={false} onBackToPlugins={vi.fn()} onRefreshPlugins={vi.fn()} onEditProfile={vi.fn()} onAddCredits={vi.fn()} /></SeedI18nProvider>);
+    const invite = screen.getByRole('button', { name: '邀请' });
+    expect(invite.hasAttribute('title')).toBe(false);
+    fireEvent.click(invite);
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(screen.getByText('群聊')).toBeTruthy();
+  });
   it('preserves the existing two-level header for plugins without navigation', async () => {
     const { back } = await fixture();
     expect(screen.getByRole('navigation').querySelectorAll('svg')).toHaveLength(1);

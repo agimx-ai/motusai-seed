@@ -11,8 +11,8 @@ const { pluginHostContentSecurityPolicy } = require('../dist/electron/main/plugi
 const { ipcChannels } = require('../dist/electron/shared/contracts.js');
 
 /** Real product renderer and IPC/mount path, with isolated platform data and no Cloud/user writes. */
-export function createPluginPage({ inspected, plugin, view, root, writeClipboardText }) {
-  const installed = {
+export function createPluginPage({ inspected, plugin, view, root, writeClipboardText, extraPlugins = [] }) {
+  const installedEntry = (inspected, plugin) => ({
     id: plugin.package_id,
     visibility: 'public',
     name: inspected.manifest.name,
@@ -30,7 +30,8 @@ export function createPluginPage({ inspected, plugin, view, root, writeClipboard
     source: 'development',
     status: 'ready',
     enabled: true,
-  };
+  });
+  const installed = installedEntry(inspected, plugin);
   const snapshot = {
     appName: 'MotusAI Seed',
     appVersion: '0.2.15',
@@ -39,7 +40,7 @@ export function createPluginPage({ inspected, plugin, view, root, writeClipboard
     startup: { status: 'ready' },
     auth: { status: 'signed_in' },
     user: { id: 'layout-test', displayName: '隔离布局测试' },
-    plugins: [installed],
+    plugins: [installed, ...extraPlugins.map(({ inspected, plugin }) => installedEntry(inspected, plugin))],
     installedPluginsStatus: 'ready',
     catalogPlugins: [],
     pluginCatalogStatus: 'ready',
@@ -57,9 +58,10 @@ export function createPluginPage({ inspected, plugin, view, root, writeClipboard
   };
   const runtime = Object.assign(Object.create(SeedRuntime.prototype), {
     stopping: false,
-    runtimePlugins: [plugin],
-    pluginViewHosts: new Map([[plugin.package_id, view]]),
+    runtimePlugins: [plugin, ...extraPlugins.map(({ plugin }) => plugin)],
+    pluginViewHosts: new Map([[plugin.package_id, view], ...extraPlugins.map(({ plugin, view }) => [plugin.package_id, view])]),
     pluginViewMounts: new Map(),
+    pluginViewPreparations: new Map(),
     pluginIsAuthorized: () => true,
     snapshot: () => structuredClone(snapshot),
     personalCreditWallet: async () => ({ available: 100 }),
@@ -100,6 +102,7 @@ export function createPluginPage({ inspected, plugin, view, root, writeClipboard
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 16 } } : {}),
     webPreferences: {
       partition,
+      backgroundThrottling: false,
       preload: join(import.meta.dirname, '../dist/electron/preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true,

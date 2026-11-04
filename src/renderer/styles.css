@@ -12,6 +12,14 @@
   display: flow-root;
   min-width: 0;
 }
+[data-plugin-view-surface] .seed-plugin-content,
+[data-plugin-view-surface] .seed-plugin-body,
+[data-plugin-view-surface] .seed-plugin-body > section {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  min-width: 0;
+}
 .seed-plugin-toolbar,
 .seed-plugin-status {
   display: flex;
@@ -454,6 +462,14 @@
 
 .seed-app-header--mac {
   transform: translateY(-6px);
+}
+
+.seed-app-header--plugin-mac::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 6px;
+  border-bottom: 1px solid var(--border);
 }
 
 .seed-app-header--sidebar-collapsed {

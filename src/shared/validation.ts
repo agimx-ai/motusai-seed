@@ -254,6 +254,7 @@ export const mountPluginViewSchema = z
   .object({
     pluginId: pluginIdSchema,
     token: z.string().uuid(),
+    background: z.boolean().optional(),
   })
   .strict();
 

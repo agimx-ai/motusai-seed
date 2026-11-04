@@ -15,6 +15,7 @@ import { createRoot } from 'react-dom/client';
 import { icons } from 'lucide-react';
 import { PluginNavigationController, type PluginBreadcrumbState } from './plugin-navigation';
 import { userFacingErrorMessage } from '../../lib/errors';
+import { pluginSidebar, type PluginPageTarget } from './plugin-sidebar';
 
 type Surface = { toolbar: HTMLElement; content: HTMLElement; status: HTMLElement };
 type Active = { key: object; hide(): Promise<void> };
@@ -25,17 +26,20 @@ export class PluginViewController {
   private plugin?: Plugin;
   private readonly tabs: PluginSettingTab[] = [];
   private readonly views = new Map<string, (host: ViewHost) => View>();
+  private readonly viewButtons = new Map<string, HTMLButtonElement>();
   private active?: Active;
   private navigation = Promise.resolve();
   private stopping = false;
   private stoppingWork?: Promise<void>;
   private visible = false;
+  private sidebar?: ReturnType<typeof pluginSidebar.attach>;
+  private pageTarget?: string;
   private readonly tabButtons = new Map<PluginSettingTab, HTMLButtonElement>();
   private readonly breadcrumbs: PluginNavigationController;
 
   private refreshTabNavigation() {
     // A sole settings page is already the active page, not an extra navigation choice.
-    const showTabs = this.tabs.length + this.views.size > 1;
+    const showTabs = this.tabs.length + this.viewButtons.size > 1;
     for (const button of this.tabButtons.values()) button.hidden = !showTabs;
     this.surface.toolbar.hidden = ![...this.surface.toolbar.children].some((child) => !(child as HTMLElement).hidden);
   }
@@ -72,6 +76,18 @@ export class PluginViewController {
       };
     };
     this.app = {
+      sidebar: {
+        register: (item) => {
+          this.assertActive();
+          if (!this.sidebar) throw new Error('Plugin has not started.');
+          return this.sidebar.api.register(item);
+        },
+        open: (id) => {
+          this.assertActive();
+          if (!this.sidebar) return Promise.resolve(false);
+          return this.sidebar.api.open(id);
+        },
+      },
       navigation: this.breadcrumbs.api,
       ...appearance,
       ...services,
@@ -90,47 +106,17 @@ export class PluginViewController {
           item.dispose();
         };
       },
-      registerView: (type, creator) => {
+      registerView: (type, creator, options) => {
         this.assertActive();
         if (this.views.has(type)) throw new Error('Duplicate view type: ' + type);
         this.views.set(type, creator);
-        const item = action(type, () =>
-          this.schedule(async () => {
-            if (this.active?.key === creator) return;
-            await this.closeActive();
-            const containerEl = document.createElement('section');
-            surface.content.append(containerEl);
-            let view: View | undefined;
-            const close = async () => {
-              if (this.active?.key === creator) this.breadcrumbs.clear();
-              try {
-                await view?.unload();
-              } finally {
-                containerEl.remove();
-                if (this.active?.key === creator) this.active = undefined;
-              }
-            };
-            try {
-              view = creator({
-                containerEl,
-                close,
-                setTitle: (title) => {
-                  item.element.textContent = title;
-                },
-              });
-              this.active = { key: creator, hide: close };
-              item.element.textContent = view.getDisplayText();
-              await view.load();
-            } catch (error) {
-              await close();
-              throw error;
-            }
-          }),
-        );
+        const item = options?.toolbar === false ? undefined : action(type, () => this.schedule(() => this.openView(type)));
+        if (item) this.viewButtons.set(type, item.element);
         this.refreshTabNavigation();
         return async () => {
           this.views.delete(type);
-          item.dispose();
+          this.viewButtons.delete(type);
+          item?.dispose();
           if (this.active?.key === creator) await this.closeActive();
         };
       },
@@ -200,6 +186,7 @@ export class PluginViewController {
     return next;
   }
   private async closeActive() {
+    this.pageTarget = undefined;
     this.breadcrumbs.clear();
     const active = this.active;
     this.active = undefined;
@@ -207,6 +194,38 @@ export class PluginViewController {
       await active?.hide();
     } finally {
       this.surface.content.replaceChildren();
+    }
+  }
+
+  private async openView(type: string, params?: Readonly<Record<string, string>>) {
+    const creator = this.views.get(type);
+    if (!creator) throw new Error('Plugin page is not registered: ' + type);
+    const target = JSON.stringify([type, params ?? {}]);
+    if (this.active?.key === creator && this.pageTarget === target) return;
+    await this.closeActive();
+    const containerEl = document.createElement('section');
+    this.surface.content.append(containerEl);
+    let view: View | undefined;
+    const close = async () => {
+      if (this.active?.key === creator) this.breadcrumbs.clear();
+      try {
+        await view?.unload();
+      } finally {
+        containerEl.remove();
+        if (this.active?.key === creator) { this.active = undefined; this.pageTarget = undefined; }
+      }
+    };
+    try {
+      const button = this.viewButtons.get(type);
+      view = creator({ containerEl, close, setTitle: (title) => { if (button) button.textContent = title; } });
+      if (button) button.textContent = view.getDisplayText();
+      this.active = { key: creator, hide: close };
+      this.pageTarget = target;
+      if (params) await view.setState({ ...params });
+      await view.load();
+    } catch (error) {
+      await close();
+      throw error;
     }
   }
   private async openTab(tab: PluginSettingTab) {
@@ -226,22 +245,26 @@ export class PluginViewController {
     this.assertActive();
     if (this.plugin) throw new Error('Plugin view controller already started.');
     this.app.i18n = createPluginI18n(manifest.translations, this.app.locale);
+    this.sidebar = pluginSidebar.attach(manifest.id);
     const plugin = (this.plugin = new Constructor(this.app, manifest));
     try {
       await plugin.load();
+      this.assertActive();
+      this.sidebar.ready();
     } catch (error) {
       await this.stop();
       throw error;
     }
   }
 
-  show(): Promise<void> {
+  show(target?: PluginPageTarget): Promise<void> {
     this.assertActive();
     return this.enqueue(async () => {
-      if (this.visible) return;
+      if (this.visible && !target) return;
       this.visible = true;
       try {
-        if (this.tabs[0]) await this.openTab(this.tabs[0]);
+        if (target) await this.openView(target.view, target.params);
+        else if (this.tabs[0]) await this.openTab(this.tabs[0]);
       } catch (error) {
         this.visible = false;
         throw error;
@@ -269,6 +292,7 @@ export class PluginViewController {
   stop(): Promise<void> {
     if (this.stoppingWork) return this.stoppingWork;
     this.stopping = true;
+    this.sidebar?.dispose();
     this.breadcrumbs.clear();
     this.stoppingWork = (async () => {
       await this.navigation.catch(this.report);

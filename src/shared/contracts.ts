@@ -368,10 +368,11 @@ export type SeedApi = {
   mountPluginView(input: {
     pluginId: string;
     token: string;
+    background?: boolean;
   }): Promise<import('./plugin-view').PluginViewConfiguration | null>;
   sendPluginViewMessage(token: string, message: import('@motus-ai/seed-sdk').RpcMessage): Promise<void>;
   onPluginViewEvent(listener: (event: import('./plugin-view').PluginViewEvent) => void): () => void;
-  unmountPluginView(token: string): Promise<void>;
+  unmountPluginView(token: string, release?: boolean): Promise<void>;
   listOrphanedPluginData(): Promise<string[]>;
   resetOrphanedPluginData(pluginIds: string[]): Promise<PluginDataResetResult>;
   snapshot(): Promise<SeedSnapshot>;

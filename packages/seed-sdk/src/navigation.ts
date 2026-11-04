@@ -12,6 +12,8 @@ export type PluginNavigationOptions = {
 };
 
 export type PluginNavigationHandle = {
+  /** Set actions displayed in the host header for this page. */
+  setActions(actions: readonly { id: string; label: string; icon: string; onClick(): void }[]): void;
   /** Publish the path below “Plugins” and the plugin name. Nonempty paths collapse plugin information; [] restores it. */
   setPath(path: readonly PluginBreadcrumb[]): void;
   /** Navigate to the parent; false at the plugin root, while busy, after disposal, or when declined. */

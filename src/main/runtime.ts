@@ -33,6 +33,7 @@ import { pluginUserProfile } from './plugin-user-profile';
 import { pluginCatalogV2Url } from './plugin-catalog-url';
 import { PluginCapabilityCatalog } from './plugin-capability-catalog';
 import { PluginEventBroker } from './plugin-event-broker';
+import { PluginCloudResourceBroker } from './plugin-cloud-resources';
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation';
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest';
 import { ConnectorManager } from './connector-manager';
@@ -144,6 +145,15 @@ export class SeedRuntime {
     () => (this.stopping ? [] : this.runtimePlugins.filter((plugin) => this.pluginIsAuthorized(plugin.package_id))),
     this.pluginCapabilityCatalog,
   );
+  private readonly cloudResources = new PluginCloudResourceBroker({
+    plugin: (id) => this.stopping || !this.pluginIsAuthorized(id) ? undefined : this.runtimePlugins.find(plugin => plugin.package_id === id),
+    session: async (rejectedToken) => {
+      await this.currentDistribution();
+      const token = await this.cloudAccessToken(rejectedToken);
+      if (!this.user) throw new Error('Cloud sign-in is required.');
+      return { userId: this.user.id, baseUrl: this.seedCloudUrl, token };
+    },
+  });
   private readonly authorizedInstalledPluginIds = new Set<string>();
   private entitlementExpiresAt = 0;
   private entitlementTimer: ReturnType<typeof setInterval> | null = null;
@@ -161,6 +171,7 @@ export class SeedRuntime {
   private readonly sandboxHost: SeedPluginSandboxSupervisor;
   private readonly nativeHost: NativePluginManager;
   private readonly pluginViewHosts = new Map<string, SeedPluginViewHost>();
+  private readonly pluginViewPreparations = new Map<BrowserWindow, Map<string, AbortController>>();
   private readonly pluginViewMounts = new Map<
     BrowserWindow,
     {
@@ -265,6 +276,8 @@ export class SeedRuntime {
       async (argumentsValue) =>
         await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.cloud.models', argumentsValue),
     ],
+    ['seed.cloud.resources', async (argumentsValue) =>
+      this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.cloud.resources', argumentsValue)],
     ...(['seed.local.relay.prepare', 'seed.local.relay'] as const).map(
       (service) =>
         [
@@ -1318,6 +1331,7 @@ export class SeedRuntime {
 
   resumeNetworkConnections() {
     this.distributionEvents.reconnectNow();
+    this.cloudResources.reconnectNow();
   }
 
   async cancelAudio() {
@@ -1417,6 +1431,7 @@ export class SeedRuntime {
   }
 
   async logout() {
+    this.cloudResources.reset();
     const pluginUpdatesStopped = this.pluginUpdates.stop();
     this.pluginBrowserAuthorization.cancelAll();
     this.pendingCloudAuthorization?.reject(new Error('登录已取消。'));
@@ -2536,7 +2551,36 @@ export class SeedRuntime {
     }
   }
 
-  async mountPluginView(owner: BrowserWindow, input: { pluginId: string; token: string }) {
+  private async preparePluginView(owner: BrowserWindow, input: { pluginId: string; token: string }) {
+    let requests = this.pluginViewPreparations.get(owner);
+    if (!requests) this.pluginViewPreparations.set(owner, (requests = new Map()));
+    requests.get(input.token)?.abort();
+    const controller = new AbortController();
+    requests.set(input.token, controller);
+    let cancel!: () => void;
+    const cancelled = new Promise<void>((resolve) => {
+      cancel = resolve;
+      controller.signal.addEventListener('abort', cancel, { once: true });
+    });
+    try {
+      await Promise.race([this.waitForPluginServices(), cancelled]);
+      if (controller.signal.aborted || this.stopping || owner.isDestroyed()) return null;
+      const plugin = this.runtimePlugins.find(
+        (candidate) => candidate.package_id === input.pluginId && candidate.api_version === 2,
+      );
+      // Publisher type comes from the verified catalog or an explicitly enabled development source.
+      if (plugin?.publisher_type !== 'official' || !this.pluginIsAuthorized(plugin.package_id))
+        throw new Error('Plugin view is unavailable for background loading.');
+      return this.ensurePluginView(plugin).mount(owner, input.token, false);
+    } finally {
+      controller.signal.removeEventListener('abort', cancel);
+      if (requests.get(input.token) === controller) requests.delete(input.token);
+      if (!requests.size) this.pluginViewPreparations.delete(owner);
+    }
+  }
+
+  async mountPluginView(owner: BrowserWindow, input: { pluginId: string; token: string; background?: boolean }) {
+    if (input.background) return this.preparePluginView(owner, input);
     const previous = this.pluginViewMounts.get(owner);
     previous?.controller.abort();
     if (previous && previous.pluginId !== input.pluginId) this.pluginViewHosts.get(previous.pluginId)?.unmount();
@@ -2576,15 +2620,25 @@ export class SeedRuntime {
     await host.receive(owner, token, message);
   }
 
-  unmountPluginView(owner: BrowserWindow, token: string) {
+  unmountPluginView(owner: BrowserWindow, token: string, release = false) {
+    if (release) this.pluginViewPreparations.get(owner)?.get(token)?.abort();
     const request = this.pluginViewMounts.get(owner);
-    if (!request || request.token !== token) return;
-    this.pluginViewMounts.delete(owner);
-    request.controller.abort();
-    this.pluginViewHosts.get(request.pluginId)?.unmount();
+    if (request?.token === token) {
+      this.pluginViewMounts.delete(owner);
+      request.controller.abort();
+      this.pluginViewHosts.get(request.pluginId)?.unmount();
+    }
+    if (release) {
+      const host = [...this.pluginViewHosts.values()].find((candidate) => candidate.owns(owner, token));
+      if (host) {
+        this.pluginViewHosts.delete(host.plugin.package_id);
+        return host.destroy();
+      }
+    }
   }
 
   private async releasePluginWork(packageId: string, failed = false) {
+    this.cloudResources.closePlugin(packageId);
     this.pluginEvents.closePlugin(packageId);
     this.systemNotifications.clear(packageId);
     for (const calls of [this.sandboxCalls, this.capabilityCalls])
@@ -2604,6 +2658,7 @@ export class SeedRuntime {
     trace?: DiagnosticTraceContext,
   ): Promise<unknown> {
     assertActive?.();
+    if (service === 'seed.cloud.resources') return this.cloudResources.invoke(packageId, argumentsValue, assertActive);
     if (service === 'seed.user-profile') {
       const plugin = this.runtimePlugins.find(
         (candidate) => candidate.package_id === packageId && candidate.api_version === 2 && candidate.has_service,
@@ -3022,6 +3077,10 @@ export class SeedRuntime {
 
   async stop() {
     this.stopping = true;
+    this.cloudResources.reset();
+    for (const requests of this.pluginViewPreparations.values())
+      for (const controller of requests.values()) controller.abort();
+    this.pluginViewPreparations.clear();
     for (const request of this.pluginViewMounts.values()) request.controller.abort();
     this.systemNotifications.clear();
     await this.pluginUpdates.stop();

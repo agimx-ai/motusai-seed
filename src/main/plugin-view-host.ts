@@ -98,10 +98,11 @@ export class SeedPluginViewHost {
     if (this.stopped) throw Object.assign(new Error('Plugin view runtime stopped.'), { code: 'plugin_view_stopped' });
   }
 
-  mount(owner: BrowserWindow, token: string): PluginViewConfiguration {
+  mount(owner: BrowserWindow, token: string, visible = true): PluginViewConfiguration {
     this.assertActive();
     if (owner.isDestroyed()) throw new Error('Plugin view owner is unavailable.');
     if (this.owner !== owner || this.token !== token) {
+      this.mounted = false;
       this.send({ type: 'stop' });
       this.rpc?.close();
       this.releaseResources?.();
@@ -165,7 +166,7 @@ export class SeedPluginViewHost {
         },
       );
     }
-    this.mounted = true;
+    if (visible) this.mounted = true;
     const base = 'seed-plugin://' + this.generation + '/';
     return {
       generation: this.generation,

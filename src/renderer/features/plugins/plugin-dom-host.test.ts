@@ -2,7 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Plugin, PluginSettingTab } from '@motus-ai/seed-sdk';
 import type { PluginViewEvent } from '../../../shared/plugin-view';
-import { mountPluginDom } from './plugin-dom-host';
+import { mountPluginDom, retainPluginDom } from './plugin-dom-host';
+import { pluginSidebar } from './plugin-sidebar';
 
 const state = vi.hoisted(() => ({ load: vi.fn(), unload: vi.fn(), display: vi.fn(), hide: vi.fn(), copy: vi.fn(), navigation: vi.fn() }));
 vi.mock('../../../shared/plugin-bundle', async (original) => {
@@ -27,6 +28,7 @@ class TestPlugin extends Plugin {
     state.load();
     this.register(state.unload);
     this.addSettingTab(new TestTab(this.app, this));
+    this.addNavigationItem({ id: 'home', title: 'Test home', view: 'home', parent: { host: 'activity' } });
   }
 }
 const listeners = new Set<(event: PluginViewEvent) => void>();
@@ -82,6 +84,24 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 describe('trusted frontend DOM mounting', () => {
+  it('registers entries before opening a page, reuses the frontend, and withdraws them on disposal', async () => {
+    const { container, show } = fixture('com.example.background');
+    const release = retainPluginDom('com.example.background', (error) => { throw error; });
+    releases.push(release);
+    await vi.waitFor(() => expect(pluginSidebar.snapshot().some((entry) => entry.pluginId === 'com.example.background')).toBe(true));
+    expect(state.load).toHaveBeenCalledOnce();
+    expect(state.display).not.toHaveBeenCalled();
+    expect(container.children).toHaveLength(0);
+    expect(window.motusSeed.mountPluginView).toHaveBeenCalledWith({ pluginId: 'com.example.background', token: expect.any(String), background: true });
+    const hide = show();
+    await vi.waitFor(() => expect(state.display).toHaveBeenCalledOnce());
+    expect(state.load).toHaveBeenCalledOnce();
+    hide();
+    await vi.waitFor(() => expect(state.hide).toHaveBeenCalledOnce());
+    expect(pluginSidebar.snapshot().some((entry) => entry.pluginId === 'com.example.background')).toBe(true);
+    release();
+    await vi.waitFor(() => expect(pluginSidebar.snapshot().some((entry) => entry.pluginId === 'com.example.background')).toBe(false));
+  });
   it('publishes only the visible lease navigation and fences hidden and reloaded generations', async () => {
     const { show, navigation, configuration } = fixture('com.example.navigation');
     const hide = show();

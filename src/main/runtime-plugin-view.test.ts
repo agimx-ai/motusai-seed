@@ -11,14 +11,15 @@ vi.mock('./updater', () => ({ SeedUpdater: class {} }));
 import { SeedRuntime } from './runtime';
 
 function fixture() {
-  const plugin = { package_id: 'com.example.generic', api_version: 2 };
+  const plugin = { package_id: 'com.example.generic', api_version: 2, publisher_type: 'official' };
   const configuration = { generation: 'generation', entryUrl: 'seed-plugin://generation/main.js' };
   const host = {
     plugin,
     active: true,
     mount: vi.fn(() => configuration),
     unmount: vi.fn(),
-    owns: vi.fn(() => true),
+    destroy: vi.fn(async () => {}),
+    owns: vi.fn((_owner: unknown, _token: string) => true),
     receive: vi.fn(async () => {}),
   };
   const owner = { isDestroyed: () => false, webContents: { send: vi.fn() } };
@@ -30,11 +31,62 @@ function fixture() {
     ensurePluginView: vi.fn(() => host),
     pluginViewHosts: new Map([[plugin.package_id, host]]),
     pluginViewMounts: new Map(),
+    pluginViewPreparations: new Map(),
   });
   const input = { pluginId: plugin.package_id, token: 'mount-one' };
   return { runtime, host, owner, plugin, input, configuration };
 }
 describe('product page DOM mounting', () => {
+  it('prepares unrelated plugins without aborting a foreground page or granting visible mounting', async () => {
+    const { runtime, host, owner, input } = fixture();
+    const page = await runtime.mountPluginView(owner, input);
+    const foreground = runtime.pluginViewMounts.get(owner);
+    const plugin = { package_id: 'com.example.other', api_version: 2, publisher_type: 'official' };
+    runtime.runtimePlugins.push(plugin);
+    expect(await runtime.mountPluginView(owner, { pluginId: plugin.package_id, token: 'background', background: true })).toBe(page);
+    expect(host.mount).toHaveBeenLastCalledWith(owner, 'background', false);
+    expect(host.unmount).not.toHaveBeenCalled();
+    expect(foreground.controller.signal.aborted).toBe(false);
+    expect(runtime.pluginViewMounts.get(owner)).toBe(foreground);
+    expect(runtime.pluginViewPreparations.size).toBe(0);
+  });
+  it('cancels a pending background preparation and checks authorization after service startup', async () => {
+    const { runtime, host, owner, input } = fixture();
+    let finish!: () => void;
+    runtime.pluginServicesReady = new Promise<void>((resolve) => { finish = resolve; });
+    const pending = runtime.mountPluginView(owner, { ...input, background: true });
+    await runtime.unmountPluginView(owner, input.token, true);
+    await expect(pending).resolves.toBeNull();
+    expect(runtime.pluginViewPreparations.size).toBe(0);
+    expect(host.mount).not.toHaveBeenCalled();
+    runtime.pluginIsAuthorized = () => false;
+    finish();
+    await expect(runtime.mountPluginView(owner, { ...input, background: true })).rejects.toThrow('unavailable');
+  });
+  it('preserves on-demand mounting without allowing community plugins to start in the background', async () => {
+    const { runtime, host, owner, input, plugin, configuration } = fixture();
+    plugin.publisher_type = 'community';
+    await expect(runtime.mountPluginView(owner, { ...input, background: true })).rejects.toThrow('background loading');
+    expect(host.mount).not.toHaveBeenCalled();
+    await expect(runtime.mountPluginView(owner, input)).resolves.toBe(configuration);
+  });
+  it('keeps background registrations when hiding a page and releases only the matching frontend', async () => {
+    const { runtime, host, owner, input } = fixture();
+    host.owns.mockImplementation((_owner, token) => token === input.token);
+    let finish!: () => void;
+    runtime.pluginServicesReady = new Promise<void>((resolve) => { finish = resolve; });
+    const background = runtime.mountPluginView(owner, { ...input, background: true });
+    const foreground = runtime.mountPluginView(owner, input);
+    runtime.unmountPluginView(owner, input.token);
+    finish();
+    await expect(foreground).resolves.toBeNull();
+    await expect(background).resolves.not.toBeNull();
+    runtime.unmountPluginView(owner, 'stale-token', true);
+    expect(host.destroy).not.toHaveBeenCalled();
+    await runtime.unmountPluginView(owner, input.token, true);
+    expect(host.destroy).toHaveBeenCalledOnce();
+    expect(runtime.pluginViewHosts.size).toBe(0);
+  });
   it.each(['ready', 'cancelled', 'withdrawn'])(
     'queues calls during service restart and fences %s requests before dispatch', async (outcome) => {
       const { runtime, owner, plugin, input } = fixture();

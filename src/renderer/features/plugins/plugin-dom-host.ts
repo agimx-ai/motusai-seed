@@ -10,6 +10,7 @@ import type { PluginViewConfiguration } from '../../../shared/plugin-view';
 import { PluginViewController } from './plugin-view-controller';
 import { userFacingErrorMessage } from '../../lib/errors';
 import type { PluginHeaderNavigation } from './plugin-navigation';
+import type { PluginPageTarget } from './plugin-sidebar';
 
 const sessions = new Map<string, PluginDomHost>();
 const modules = {
@@ -27,6 +28,7 @@ type ViewLease = {
   loading(value: boolean): void;
   navigation(value: PluginHeaderNavigation | undefined): void;
 };
+type BackgroundLease = { withdrawn(): void };
 
 /** Trusted frontends share the product document; only private services use RPC. */
 class PluginDomHost {
@@ -39,6 +41,7 @@ class PluginDomHost {
   private initializing?: Promise<void>;
   private releaseEvents?: () => void;
   private lease?: ViewLease;
+  private backgroundLease?: BackgroundLease;
   private stopped = false;
   private readonly lifetime = new AbortController();
 
@@ -79,8 +82,12 @@ class PluginDomHost {
         if (event.type === 'message') void peer.receive(event.message);
         else if (event.type === 'stop') {
           const lease = this.lease;
+          const background = this.backgroundLease;
           lease?.loading(true);
-          void this.stop().then(() => lease?.withdrawn());
+          void this.stop().then(() => {
+            lease?.withdrawn();
+            background?.withdrawn();
+          });
         } else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(userFacingErrorMessage(error)));
       });
       if (configuration.styleUrl) {
@@ -141,7 +148,32 @@ class PluginDomHost {
     if (this.stopped) throw new Error('Plugin DOM runtime stopped.');
   }
 
-  async show(container: HTMLElement, lease: ViewLease) {
+  async prepare(lease: BackgroundLease) {
+    this.backgroundLease = lease;
+    try {
+      const configuration = await window.motusSeed.mountPluginView({ pluginId: this.pluginId, token: this.token, background: true });
+      if (!configuration || this.backgroundLease !== lease || this.stopped) return true;
+      if (this.generation && configuration.generation !== this.generation) {
+        await this.stop();
+        return false;
+      }
+      await this.initialize(configuration);
+      return true;
+    } catch (error) {
+      const withdrawn = this.stopped;
+      await this.stop();
+      if (withdrawn) return true;
+      throw error;
+    }
+  }
+
+  release(lease: BackgroundLease) {
+    if (this.backgroundLease !== lease) return;
+    this.backgroundLease = undefined;
+    void this.stop();
+  }
+
+  async show(container: HTMLElement, lease: ViewLease, target?: PluginPageTarget) {
     this.lease = lease;
     lease.loading(true);
     const configuration = await window.motusSeed.mountPluginView({ pluginId: this.pluginId, token: this.token });
@@ -163,7 +195,7 @@ class PluginDomHost {
     try {
       await this.controller!.setAppearance(configuration);
       if (this.lease !== lease || this.stopped) return true;
-      await this.controller!.show();
+      await this.controller!.show(target);
     } catch (error) {
       if (this.lease !== lease || this.stopped) return true;
       this.hide(lease);
@@ -188,6 +220,8 @@ class PluginDomHost {
     this.lease?.navigation(undefined);
     this.lifetime.abort(new Error('Plugin DOM runtime stopped.'));
     this.lease = undefined;
+    this.backgroundLease = undefined;
+    void window.motusSeed.unmountPluginView(this.token, true);
     this.releaseEvents?.();
     this.peer?.close();
     this.style?.remove();
@@ -203,6 +237,7 @@ export function mountPluginDom(
   onError: (error: unknown) => void,
   onLoadingChange?: (loading: boolean) => void,
   onNavigationChange?: (navigation: PluginHeaderNavigation | undefined) => void,
+  target?: PluginPageTarget,
 ) {
   let host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
   sessions.set(pluginId, host);
@@ -225,7 +260,7 @@ export function mountPluginDom(
     // A hidden page may have missed withdrawal before subscribing. Replace that generation,
     // rather than asking the user to reopen or attempting to reuse its unloaded controller.
     for (let attempt = 0; active && attempt < 2; attempt++) {
-      if (await host.show(container, lease)) return;
+      if (await host.show(container, lease, target)) return;
       if (!active) return;
       host = new PluginDomHost(pluginId);
       sessions.set(pluginId, host);
@@ -245,5 +280,24 @@ export function mountPluginDom(
     lease.navigation(undefined);
     active = false;
     host.hide(lease);
+  };
+}
+
+/** Load registrations once for an enabled plugin, without opening its page. */
+export function retainPluginDom(pluginId: string, onError: (error: unknown) => void) {
+  let active = true;
+  let host: PluginDomHost;
+  const lease: BackgroundLease = { withdrawn: () => { if (active) start(); } };
+  const start = () => {
+    host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
+    sessions.set(pluginId, host);
+    void host.prepare(lease).then((current) => {
+      if (active && !current) start();
+    }).catch((error) => { if (active) onError(error); });
+  };
+  start();
+  return () => {
+    active = false;
+    host.release(lease);
   };
 }

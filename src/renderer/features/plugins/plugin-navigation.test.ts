@@ -21,6 +21,23 @@ function fixture() {
 }
 
 describe('plugin-owned breadcrumb navigation', () => {
+  it('ignores replaced and disposed header actions', () => {
+    const f = fixture();
+    const previous = vi.fn();
+    const current = vi.fn();
+    f.handle.setActions([{ id: 'open', label: 'Open', icon: 'folder', onClick: previous }]);
+    const staleAction = f.state().actions![0];
+    f.handle.setActions([{ id: 'open', label: 'Open', icon: 'folder', onClick: current }]);
+    staleAction.onClick();
+    expect(previous).not.toHaveBeenCalled();
+    const action = f.state().actions![0];
+    action.onClick();
+    expect(current).toHaveBeenCalledOnce();
+    f.hide();
+    action.onClick();
+    expect(current).toHaveBeenCalledOnce();
+  });
+
   it('returns one level at a time and stops at the plugin root', async () => {
     const f = fixture();
     expect(await f.handle.back()).toBe(true);

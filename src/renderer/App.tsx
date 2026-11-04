@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@motus-ai/seed-sdk';
 import type { SeedCatalogPage } from '../shared/contracts';
@@ -27,6 +27,9 @@ import { pluginDataCleanupFeedback } from './features/plugins/plugin-data-cleanu
 import type { PluginHeaderNavigation } from './features/plugins/plugin-navigation';
 import { userFacingErrorMessage } from './lib/errors';
 import { useSeedI18n } from './i18n';
+import { usePluginFrontends } from './features/plugins/use-plugin-frontends';
+import { pluginSidebar, type PluginSidebarRoute } from './features/plugins/plugin-sidebar';
+import { PluginViewSurface } from './features/plugins/PluginViewSurface';
 
 const previewStartupScreen = false;
 const minimumStartupDurationMs = 1_200;
@@ -53,6 +56,22 @@ export default function App() {
   currentPluginQuery.current = pluginQuery.trim();
   const [selectedPluginId, setSelectedPluginId] = useState('');
   const [pluginNavigation, setPluginNavigation] = useState<PluginHeaderNavigation>();
+  const [pluginRoute, setPluginRoute] = useState<PluginSidebarRoute>();
+  const navigationEntries = useSyncExternalStore(pluginSidebar.subscribe, pluginSidebar.snapshot);
+  usePluginFrontends(snapshot);
+  useEffect(() => pluginSidebar.onOpen((route) => {
+    setPluginRoute(route);
+    setPluginNavigation(undefined);
+    setView('plugin-view');
+  }), []);
+  const currentNavigationEntry = navigationEntries.find((entry) => entry.key === pluginRoute?.key);
+  const routePluginEnabled = snapshot?.plugins.some((plugin) => plugin.id === pluginRoute?.pluginId && plugin.enabled && plugin.status === 'ready');
+  useEffect(() => {
+    if (view === 'plugin-view' && pluginRoute && (!routePluginEnabled || !currentNavigationEntry && pluginSidebar.isReady(pluginRoute.pluginId))) {
+      setPluginRoute(undefined);
+      setView('overview');
+    }
+  }, [view, currentNavigationEntry, pluginRoute, routePluginEnabled]);
   const updatingAllPlugins = snapshot?.pluginUpdates?.running ?? false;
   const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -273,10 +292,17 @@ export default function App() {
         <Sidebar
           collapsed={sidebarCollapsed}
           view={view}
+          selectedNavigationKey={pluginRoute?.key}
           snapshot={snapshot}
           loggingOut={busy === 'logout'}
           pluginUpdateCount={pluginUpdateCount}
           onNavigate={navigate}
+          onOpenPlugin={(entry) => {
+            if (!entry.view) return;
+            setPluginRoute({ key: entry.key, pluginId: entry.pluginId, title: entry.title, view: entry.view, params: entry.params });
+            setPluginNavigation(undefined);
+            setView('plugin-view');
+          }}
           onShowPluginUpdates={() => {
             navigate('plugins');
             setPluginQuery('');
@@ -291,8 +317,9 @@ export default function App() {
           <AppHeader
             sidebarCollapsed={sidebarCollapsed}
             view={view}
-            selectedPlugin={selectedPlugin}
+            selectedPlugin={view === 'plugin-view' ? plugins.find((plugin) => plugin.id === pluginRoute?.pluginId) : selectedPlugin}
             pluginNavigation={pluginNavigation}
+            pageTitle={currentNavigationEntry?.title ?? pluginRoute?.title}
             refreshing={busy === 'plugin-catalog-refresh'}
             onBackToPlugins={backToPlugins}
             onRefreshPlugins={() => void refreshPlugins(true)}
@@ -313,9 +340,12 @@ export default function App() {
             }
           />
           <main
-            className={`h-full min-h-0 min-w-0 overflow-auto px-8 pb-16 max-[980px]:px-6 ${view === 'overview' ? 'pt-4' : 'pt-0'}`}
+            className={`h-full min-h-0 min-w-0 overflow-auto px-8 max-[980px]:px-6 ${view === 'plugin-view' ? '' : 'pb-16'} ${view === 'overview' ? 'pt-4' : 'pt-0'}`}
           >
             {view === 'overview' && <OverviewPage snapshot={snapshot} />}
+            {view === 'plugin-view' && pluginRoute && routePluginEnabled && (
+              <PluginViewSurface pluginId={pluginRoute.pluginId} target={pluginRoute} onNavigationChange={setPluginNavigation} />
+            )}
             {view === 'plugins' && (
               <PluginsPage
                 appName={snapshot.appName}

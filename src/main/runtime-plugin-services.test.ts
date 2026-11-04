@@ -34,6 +34,7 @@ function fixture(kind = 'sandboxed-web') {
     handleWorkerEvent: vi.fn(async () => undefined),
     pluginCapabilityCatalog: { publish: vi.fn() },
     pluginEvents: { reconcile: vi.fn(), closePlugin: vi.fn() },
+    cloudResources: { invoke: vi.fn(), closePlugin: vi.fn(), reset: vi.fn() },
     systemNotifications: { invoke: vi.fn(async () => 'sent'), clear: vi.fn() },
     pluginIsAuthorized: vi.fn(() => true),
     store: { systemNotificationsEnabled: vi.fn(() => true) },

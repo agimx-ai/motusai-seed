@@ -34,6 +34,9 @@
     "appUnavailable": "The app did not start correctly. Quit and reopen it"
   },
   "nav": {
+    "mainNavigation": "Main navigation",
+    "expandSection": "Expand {{name}}",
+    "collapseSection": "Collapse {{name}}",
     "overview": "Companion",
     "plugins": "Plugins",
     "activity": "Activity log",

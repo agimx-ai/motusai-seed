@@ -2,6 +2,8 @@ export { pluginDevelopmentStatusFile, type PluginDevelopmentStatus } from './dev
 export { Component, type Disposer } from './component.js';
 export { Events, type EventRef } from './events.js';
 export type { SeedUserProfile, SeedUserService } from './user-profile.js';
+export type { CloudResourceRequest, CloudResourceChange, CloudResourceSubscription, CloudResourceService } from './cloud-resources.js';
+export type { PluginSidebar, PluginSidebarHandle, PluginSidebarItem } from './sidebar.js';
 export type {
   PluginBreadcrumb,
   PluginNavigation,

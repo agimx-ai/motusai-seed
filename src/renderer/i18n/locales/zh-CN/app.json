@@ -34,6 +34,9 @@
     "appUnavailable": "应用未能正常启动，请退出并重新打开"
   },
   "nav": {
+    "mainNavigation": "主导航",
+    "expandSection": "展开{{name}}",
+    "collapseSection": "收起{{name}}",
     "overview": "伙伴",
     "plugins": "插件",
     "activity": "活动记录",

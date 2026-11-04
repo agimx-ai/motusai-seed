@@ -27,6 +27,7 @@ describe('Seed Cloud native authorization', () => {
     expect(url.origin).toBe('https://cloud.example.com')
     expect(url.pathname).toBe('/api/v1/oauth2/authorize')
     expect(url.searchParams.get('response_type')).toBe('code')
+    expect(url.searchParams.get('scope')).toBe('openid profile')
     expect(url.searchParams.get('client_id')).toBe('seed-desktop')
     expect(url.searchParams.get('redirect_uri')).toBe('com.motusai.seed:/oauth/callback')
     expect(url.searchParams.get('code_challenge_method')).toBe('S256')

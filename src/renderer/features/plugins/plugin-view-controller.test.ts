@@ -38,6 +38,36 @@ function fixture() {
 }
 
 describe('plugin view controller lifecycle', () => {
+  it('registers navigation before display and opens plugin-owned views with route state', async () => {
+    const { controller, surface } = fixture();
+    const close = vi.fn();
+    class Page extends View {
+      private room = '';
+      getViewType() { return 'room'; }
+      getDisplayText() { return 'Room'; }
+      async setState(state: Record<string, unknown>) { this.room = String(state.room); }
+      async onOpen() { this.containerEl.textContent = this.room; }
+      async onClose() { close(); }
+    }
+    class Example extends Plugin {
+      onload() {
+        this.registerView('room', (host) => new Page(this.app, host));
+        this.addNavigationItem({ id: 'room-one', title: 'One', parent: { host: 'activity' }, view: 'room', params: { room: 'one' } });
+      }
+    }
+    await controller.start(Example, manifest);
+    expect(surface.content.textContent).toBe('');
+    await controller.show({ view: 'room', params: { room: 'one' } });
+    expect(surface.content.textContent).toBe('one');
+    await controller.show({ view: 'room', params: { room: 'two' } });
+    expect(close).toHaveBeenCalledOnce();
+    expect(surface.content.textContent).toBe('two');
+    await controller.hide();
+    await controller.show({ view: 'room', params: { room: 'two' } });
+    expect(surface.content.textContent).toBe('two');
+    await controller.stop();
+    expect(() => controller.app.sidebar!.register({ id: 'late', title: 'Late' })).toThrow('stopped');
+  });
   it('clears page navigation on settings redisplay, view switching, hide and stop', async () => {
     const { controller, surface, navigation } = fixture();
     const handles: PluginNavigationHandle[] = [];
@@ -109,11 +139,18 @@ describe('plugin view controller lifecycle', () => {
     expect(surface.content.textContent).toBe('Settings');
     expect(surface.toolbar.hidden).toBe(true);
     expect(surface.toolbar.querySelector('button')!.hidden).toBe(true);
+    const disposeSidebarView = controller.app.registerView('sidebar-room', (host) => new ExtraView(controller.app, host), { toolbar: false });
+    expect(surface.toolbar.hidden).toBe(true);
+    await controller.show({ view: 'sidebar-room' });
+    expect(surface.toolbar.hidden).toBe(true);
+    await controller.show();
+    expect(surface.toolbar.hidden).toBe(true);
     const disposeView = controller.app.registerView('extra', (host) => new ExtraView(controller.app, host));
     expect(surface.toolbar.hidden).toBe(false);
     expect([...surface.toolbar.querySelectorAll('button')].every((button) => !button.hidden)).toBe(true);
     await disposeView();
     expect(surface.toolbar.hidden).toBe(true);
+    await disposeSidebarView();
     plugin.addCommand({ id: 'run', name: 'Run', callback: vi.fn() });
     expect(surface.toolbar.hidden).toBe(false);
     expect(

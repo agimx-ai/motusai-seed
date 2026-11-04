@@ -111,6 +111,7 @@ async function run() {
       sandboxTasks: new Map(),
       pluginCapabilityCatalog: new PluginCapabilityCatalog(),
       pluginEvents: { closePlugin: () => {} },
+      cloudResources: { closePlugin: () => {}, reset: () => {} },
       systemNotifications: { clear: () => {} },
       pluginViewHosts: new Map(),
       publishSnapshot: async () => {

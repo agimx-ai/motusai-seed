@@ -1,4 +1,4 @@
-import { ChevronRight, Pencil, Plus, RotateCw } from 'lucide-react';
+import { ChevronRight, Pencil, Plus, RotateCw, icons } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Fragment, type ReactNode } from 'react';
 import type { SeedCatalogPlugin, SeedInstalledPlugin } from '../../shared/contracts';
@@ -7,12 +7,14 @@ import { ActionButton, Tooltip } from '@motus-ai/seed-sdk/react';
 import { useSeedI18n } from '../i18n';
 import type { View } from '../lib/display';
 import type { PluginHeaderNavigation } from '../features/plugins/plugin-navigation';
+import { HeaderActionButton } from '../components/HeaderActionButton';
 
 type AppHeaderProps = {
   sidebarCollapsed: boolean;
   view: View;
   selectedPlugin?: SeedInstalledPlugin | SeedCatalogPlugin;
   pluginNavigation?: PluginHeaderNavigation;
+  pageTitle?: string;
   refreshing: boolean;
   onBackToPlugins: () => void;
   onRefreshPlugins: () => void;
@@ -26,6 +28,7 @@ export function AppHeader({
   view,
   selectedPlugin,
   pluginNavigation,
+  pageTitle,
   refreshing,
   onBackToPlugins,
   onRefreshPlugins,
@@ -37,13 +40,15 @@ export function AppHeader({
   const { locale } = useSeedI18n();
   const navigation = pluginNavigation?.pluginId === selectedPlugin?.id ? pluginNavigation : undefined;
   const breadcrumbs = [
-    { id: null, label: selectedPlugin ? resolveSeedLocalizedText(selectedPlugin.name, locale) : '' },
+    { id: null, label: view === 'plugin-view' ? pageTitle ?? '' : selectedPlugin ? resolveSeedLocalizedText(selectedPlugin.name, locale) : '' },
     ...(navigation?.path ?? []),
   ];
   const isWindows = window.motusWindow.platform === 'win32';
   const isMac = window.motusWindow.platform === 'darwin';
   const title =
-    view === 'plugins' || view === 'plugin-settings'
+    view === 'plugin-view'
+      ? pageTitle ?? ''
+      : view === 'plugins' || view === 'plugin-settings'
       ? t('nav.plugins')
       : view === 'activity'
         ? t('nav.activity')
@@ -88,26 +93,26 @@ export function AppHeader({
 
   return (
     <header
-      className={`seed-app-header flex min-w-0 items-center${isWindows ? '' : ' justify-between'}${isMac ? ' seed-app-header--mac' : ''}${isMac && sidebarCollapsed ? ' seed-app-header--sidebar-collapsed' : ''}${isWindows && sidebarCollapsed ? ' seed-app-header--windows-collapsed' : ''}`}
+      className={`seed-app-header flex min-w-0 items-center${view === 'plugin-view' ? isMac ? ' seed-app-header--plugin-mac' : ' border-b border-border' : ''}${isWindows && view !== 'plugin-view' ? '' : ' justify-between'}${isMac ? ' seed-app-header--mac' : ''}${isMac && sidebarCollapsed ? ' seed-app-header--sidebar-collapsed' : ''}${isWindows && sidebarCollapsed ? ' seed-app-header--windows-collapsed' : ''}`}
     >
       {view === 'overview' ? (
         <span />
-      ) : view === 'plugins' && selectedPlugin ? (
+      ) : (view === 'plugins' && selectedPlugin || view === 'plugin-view' && navigation?.path.length) ? (
         <nav
           className="seed-header-breadcrumbs flex min-w-0 items-center gap-2 whitespace-nowrap text-[14px] font-normal leading-none [-webkit-app-region:no-drag]"
           aria-label={t('plugins.breadcrumb')}
           aria-busy={navigation?.busy || undefined}
         >
-          <button
+          {view === 'plugins' && <button
             className="-ml-2 inline-flex h-9 shrink-0 items-center rounded-lg px-2 text-[16px] font-medium text-foreground transition"
             type="button"
             onClick={onBackToPlugins}
           >
             {t('nav.plugins')}
-          </button>
+          </button>}
           {breadcrumbs.map((item, index) => (
             <Fragment key={item.id === null ? 'root' : `item:${item.id}`}>
-              <ChevronRight size={16} className="min-w-0 text-muted-foreground" aria-hidden="true" />
+              {(view === 'plugins' || index > 0) && <ChevronRight size={16} className="min-w-0 text-muted-foreground" aria-hidden="true" />}
               {index === breadcrumbs.length - 1 ? (
                 <span className="seed-header-breadcrumb seed-header-breadcrumb--tail min-w-0 truncate text-foreground" aria-current="page" title={item.label}>{item.label}</span>
               ) : (
@@ -132,7 +137,11 @@ export function AppHeader({
       ) : (
         <h1 className="m-0 text-[16px] font-medium">{title}</h1>
       )}
-      {!isWindows && (actions || <span />)}
+      {view === 'plugin-view' && navigation?.actions?.length ? <div className="flex items-center gap-2 [-webkit-app-region:no-drag]">{navigation.actions.map((action) => {
+        const key = action.icon.replace(/(^|-)([a-z])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
+        const Icon = icons[key as keyof typeof icons];
+        return <HeaderActionButton key={action.id} aria-label={action.label} onClick={action.onClick}>{Icon && <Icon size={18} />}</HeaderActionButton>;
+      })}</div> : !isWindows && (actions || <span />)}
     </header>
   );
 }

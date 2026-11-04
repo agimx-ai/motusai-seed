@@ -89,6 +89,18 @@ async function fixture(id = 'com.example.generic', overrides: Partial<PluginView
 }
 
 describe('trusted DOM plugin service/resource broker', () => {
+  it('keeps a prepared frontend hidden and does not demote an already visible page during preparation', async () => {
+    const { host, owner, token, client } = await fixture();
+    host.unmount();
+    host.mount(owner, token, false);
+    expect(await client.call('data.load')).toMatchObject({ revision: 7 });
+    await expect(client.call('files.pick')).rejects.toThrow('mounted');
+    host.mount(owner, token);
+    host.mount(owner, token, false);
+    state.pick.mockResolvedValueOnce({ canceled: true, filePaths: [] });
+    expect(await client.call('files.pick')).toEqual([]);
+    expect(state.pick).toHaveBeenCalledOnce();
+  });
   it('returns generation-owned module resources without constructing any native rendering surface', async () => {
     const { configuration, resource, host } = await fixture();
     expect(configuration.entryUrl).toBe('seed-plugin://' + host.generation + '/main.js');

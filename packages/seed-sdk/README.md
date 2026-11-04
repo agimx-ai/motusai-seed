@@ -116,7 +116,8 @@ await buildPlugin({
 | 方法 | 说明 | 返回值 |
 | --- | --- | --- |
 | `addSettingTab(tab)` | 添加设置页 | `void` |
-| `registerView(type, creator)` | 注册视图类型和创建函数 | `void` |
+| `registerView(type, creator, options?)` | 注册视图类型和创建函数；`{ toolbar: false }` 用于仅由侧栏打开的页面 | `void` |
+| `addNavigationItem(item)` | 注册当前插件的导航节点，卸载时自动撤销 | `PluginSidebarHandle` |
 | `addCommand(command)` | 注册命令 | `Command` |
 | `removeCommand(id)` | 按插件内 ID 移除命令 | `void` |
 | `addRibbonIcon(icon, title, callback)` | 添加工具栏按钮，使用 Lucide 图标名 | `HTMLElement` |
@@ -147,6 +148,8 @@ await buildPlugin({
 | `files?.path(file)` | `string` | 获取 `File` 的本地路径 |
 | `clipboard?.writeText(text)` | `Promise<void>` | 写入剪贴板 |
 | `navigation?.create(options)` | `PluginNavigationHandle` | 为当前显示页面创建头部多级面包屑和返回句柄 |
+| `sidebar?.register(item)` | `PluginSidebarHandle` | 注册顶级、内置分组下或插件自身分组下的导航节点 |
+| `sidebar?.open(id)` | `Promise<boolean>` | 打开当前插件已注册的页面；没有可用目标时返回 `false` |
 
 ### `PluginService`
 
@@ -296,36 +299,21 @@ export default class GreetingService extends PluginService {
 
 ---
 
+### `sidebar`
+
+用 `this.addNavigationItem()` 把插件入口放到 Seed 侧栏。可以放在侧栏顶层、挂到内置栏目下，或在插件自己的分组中组织多个入口。
+
+- 打开页面时，先用 `this.registerView()` 注册页面，再在入口上指定对应的 `view`。需要区分多条记录时，通过 `params` 传入记录 ID。
+- 打开弹窗等操作用 `onSelect`，点击后用户留在当前页面。
+- 标题、顺序或未读数变化时，用注册返回的句柄更新入口。要从插件内打开一个已注册的入口，可调用 `this.app.sidebar.open(id)`。
+
+在 `onload()` 注册入口。已启用的官方插件会在用户进入 Seed 后提供入口，社区插件会在用户首次打开插件时注册入口。发布插件时，将 `minAppVersion` 设为首个支持该接口的客户端版本。
+
 ### `navigation`
 
-设置当前插件页面的头部面包屑，通过 `this.app.navigation` 使用。需要 MotusAI Seed 和 Seed SDK `0.3.10` 或更新版本；不支持该接口的客户端中，`navigation` 为 `undefined`。
+用 `this.app.navigation` 给插件页面添加头部面包屑，让用户能从详情返回上一级。打开页面时调用 `create()`，提供页面的取消信号和负责切换页面的 `onNavigate` 回调。用 `setPath()` 更新层级，插件首页使用空路径。
 
-| 方法 | 参数 | 返回值 |
-| --- | --- | --- |
-| `create(options)` | `PluginNavigationOptions`，在页面显示时创建 | `PluginNavigationHandle` |
-
-#### `PluginNavigationOptions`
-
-| 参数 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `signal` | `AbortSignal` | 是 | 页面或组件的取消信号，取消时释放导航句柄 |
-| `onNavigate` | `(id: string \| null, signal: AbortSignal) => void \| boolean \| Promise<void \| boolean>` | 是 | 切换到指定上级页面；`null` 表示插件首页，返回 `false` 取消本次导航 |
-
-#### `PluginNavigationHandle`
-
-| 方法 | 参数 | 返回值 |
-| --- | --- | --- |
-| `setPath(path)` | `readonly PluginBreadcrumb[]`，空数组表示插件首页 | `void` |
-| `back()` | 无，返回上一级 | `Promise<boolean>` |
-| `dispose()` | 无，释放句柄，可重复调用 | `void` |
-
-路径不包含头部已有的「插件」和插件名称。上级层级可点击，最后一项表示当前页面；页面切换由 `onNavigate` 回调处理。
-
-路径非空时收起插件信息区，显示当前子页面；返回插件首页或调用 `setPath([])` 时恢复插件信息。
-
-导航成功后，路径保留到目标层级；回调中调用 `setPath()` 时使用新的路径。回调执行期间忽略重复导航，失败时保留当前路径；`back()` 在插件首页、忙碌、句柄已释放或回调返回 `false` 时返回 `false`，回调异常时拒绝 Promise。
-
-新句柄替换旧句柄。页面隐藏、切换视图或插件重新加载后，原句柄失效。设置页中通过 `this.register(navigation.dispose)` 注册清理；React 页面在 effect 清理时调用 `dispose()`。回调中的异步操作应传递或检查取消信号。
+面包屑需要 Seed 和 Seed SDK 0.3.10 或更新版本。插件侧栏页面可在支持的客户端通过 `setActions()` 添加头部操作，例如打开页面设置。兼容旧客户端时，先检查所用接口是否可用。见 [头部面包屑与返回示例](#头部面包屑与返回)。
 
 ---
 
@@ -614,6 +602,13 @@ toast.error('保存失败', { description: '请检查连接后重试。' });
 ---
 
 ### `invokeHost` 详细说明
+
+插件后台可使用 `app.cloud.request({ resource, path, method, body })` 请求 Cloud 插件资源，并通过
+`app.cloud.watch(resource, listener)` 接收该资源的变更提示。Manifest 须为每个资源精确声明
+`cloud.resources.<resource>`，例如 `cloud.resources.inventory`。客户端以活动插件及其已校验
+Manifest 为准，在发送请求、交付结果、建立订阅和分发提示时校验资源权限。Cloud 继续校验账号
+的数据访问权限，登录凭据留在客户端。订阅只交付变更提示，插件据此重新读取数据。
+该接口和权限格式需要配套的客户端与 SDK。
 
 调用 Seed 系统服务，例如音频采集。
 

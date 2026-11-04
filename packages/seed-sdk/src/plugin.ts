@@ -17,6 +17,7 @@ import type {
 import type { CapabilityDefinition, CapabilityRegistration } from './capability.js';
 import type { PluginSettingTab, View, ViewHost } from './dom.js';
 import type { PluginNavigation } from './navigation.js';
+import type { PluginSidebar, PluginSidebarHandle, PluginSidebarItem } from './sidebar.js';
 import { createPluginI18n, type PluginTranslations } from './i18n.js';
 import type { i18n } from 'i18next';
 import { SeedPluginError } from './error.js';
@@ -25,6 +26,7 @@ import { createPluginEventClient, type PluginEventService } from './plugin-event
 import type { PluginResources, PluginFilePicker } from './resources.js';
 import { createSystemNotificationClient, type SystemNotificationService } from './notifications.js';
 import { createUserProfileClient, type SeedUserService } from './user-profile.js';
+import { createCloudResourceClient, type CloudResourceService } from './cloud-resources.js';
 
 export type PluginManifest = {
   id: string;
@@ -44,6 +46,8 @@ export type Command = {
 };
 
 export type App = {
+  /** Application-lifetime navigation contributions, independent of the visible page. */
+  sidebar?: PluginSidebar;
   /** Available in clients supporting plugin-owned header breadcrumbs. Feature-detect on older clients. */
   navigation?: PluginNavigation;
   /** Stable across package updates; changes after uninstall and reinstall. Undefined for local development sources. */
@@ -61,7 +65,7 @@ export type App = {
   data: PluginDataStore;
   service: { call<T = unknown>(method: string, args?: Record<string, unknown>, signal?: AbortSignal): Promise<T> };
   addSettingTab(tab: PluginSettingTab): () => void;
-  registerView(type: string, creator: (host: ViewHost) => View): () => void;
+  registerView(type: string, creator: (host: ViewHost) => View, options?: { toolbar?: boolean }): () => void;
   addCommand(command: Command): () => void;
   addToolbarItem(icon: string, title: string, callback: () => void): { element: HTMLElement; dispose(): void };
   addStatusBarItem(): { element: HTMLElement; dispose(): void };
@@ -88,6 +92,7 @@ export type PluginServices = {
 
 export type ServiceApp = PluginServices & {
   user: SeedUserService;
+  cloud: CloudResourceService;
   settings: PluginSettingsStore;
   events: PluginEventService;
   notifications: SystemNotificationService;
@@ -117,8 +122,14 @@ export class Plugin extends Component {
     this.addChild(tab);
     this.register(this.app.addSettingTab(tab));
   }
-  registerView(type: string, creator: (host: ViewHost) => View): void {
-    this.register(this.app.registerView(type, creator));
+  registerView(type: string, creator: (host: ViewHost) => View, options?: { toolbar?: boolean }): void {
+    this.register(this.app.registerView(type, creator, options));
+  }
+  addNavigationItem(item: PluginSidebarItem): PluginSidebarHandle {
+    if (!this.app.sidebar) throw new Error('This client does not support plugin sidebar contributions.');
+    const handle = this.app.sidebar.register(item);
+    this.register(handle.dispose);
+    return handle;
   }
   addCommand(command: Command): Command {
     if (!/^[a-z][a-z0-9_.-]{0,127}$/.test(command.id) || this.commands.has(command.id))
@@ -172,6 +183,8 @@ export class PluginService extends Component {
     this.app = {
       ...app,
       user: createUserProfileClient((service, args) => app.invokeHost(service, args), this.signal),
+      cloud: createCloudResourceClient((service, args) => app.invokeHost(service, args), this.signal,
+        error => { void app.diagnostics.error('plugin.cloud.subscription.failed', error).catch(() => undefined); }),
       capabilities: {
         list: () => app.capabilities.list(),
         invoke: (input) => app.capabilities.invoke(input),
