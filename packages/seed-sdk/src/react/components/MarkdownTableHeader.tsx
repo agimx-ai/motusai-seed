@@ -8,8 +8,7 @@ export function MarkdownTableHeader({ className, node: _node, ...props }: Compon
     const header = ref.current!;
     const table = header.closest('table');
     const win = header.ownerDocument.defaultView;
-    // Streamdown already pins the header inside its full-screen scroll area.
-    if (!win || !table || header.closest('[data-streamdown="table-fullscreen"]')) return;
+    if (!win || !table) return;
 
     // The immediate wrapper scrolls horizontally. Pin against the surrounding vertical viewport.
     const scrollport = table.parentElement!;

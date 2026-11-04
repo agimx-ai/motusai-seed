@@ -38,6 +38,7 @@ export function MarkdownContent({ children, streaming = false, renderImage, imag
     <div className="seed-markdown text-[13px] leading-6 text-foreground">
       <Streamdown
         mode={streaming ? 'streaming' : 'static'}
+        controls={{ table: { copy: true, download: false, fullscreen: false } }}
         tableMaxHeight={0}
         skipHtml
         rehypePlugins={rehypePlugins}

@@ -22,7 +22,7 @@
   margin-block-end: 0;
 }
 
-/* Keep Streamdown's horizontal scrolling and original table controls. */
+/* Keep Streamdown's horizontal scrolling and copy control. */
 .seed-markdown [data-streamdown='table-wrapper'] > div:has(> table) {
   min-width: 0;
   margin-inline: 12px;
@@ -49,13 +49,11 @@
   content: '表格' / '';
 }
 
-:is(.seed-markdown, [data-streamdown='table-fullscreen']:has(.seed-markdown-table-head))
-  [data-streamdown='table-wrapper'] > div:first-child:not(:has(> table)) button {
+.seed-markdown [data-streamdown='table-wrapper'] > div:first-child:not(:has(> table)) button {
   border-radius: 6px;
 }
 
-:is(.seed-markdown, [data-streamdown='table-fullscreen']:has(.seed-markdown-table-head))
-  [data-streamdown='table-wrapper'] > div:first-child:not(:has(> table)) button:has(> svg) {
+.seed-markdown [data-streamdown='table-wrapper'] > div:first-child:not(:has(> table)) button:has(> svg) {
   display: grid;
   place-items: center;
   width: 24px;
@@ -63,21 +61,19 @@
   padding: 4px;
 }
 
-:is(.seed-markdown, [data-streamdown='table-fullscreen']:has(.seed-markdown-table-head))
-  [data-streamdown='table-wrapper'] > div:first-child:not(:has(> table)) button:hover:not(:disabled) {
+.seed-markdown [data-streamdown='table-wrapper'] > div:first-child:not(:has(> table)) button:hover:not(:disabled) {
   background: var(--main-surface-hover);
   color: var(--foreground);
 }
 
-:is(.seed-markdown, [data-streamdown='table-fullscreen']:has(.seed-markdown-table-head))
-  [data-streamdown='table-wrapper'] > div:first-child:not(:has(> table)) > div > div:has(> button) {
+.seed-markdown [data-streamdown='table-wrapper'] > div:first-child:not(:has(> table)) > div > div:has(> button) {
   padding: 4px;
   border-radius: 8px;
   background: var(--card);
   box-shadow: var(--overlay-shadow);
 }
 
-:is(.seed-markdown, [data-streamdown='table-fullscreen']:has(.seed-markdown-table-head)) [data-streamdown='table'] {
+.seed-markdown [data-streamdown='table'] {
   border-collapse: separate;
   border-spacing: 0;
   background: transparent;
@@ -85,40 +81,20 @@
   line-height: 1.55;
 }
 
-:is(.seed-markdown, [data-streamdown='table-fullscreen']:has(.seed-markdown-table-head))
-  [data-streamdown='table'] > :is(thead, tbody) > tr > :is(th, td) {
-  padding: 0.55rem var(--seed-markdown-table-cell-inset, 10px);
+.seed-markdown [data-streamdown='table'] > :is(thead, tbody) > tr > :is(th, td) {
+  padding: 0.55rem var(--seed-markdown-table-cell-inset);
   border: 0;
   border-block-end: 1px solid var(--overlay-border);
   font-size: inherit;
   vertical-align: top;
 }
 
-:is(.seed-markdown, [data-streamdown='table-fullscreen']:has(.seed-markdown-table-head))
-  [data-streamdown='table'] > tbody > tr:last-child > td {
+.seed-markdown [data-streamdown='table'] > tbody > tr:last-child > td {
   border-block-end: 0;
 }
 
-.seed-markdown-table-head {
-  background: var(--seed-markdown-table-surface, var(--card));
-}
-
 .seed-markdown .seed-markdown-table-head {
+  background: var(--seed-markdown-table-surface, var(--card));
   position: relative;
   z-index: 1;
-}
-
-[data-streamdown='table-fullscreen']:has(.seed-markdown-table-head) {
-  color: var(--foreground);
-  background: var(--card);
-}
-
-[data-streamdown='table-fullscreen']:has(.seed-markdown-table-head)
-  [data-streamdown='table'] > :is(thead, tbody) > tr > :is(th, td) {
-  padding-block: 7px;
-}
-
-[data-streamdown='table-fullscreen']:has(.seed-markdown-table-head)
-  [data-streamdown='table'] > :is(thead, tbody) > tr > :is(th, td):not(:last-child) {
-  border-inline-end: 1px solid var(--overlay-border);
 }
