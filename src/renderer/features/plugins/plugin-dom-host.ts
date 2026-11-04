@@ -80,15 +80,8 @@ class PluginDomHost {
       this.releaseEvents = window.motusSeed.onPluginViewEvent((event) => {
         if (this.stopped || event.token !== this.token) return;
         if (event.type === 'message') void peer.receive(event.message);
-        else if (event.type === 'stop') {
-          const lease = this.lease;
-          const background = this.backgroundLease;
-          lease?.loading(true);
-          void this.stop().then(() => {
-            lease?.withdrawn();
-            background?.withdrawn();
-          });
-        } else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(userFacingErrorMessage(error)));
+        else if (event.type === 'stop') this.withdraw();
+        else void this.controller?.setAppearance(event.appearance).catch((error) => sdk.toast.error(userFacingErrorMessage(error)));
       });
       if (configuration.styleUrl) {
         const style = (this.style = document.createElement('link'));
@@ -152,17 +145,16 @@ class PluginDomHost {
     this.backgroundLease = lease;
     try {
       const configuration = await window.motusSeed.mountPluginView({ pluginId: this.pluginId, token: this.token, background: true });
-      if (!configuration || this.backgroundLease !== lease || this.stopped) return true;
+      if (!configuration || this.backgroundLease !== lease || this.stopped) return;
       if (this.generation && configuration.generation !== this.generation) {
-        await this.stop();
-        return false;
+        this.withdraw();
+        return;
       }
       await this.initialize(configuration);
-      return true;
     } catch (error) {
       const withdrawn = this.stopped;
       await this.stop();
-      if (withdrawn) return true;
+      if (withdrawn) return;
       throw error;
     }
   }
@@ -170,7 +162,8 @@ class PluginDomHost {
   release(lease: BackgroundLease) {
     if (this.backgroundLease !== lease) return;
     this.backgroundLease = undefined;
-    void this.stop();
+    // A new snapshot can replace the preload lease after the visible page has already reopened.
+    this.withdraw();
   }
 
   async show(container: HTMLElement, lease: ViewLease, target?: PluginPageTarget) {
@@ -179,7 +172,9 @@ class PluginDomHost {
     const configuration = await window.motusSeed.mountPluginView({ pluginId: this.pluginId, token: this.token });
     if (!configuration || this.lease !== lease || this.stopped) return true;
     if (this.generation && configuration.generation !== this.generation) {
+      const background = this.backgroundLease;
       await this.stop();
+      background?.withdrawn();
       return false;
     }
     try {
@@ -212,6 +207,16 @@ class PluginDomHost {
     this.element.remove();
     void window.motusSeed.unmountPluginView(this.token);
     void this.controller?.hide().catch((error) => sdk.toast.error(userFacingErrorMessage(error)));
+  }
+
+  private withdraw() {
+    const lease = this.lease;
+    const background = this.backgroundLease;
+    lease?.loading(true);
+    void this.stop().then(() => {
+      lease?.withdrawn();
+      background?.withdrawn();
+    });
   }
 
   async stop() {
@@ -262,7 +267,7 @@ export function mountPluginDom(
     for (let attempt = 0; active && attempt < 2; attempt++) {
       if (await host.show(container, lease, target)) return;
       if (!active) return;
-      host = new PluginDomHost(pluginId);
+      host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
       sessions.set(pluginId, host);
     }
     if (active) throw new Error('Plugin changed while its page was opening.');
@@ -291,9 +296,7 @@ export function retainPluginDom(pluginId: string, onError: (error: unknown) => v
   const start = () => {
     host = sessions.get(pluginId) ?? new PluginDomHost(pluginId);
     sessions.set(pluginId, host);
-    void host.prepare(lease).then((current) => {
-      if (active && !current) start();
-    }).catch((error) => { if (active) onError(error); });
+    void host.prepare(lease).catch((error) => { if (active) onError(error); });
   };
   start();
   return () => {

@@ -3,7 +3,7 @@ import type { PluginSidebar, PluginSidebarItem } from '@motus-ai/seed-sdk';
 export type PluginSidebarEntry = Readonly<PluginSidebarItem & { key: string; pluginId: string }>;
 export type PluginPageTarget = Readonly<{ view: string; params?: Readonly<Record<string, string>> }>;
 export type PluginSidebarRoute = PluginPageTarget & { key: string; pluginId: string; title: string };
-type Owner = { ready: boolean; items: Map<string, PluginSidebarItem> };
+type Owner = { items: Map<string, PluginSidebarItem> };
 const idPattern = /^[a-z][a-z0-9._-]{0,127}$/;
 const hostSlots = new Set(['overview', 'plugins', 'activity', 'quick-actions']);
 const empty: readonly PluginSidebarEntry[] = Object.freeze([]);
@@ -13,6 +13,7 @@ export class PluginSidebarRegistry {
   private readonly owners = new Map<string, Owner>();
   private readonly listeners = new Set<() => void>();
   private readonly routeListeners = new Set<(route: PluginSidebarRoute) => void>();
+  private readonly removalListeners = new Set<(key: string) => void>();
   private entries: readonly PluginSidebarEntry[] = empty;
   readonly subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -28,12 +29,16 @@ export class PluginSidebarRegistry {
     };
   }
 
-  isReady(pluginId: string): boolean {
-    return this.owners.get(pluginId)?.ready ?? false;
+  /** An item was explicitly removed, rather than temporarily withdrawn during frontend replacement. */
+  onRemove(listener: (key: string) => void) {
+    this.removalListeners.add(listener);
+    return () => {
+      this.removalListeners.delete(listener);
+    };
   }
 
-  attach(pluginId: string): { api: PluginSidebar; ready(): void; dispose(): void } {
-    const owner: Owner = { ready: false, items: new Map() };
+  attach(pluginId: string): { api: PluginSidebar; dispose(): void } {
+    const owner: Owner = { items: new Map() };
     this.owners.set(pluginId, owner);
     this.publish();
     const assertCurrent = () => {
@@ -63,13 +68,17 @@ export class PluginSidebarRegistry {
               if (disposed) return;
               disposed = true;
               if (this.owners.get(pluginId) !== owner || owner.items.get(current.id) !== current) return;
+              const removed: string[] = [];
               const remove = (id: string) => {
                 for (const child of [...owner.items.values()])
                   if (child.parent && 'item' in child.parent && child.parent.item === id) remove(child.id);
                 owner.items.delete(id);
+                removed.push(id);
               };
               remove(current.id);
               this.publish();
+              for (const id of removed)
+                for (const listener of this.removalListeners) listener(pluginId + ':' + id);
             },
           };
         },
@@ -77,11 +86,6 @@ export class PluginSidebarRegistry {
           assertCurrent();
           return this.open(pluginId + ':' + id);
         },
-      },
-      ready: () => {
-        assertCurrent();
-        owner.ready = true;
-        this.publish();
       },
       dispose: () => {
         if (this.owners.get(pluginId) !== owner) return;

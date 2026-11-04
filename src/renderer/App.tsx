@@ -67,11 +67,17 @@ export default function App() {
   const currentNavigationEntry = navigationEntries.find((entry) => entry.key === pluginRoute?.key);
   const routePluginEnabled = snapshot?.plugins.some((plugin) => plugin.id === pluginRoute?.pluginId && plugin.enabled && plugin.status === 'ready');
   useEffect(() => {
-    if (view === 'plugin-view' && pluginRoute && (!routePluginEnabled || !currentNavigationEntry && pluginSidebar.isReady(pluginRoute.pluginId))) {
+    if (view === 'plugin-view' && pluginRoute && !routePluginEnabled) {
       setPluginRoute(undefined);
       setView('overview');
     }
-  }, [view, currentNavigationEntry, pluginRoute, routePluginEnabled]);
+  }, [view, pluginRoute, routePluginEnabled]);
+  useEffect(() => pluginSidebar.onRemove((key) => {
+    if (view === 'plugin-view' && key === pluginRoute?.key) {
+      setPluginRoute(undefined);
+      setView('overview');
+    }
+  }), [view, pluginRoute?.key]);
   const updatingAllPlugins = snapshot?.pluginUpdates?.running ?? false;
   const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

@@ -251,7 +251,6 @@ export class PluginViewController {
     try {
       await plugin.load();
       this.assertActive();
-      this.sidebar.ready();
     } catch (error) {
       await this.stop();
       throw error;

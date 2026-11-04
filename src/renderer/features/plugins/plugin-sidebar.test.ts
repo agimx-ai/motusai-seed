@@ -56,6 +56,8 @@ describe('plugin sidebar ownership and routing', () => {
 
   it('fences stale generations and removes descendants without letting old handles resurrect them', () => {
     const registry = new PluginSidebarRegistry();
+    const removed = vi.fn();
+    registry.onRemove(removed);
     const old = registry.attach('com.example.one');
     const stale = old.api.register({ id: 'root', title: 'Old' });
     const current = registry.attach('com.example.one');
@@ -63,15 +65,19 @@ describe('plugin sidebar ownership and routing', () => {
     const child = current.api.register({ id: 'child', title: 'Child', parent: { item: 'root' }, view: 'detail' });
     old.dispose();
     stale.dispose();
+    expect(removed).not.toHaveBeenCalled();
     expect(registry.snapshot()).toHaveLength(2);
     expect(() => stale.update({ title: 'Stale' })).toThrow('no longer active');
     parent.dispose();
     expect(registry.snapshot()).toEqual([]);
+    expect(removed.mock.calls).toEqual([['com.example.one:child'], ['com.example.one:root']]);
     expect(() => child.update({ title: 'Resurrect' })).toThrow('removed');
     current.api.register({ id: 'root', title: 'Replacement' });
     current.api.register({ id: 'child', title: 'New child', parent: { item: 'root' } });
     child.dispose();
     expect(registry.snapshot()).toHaveLength(2);
+    current.dispose();
+    expect(removed).toHaveBeenCalledTimes(2);
   });
 
   it('rejects cycles and foreign or missing parents atomically', () => {

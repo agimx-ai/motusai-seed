@@ -257,6 +257,26 @@ describe('trusted frontend DOM mounting', () => {
     expect(error).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(loading).toHaveBeenLastCalledWith(false));
   });
+
+  it('keeps the visible page mounted when the snapshot replaces its background frontend', async () => {
+    const id = 'com.example.snapshot-reload';
+    const { configuration, container, error, loading, show } = fixture(id);
+    const release = retainPluginDom(id, error);
+    releases.push(release);
+    show();
+    await vi.waitFor(() => expect(loading).toHaveBeenLastCalledWith(false));
+
+    configuration.generation = 'replacement';
+    for (const listener of [...listeners]) listener({ token, type: 'stop' });
+    await vi.waitFor(() => expect(state.display).toHaveBeenCalledTimes(2));
+    release();
+    releases.push(retainPluginDom(id, error));
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Plugin-owned content'));
+    expect(loading).toHaveBeenLastCalledWith(false);
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('replaces a withdrawn hidden generation without requiring a manual reopen', async () => {
     const { container, error, configuration, show } = fixture('com.example.reload');
     const hide = show();

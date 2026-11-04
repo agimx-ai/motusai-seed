@@ -21,8 +21,8 @@ let owner;
 app.whenReady().then(async () => {
   let failed = false;
   try {
-    const fixture = async (name, parent) => {
-      const path = join(root, name);
+    const fixture = async (name, parent, reloaded = false) => {
+      const path = join(root, reloaded ? name + '-reloaded' : name);
       await cp(resolve('packages/seed-sdk/tests/fixtures/generic'), path, { recursive: true });
       const manifest = JSON.parse(await readFile(join(path, 'manifest.json'), 'utf8'));
       manifest.id = 'com.example.' + name;
@@ -35,6 +35,8 @@ app.whenReady().then(async () => {
           async onOpen() {
             this.containerEl.dataset.fixture = '${name}';
             this.containerEl.dataset.record = this.route.record;
+            this.containerEl.dataset.mount = crypto.randomUUID();
+            this.containerEl.dataset.reloaded = '${reloaded}';
             if (this.route.record === 'broken') throw new Error('Page failed to open');
             this.containerEl.innerHTML = '<p>${name}</p><input aria-label="Draft"/><div style="height:1400px"></div><p>End of plugin page</p>';
           }
@@ -43,14 +45,19 @@ app.whenReady().then(async () => {
           onload() {
             this.registerView('page', host => new Page(this.app, host), { toolbar: false });
             const root = this.addNavigationItem({ id: 'root', title: '${name}', icon: 'folder', ${parent ? `parent: { host: '${parent}' },` : ''} });
-            const page = this.addNavigationItem({ id: 'record', title: '${name} record', icon: 'messages-square', view: 'page', parent: { item: 'root' }, params: { record: '123' }, badge: 2 });
+            let page;
+            const registerRecord = () => {
+              page ??= this.addNavigationItem({ id: 'record', title: '${name} record', icon: 'messages-square', view: 'page', parent: { item: 'root' }, params: { record: '123' }, badge: 2 });
+            };
+            if (${reloaded}) this.registerDomEvent(document, 'seed-smoke-restore-record', registerRecord);
+            else registerRecord();
             this.addNavigationItem({ id: 'broken', title: '${name} broken', view: 'page', parent: { item: 'root' }, params: { record: 'broken' } });
             if (!this.app.sidebar?.supportsHost?.('quick-actions')) throw new Error('Missing quick actions host');
             this.addNavigationItem({
               id: 'create', title: '${name} create', icon: 'message-circle', parent: { host: 'quick-actions' },
               onSelect: () => { document.body.dataset.quickAction = '${name}'; },
             });
-            this.registerEvent(this.app.events.on('appearance-change', () => page.update({ title: this.app.locale === 'en-US' ? '${name} record' : '${name} 记录' })));
+            this.registerEvent(this.app.events.on('appearance-change', () => page?.update({ title: this.app.locale === 'en-US' ? '${name} record' : '${name} 记录' })));
           }
         }
       `);
@@ -73,6 +80,10 @@ app.whenReady().then(async () => {
     delete snapshot.navigationRequest;
     snapshot.locale = snapshot.languagePreference = 'en-US';
     page.runtime.snapshot = () => structuredClone(snapshot);
+    page.runtime.store = {
+      themePreference: () => snapshot.themePreference,
+      languagePreference: () => snapshot.languagePreference,
+    };
     const errors = [];
     owner.webContents.on('console-message', event => { if (event.level === 'error') errors.push(event.message); });
     await page.load();
@@ -121,6 +132,22 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate(`document.querySelector('aside')?.textContent.includes('documents record')`), true);
     await clickLabel('documents record');
     await wait(`document.querySelector('[data-fixture="documents"]')?.dataset.record === '123' && !document.querySelector('main [role="alert"]')`);
+    const replacement = await fixture('documents', 'overview', true);
+    await docs.view.destroy();
+    page.runtime.runtimePlugins = [replacement.plugin, monitor.plugin];
+    page.runtime.pluginViewHosts.set(replacement.plugin.package_id, replacement.view);
+    const reloadedPage = '[data-fixture="documents"][data-reloaded="true"][data-record="123"]';
+    await wait(`!!document.querySelector(${JSON.stringify(reloadedPage)}) && document.querySelector('[data-plugin-view-surface]')?.getAttribute('aria-busy') === 'false'`);
+    const mount = await evaluate(`document.querySelector(${JSON.stringify(reloadedPage)}).dataset.mount`);
+    snapshot.plugins.find(plugin => plugin.id === replacement.plugin.package_id).manifestDigest = replacement.inspected.manifestDigest;
+    owner.webContents.send('seed:event', { type: 'snapshot.changed', snapshot: structuredClone(snapshot) });
+    await wait(`(() => {
+      const page = document.querySelector(${JSON.stringify(reloadedPage)});
+      return page && page.dataset.mount !== ${JSON.stringify(mount)} && document.querySelector('[data-plugin-view-surface]')?.getAttribute('aria-busy') === 'false';
+    })()`);
+    views.push(page.runtime.pluginViewHosts.get(replacement.plugin.package_id));
+    await evaluate(`document.dispatchEvent(new Event('seed-smoke-restore-record'))`);
+    await wait(`document.querySelector('aside nav button[aria-current="page"]')?.textContent.includes('documents record')`);
     await clickLabel('monitor record');
     await wait(`!!document.querySelector('[data-fixture="monitor"]')`);
     assert.equal(await evaluate('document.querySelectorAll("[data-plugin-view-owner]").length'), 1);
