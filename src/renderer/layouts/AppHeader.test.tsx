@@ -32,6 +32,9 @@ describe('product header breadcrumbs', () => {
       refreshing={false} onBackToPlugins={vi.fn()} onRefreshPlugins={vi.fn()} onEditProfile={vi.fn()} onAddCredits={vi.fn()} /></SeedI18nProvider>);
     const invite = screen.getByRole('button', { name: '邀请' });
     expect(invite.hasAttribute('title')).toBe(false);
+    const icon = invite.querySelector('svg');
+    expect(icon?.getAttribute('width')).toBe('15');
+    expect(icon?.getAttribute('stroke-width')).toBe('1.8');
     fireEvent.click(invite);
     expect(onClick).toHaveBeenCalledOnce();
     expect(screen.getByText('群聊')).toBeTruthy();

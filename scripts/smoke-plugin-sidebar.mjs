@@ -38,6 +38,11 @@ app.whenReady().then(async () => {
             this.containerEl.dataset.mount = crypto.randomUUID();
             this.containerEl.dataset.reloaded = '${reloaded}';
             if (this.route.record === 'broken') throw new Error('Page failed to open');
+            const navigation = this.app.navigation.create({ signal: this.signal, onNavigate: () => false });
+            navigation.setActions([
+              { id: 'edit', label: 'Edit record', icon: 'pencil', onClick() {} },
+              { id: 'share', label: 'Share record', icon: 'user-plus', onClick() {} },
+            ]);
             this.containerEl.innerHTML = '<p>${name}</p><input aria-label="Draft"/><div style="height:1400px"></div><p>End of plugin page</p>';
           }
         }
@@ -127,6 +132,16 @@ app.whenReady().then(async () => {
     await clickLabel('documents record');
     await wait(`document.querySelector('[data-fixture="documents"]')?.dataset.record === '123'`);
     assert.equal(await evaluate('document.querySelector(".seed-plugin-toolbar").hidden'), true);
+    assert.deepEqual(await evaluate(`(() => {
+      const title = getComputedStyle(document.querySelector('.seed-app-header h1'));
+      return [title.fontSize, title.fontWeight];
+    })()`), ['14px', '400']);
+    assert.deepEqual(await evaluate(`(() => {
+      const edit = document.querySelector('.seed-app-header button[aria-label="Edit record"]');
+      const share = document.querySelector('.seed-app-header button[aria-label="Share record"]');
+      const button = edit.getBoundingClientRect();
+      return [button.width, button.height, share.getBoundingClientRect().left - button.right, edit.querySelector('svg').getBoundingClientRect().width];
+    })()`), [28, 28, 2, 15]);
     await clickLabel('documents broken');
     await wait(`document.querySelector('main [role="alert"]')?.textContent === 'Page failed to open'`);
     assert.equal(await evaluate(`document.querySelector('aside')?.textContent.includes('documents record')`), true);

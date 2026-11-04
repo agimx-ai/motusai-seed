@@ -129,6 +129,8 @@ export function AppHeader({
             </Fragment>
           ))}
         </nav>
+      ) : view === 'plugin-view' ? (
+        <h1 className="m-0 min-w-0 truncate text-[14px] font-normal" title={title}>{title}</h1>
       ) : isWindows ? (
         <div className={`flex items-center ${view === 'usage' ? 'gap-2' : 'gap-1'}`}>
           <h1 className="m-0 text-[16px] font-medium">{title}</h1>
@@ -137,10 +139,10 @@ export function AppHeader({
       ) : (
         <h1 className="m-0 text-[16px] font-medium">{title}</h1>
       )}
-      {view === 'plugin-view' && navigation?.actions?.length ? <div className="flex items-center gap-2 [-webkit-app-region:no-drag]">{navigation.actions.map((action) => {
+      {view === 'plugin-view' && navigation?.actions?.length ? <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">{navigation.actions.map((action) => {
         const key = action.icon.replace(/(^|-)([a-z])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
         const Icon = icons[key as keyof typeof icons];
-        return <HeaderActionButton key={action.id} aria-label={action.label} onClick={action.onClick}>{Icon && <Icon size={18} />}</HeaderActionButton>;
+        return <HeaderActionButton compact key={action.id} aria-label={action.label} onClick={action.onClick}>{Icon && <Icon size={15} strokeWidth={1.8} aria-hidden="true" />}</HeaderActionButton>;
       })}</div> : !isWindows && (actions || <span />)}
     </header>
   );
