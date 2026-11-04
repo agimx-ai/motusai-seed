@@ -152,18 +152,25 @@ class PluginDomHost {
     }
     try {
       await this.initialize(configuration);
-      if (this.lease !== lease || this.stopped) return true;
-      container.append(this.element);
-      await this.controller!.setAppearance(configuration);
-      await this.controller!.show();
-      if (this.lease === lease && !this.stopped) lease.loading(false);
-      return true;
     } catch (error) {
       const withdrawn = this.stopped;
       await this.stop();
       if (withdrawn) return true;
       throw error;
     }
+    if (this.lease !== lease || this.stopped) return true;
+    container.append(this.element);
+    try {
+      await this.controller!.setAppearance(configuration);
+      if (this.lease !== lease || this.stopped) return true;
+      await this.controller!.show();
+    } catch (error) {
+      if (this.lease !== lease || this.stopped) return true;
+      this.hide(lease);
+      throw error;
+    }
+    if (this.lease === lease && !this.stopped) lease.loading(false);
+    return true;
   }
 
   hide(lease: ViewLease) {

@@ -126,6 +126,23 @@ describe('trusted frontend DOM mounting', () => {
     expect(loading.mock.calls.map(([value]) => value)).toEqual([true, false]);
   });
 
+  it('reports a page failure without unloading the frontend and allows reopening', async () => {
+    const { container, error, loading, show } = fixture('com.example.page-failure');
+    const failure = new Error('Page failed to open');
+    state.display.mockRejectedValueOnce(failure);
+    const hide = show();
+    await vi.waitFor(() => expect(error).toHaveBeenCalledWith(failure));
+    expect(loading).toHaveBeenLastCalledWith(false);
+    expect(container.children).toHaveLength(0);
+    expect(state.unload).not.toHaveBeenCalled();
+    const firstToken = token;
+    hide();
+    show();
+    await vi.waitFor(() => expect(container.textContent).toContain('Plugin-owned content'));
+    expect(token).toBe(firstToken);
+    expect(state.load).toHaveBeenCalledOnce();
+  });
+
   it('provides generic write-only clipboard access and fences it after runtime withdrawal', async () => {
     const { container, show } = fixture('com.example.clipboard');
     show();
