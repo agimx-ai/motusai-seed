@@ -113,6 +113,12 @@ app.whenReady().then(async () => {
     const quickMenu = `document.querySelector('[role="menu"][aria-label="Quick actions"], [role="menu"][aria-label="快捷操作"]')`;
     const openQuickActions = () => evaluate(`document.querySelector(${JSON.stringify(quickTrigger)}).click()`);
     assert.equal(await evaluate(`!document.querySelector('aside nav')?.textContent.includes('documents create')`), true);
+    await evaluate(`document.querySelector(${JSON.stringify(quickTrigger)}).dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }))`);
+    await wait(`!!${quickMenu} && document.activeElement === document.querySelector(${JSON.stringify(quickTrigger)})`);
+    await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))`);
+    await wait(`document.activeElement?.textContent === 'documents create'`);
+    await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await wait(`!${quickMenu}`);
     await openQuickActions();
     await wait(`document.activeElement?.textContent === 'documents create'`);
     await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))`);
@@ -190,6 +196,10 @@ app.whenReady().then(async () => {
       const triggerSelector = `aside button[aria-label="${locale === 'en-US' ? 'Quick actions' : '快捷操作'}"]`;
       await evaluate(`document.querySelector(${JSON.stringify(triggerSelector)}).click()`);
       await wait(`!!${quickMenu}`);
+      assert.equal(await evaluate(`(() => {
+        const activeColor = element => getComputedStyle(element).getPropertyValue('--sidebar-item-active').trim();
+        return activeColor(${quickMenu}) === activeColor(document.querySelector('.seed-sidebar'));
+      })()`), true, 'Quick actions use the sidebar highlight color');
       assert.equal(await evaluate(`(() => {
         const sidebar = document.querySelector('aside').getBoundingClientRect();
         const trigger = document.querySelector(${JSON.stringify(triggerSelector)}).getBoundingClientRect();

@@ -563,13 +563,11 @@
   background: linear-gradient(180deg, rgba(38, 55, 65, 0.95) 0%, rgba(34, 49, 55, 0.92) 100%);
 }
 
-:root[data-platform='darwin'][data-theme='dark'] .seed-sidebar {
+:root:is([data-platform='darwin'], [data-platform='win32'])[data-theme='dark'] :is(.seed-sidebar, .seed-quick-actions-menu) {
   --sidebar-item-active: rgba(255, 255, 255, 0.09);
-  background: linear-gradient(180deg, rgba(34, 34, 34, 0.72) 0%, rgba(27, 27, 27, 0.66) 100%);
 }
 
-:root[data-platform='win32'][data-theme='dark'] .seed-sidebar {
-  --sidebar-item-active: rgba(255, 255, 255, 0.09);
+:root:is([data-platform='darwin'], [data-platform='win32'])[data-theme='dark'] .seed-sidebar {
   background: linear-gradient(180deg, rgba(34, 34, 34, 0.72) 0%, rgba(27, 27, 27, 0.66) 100%);
 }
 

@@ -18,7 +18,7 @@ export function SidebarQuickActions({ collapsed }: { collapsed: boolean }) {
   const menuId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
-  const initialFocus = useRef<'first' | 'last'>('first');
+  const initialFocus = useRef<'trigger' | 'first' | 'last'>('first');
   const contains = useCallback((target: Node | null) => trigger.current?.contains(target) || menu.current?.contains(target), []);
 
   useEffect(() => {
@@ -51,9 +51,13 @@ export function SidebarQuickActions({ collapsed }: { collapsed: boolean }) {
 
   useEffect(() => {
     if (!shown) return;
-    menu.current?.querySelector<HTMLButtonElement>(
-      initialFocus.current === 'first' ? '[role="menuitem"]:first-child' : '[role="menuitem"]:last-child',
-    )?.focus();
+    if (initialFocus.current === 'trigger') {
+      trigger.current?.focus();
+    } else {
+      menu.current?.querySelector<HTMLButtonElement>(
+        initialFocus.current === 'first' ? '[role="menuitem"]:first-child' : '[role="menuitem"]:last-child',
+      )?.focus();
+    }
     const outside = (event: PointerEvent) => {
       if (!contains(event.target as Node)) setOpen(false);
     };
@@ -123,8 +127,8 @@ export function SidebarQuickActions({ collapsed }: { collapsed: boolean }) {
           'grid h-6 w-6 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-[var(--sidebar-item-active)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           shown && 'bg-[var(--sidebar-item-active)] text-foreground',
         )}
-        onClick={() => {
-          initialFocus.current = 'first';
+        onClick={(event) => {
+          initialFocus.current = event.detail === 0 ? 'first' : 'trigger';
           setOpen(!shown);
         }}
       >
@@ -136,7 +140,7 @@ export function SidebarQuickActions({ collapsed }: { collapsed: boolean }) {
           id={menuId}
           role="menu"
           aria-label={label}
-          className="seed-account-menu fixed z-[80] w-max min-w-32 max-w-44 rounded-[12px] border p-1"
+          className="seed-account-menu seed-quick-actions-menu fixed z-[80] w-max min-w-32 max-w-44 rounded-[12px] border p-1"
         >
           <svg
             aria-hidden="true"
@@ -156,7 +160,7 @@ export function SidebarQuickActions({ collapsed }: { collapsed: boolean }) {
                 type="button"
                 role="menuitem"
                 tabIndex={-1}
-                className="flex min-h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-foreground hover:bg-[var(--sidebar-item-active)] focus:bg-[var(--sidebar-item-active)] focus:outline-none"
+                className="flex min-h-8 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[13px] text-foreground hover:bg-[var(--sidebar-item-active)] focus:bg-[var(--sidebar-item-active)] focus:outline-none"
                 onClick={() => {
                   close();
                   try {
