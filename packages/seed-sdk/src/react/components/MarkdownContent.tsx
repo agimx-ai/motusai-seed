@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, type ComponentProps, type ReactNode } from 'react';
 import { Streamdown, defaultRehypePlugins, type Components, type StreamdownProps } from 'streamdown';
+import { MarkdownTableHeader } from './MarkdownTableHeader';
 
 export type MarkdownImage = { src: string; alt: string; title?: string };
 type ImageRenderer = (image: MarkdownImage) => ReactNode;
@@ -34,9 +35,10 @@ export function MarkdownContent({ children, streaming = false, renderImage, imag
   const images = renderImage ? { img: ReferencedImage } as Components : {};
   return (
     <ImageRendererContext.Provider value={renderImage}>
-    <div className="text-[13px] leading-6 text-foreground">
+    <div className="seed-markdown text-[13px] leading-6 text-foreground">
       <Streamdown
         mode={streaming ? 'streaming' : 'static'}
+        tableMaxHeight={0}
         skipHtml
         rehypePlugins={rehypePlugins}
         components={{
@@ -47,6 +49,7 @@ export function MarkdownContent({ children, streaming = false, renderImage, imag
           p: ({ children }) => <p className="my-3">{children}</p>,
           ul: ({ children }) => <ul className="my-3 list-disc space-y-1 pl-5">{children}</ul>,
           ol: ({ children }) => <ol className="my-3 list-decimal space-y-1 pl-5">{children}</ol>,
+          thead: MarkdownTableHeader,
           blockquote: ({ children }) => (
             <blockquote className="my-4 border-l-2 border-border pl-4 text-muted-foreground">{children}</blockquote>
           ),

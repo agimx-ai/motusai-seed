@@ -21,4 +21,14 @@ describe('MarkdownContent', () => {
     expect(html).toContain('class="my-3"');
     expect(html).toContain('mb-2 mt-6');
   });
+
+  it('keeps table semantics and Streamdown actions with the shared table style', () => {
+    const html = renderToStaticMarkup(<MarkdownContent>{'| Name | Count |\n| --- | ---: |\n| Items | 3 |'}</MarkdownContent>);
+    expect(html).toContain('data-streamdown="table-wrapper"');
+    expect(html).toContain('data-streamdown="table-header" class="seed-markdown-table-head"');
+    expect(html).toContain('style="text-align:right"');
+    expect(html).toContain('title="Copy table"');
+    expect(html).toContain('title="Download table"');
+    expect(html).toContain('title="View fullscreen"');
+  });
 });

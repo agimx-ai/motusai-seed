@@ -420,7 +420,7 @@ export default class GreetingService extends PluginService {
 | `StatusBadge` | `children`、`tone`、可选 `onClick` | 状态胶囊 |
 | `Dialog` | `open`、`title`、`closeLabel`、`onClose`、`children`、`busy` | 带焦点管理的对话框 |
 | `Flow` / `FlowStep` | `children`；步骤还需 `icon`、`title`，可选 `muted` | 步骤布局 |
-| `MarkdownContent` | `children: string`、`streaming`、`renderImage?: (image: MarkdownImage) => ReactNode`、`imageProtocols?: readonly string[]` | 静态 / 流式 Markdown；图片解析由调用方按自身资源边界提供，额外协议只用于图片回调，不用于普通链接或浏览器图片加载；默认行为不变 |
+| `MarkdownContent` | `children: string`、`streaming`、`renderImage?: (image: MarkdownImage) => ReactNode`、`imageProtocols?: readonly string[]` | 静态和流式 Markdown。长表格滚动时保留表头。图片解析由调用方提供，额外协议仅用于图片回调。 |
 | `Collection` / `CollectionCard` | `children`；卡片使用 `icon`、`title`、`description`、`onOpen`、`actions` | 集合与可打开的卡片 |
 
 #### `SelectControl` 参数

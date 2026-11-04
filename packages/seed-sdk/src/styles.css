@@ -4,6 +4,7 @@
 @import './theme.css';
 @import 'driver.js/dist/driver.css' layer(components);
 @import './components.css';
+@import './markdown.css';
 @import './tour.css';
 @source './react/**/*.{ts,tsx}';
 @source './dom.ts';
