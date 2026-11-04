@@ -7,6 +7,7 @@ import {
   type Plugin,
   type PluginManifest,
   type PluginSettingTab,
+  type PluginViewOptions,
   type View,
   type ViewHost,
 } from '@motus-ai/seed-sdk';
@@ -25,7 +26,7 @@ export class PluginViewController {
   readonly app: App;
   private plugin?: Plugin;
   private readonly tabs: PluginSettingTab[] = [];
-  private readonly views = new Map<string, (host: ViewHost) => View>();
+  private readonly views = new Map<string, { creator: (host: ViewHost) => View; layout: PluginViewOptions['layout'] }>();
   private readonly viewButtons = new Map<string, HTMLButtonElement>();
   private active?: Active;
   private navigation = Promise.resolve();
@@ -110,7 +111,7 @@ export class PluginViewController {
       registerView: (type, creator, options) => {
         this.assertActive();
         if (this.views.has(type)) throw new Error('Duplicate view type: ' + type);
-        this.views.set(type, creator);
+        this.views.set(type, { creator, layout: options?.layout });
         const item = options?.toolbar === false ? undefined : action(type, () => this.schedule(() => this.openView(type)));
         if (item) this.viewButtons.set(type, item.element);
         this.refreshTabNavigation();
@@ -198,13 +199,17 @@ export class PluginViewController {
     }
   }
 
-  private async openView(type: string, params?: Readonly<Record<string, string>>) {
-    const creator = this.views.get(type);
-    if (!creator) throw new Error('Plugin page is not registered: ' + type);
-    const target = JSON.stringify([type, params ?? {}]);
+  private async openView(type: string, page?: PluginPageTarget) {
+    const registration = this.views.get(type);
+    if (!registration) throw new Error('Plugin page is not registered: ' + type);
+    const { creator, layout } = registration;
+    const params = page?.params;
+    const edgeToEdge = !!page && layout === 'edge-to-edge';
+    const target = JSON.stringify([type, params ?? {}, edgeToEdge]);
     if (this.active?.key === creator && this.pageTarget === target) return;
     await this.closeActive();
     const containerEl = document.createElement('section');
+    if (edgeToEdge) containerEl.dataset.pluginViewLayout = 'edge-to-edge';
     this.surface.content.append(containerEl);
     let view: View | undefined;
     const close = async () => {
@@ -263,7 +268,7 @@ export class PluginViewController {
       if (this.visible && !target) return;
       this.visible = true;
       try {
-        if (target) await this.openView(target.view, target.params);
+        if (target) await this.openView(target.view, target);
         else if (this.tabs[0]) await this.openTab(this.tabs[0]);
       } catch (error) {
         this.visible = false;

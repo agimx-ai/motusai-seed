@@ -53,6 +53,7 @@ export {
   type App,
   type Command,
   type PluginManifest,
+  type PluginViewOptions,
   type PluginDataStore,
   type PluginDataSnapshot,
 } from './plugin.js';

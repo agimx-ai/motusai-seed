@@ -48,7 +48,7 @@ app.whenReady().then(async () => {
         }
         export default class Example extends Plugin {
           onload() {
-            this.registerView('page', host => new Page(this.app, host), { toolbar: false });
+            this.registerView('page', host => new Page(this.app, host), { toolbar: false${name === 'monitor' ? ", layout: 'edge-to-edge'" : ''} });
             const root = this.addNavigationItem({ id: 'root', title: '${name}', icon: 'folder', ${parent ? `parent: { host: '${parent}' },` : ''} });
             let page;
             const registerRecord = () => {
@@ -131,6 +131,15 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate('!!document.querySelector("[data-plugin-view-surface]")'), false, 'Navigation registered before any plugin detail was opened');
     await clickLabel('documents record');
     await wait(`document.querySelector('[data-fixture="documents"]')?.dataset.record === '123'`);
+    const viewInsets = () => evaluate(`(() => {
+      const header = document.querySelector('.seed-app-header');
+      const main = document.querySelector('[data-plugin-view-surface]').parentElement.getBoundingClientRect();
+      const divider = header.getBoundingClientRect().bottom -
+        (header.matches('.seed-app-header--plugin-mac') ? parseFloat(getComputedStyle(header, '::after').bottom) : 0);
+      return [main.top - divider, innerHeight - main.bottom];
+    })()`);
+    const defaultInsets = [process.platform === 'darwin' ? 12 : 0, 12];
+    assert.deepEqual(await viewInsets(), defaultInsets, 'Default views keep their existing spacing');
     assert.equal(await evaluate('document.querySelector(".seed-plugin-toolbar").hidden'), true);
     assert.deepEqual(await evaluate(`(() => {
       const title = getComputedStyle(document.querySelector('.seed-app-header h1'));
@@ -165,6 +174,7 @@ app.whenReady().then(async () => {
     await wait(`document.querySelector('aside nav button[aria-current="page"]')?.textContent.includes('documents record')`);
     await clickLabel('monitor record');
     await wait(`!!document.querySelector('[data-fixture="monitor"]')`);
+    assert.deepEqual(await viewInsets(), [0, 0], 'An opted-in view touches the header divider and window bottom');
     assert.equal(await evaluate('document.querySelectorAll("[data-plugin-view-owner]").length'), 1);
     assert.equal(await evaluate('document.querySelectorAll("iframe, webview").length'), 0);
     for (const theme of ['light', 'dark']) for (const width of [960, 1280]) for (const locale of ['zh-CN', 'en-US']) {
@@ -174,6 +184,7 @@ app.whenReady().then(async () => {
       owner.setSize(width, 720);
       const title = locale === 'en-US' ? 'monitor record' : 'monitor 记录';
       await wait(`document.documentElement.lang === ${JSON.stringify(locale)} && document.documentElement.dataset.theme === ${JSON.stringify(theme)} && document.querySelector('aside')?.textContent.includes(${JSON.stringify(title)})`);
+      assert.deepEqual(await viewInsets(), [0, 0]);
       assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'), false);
       await writeFile(join(screenshots, `${theme}-${width}-${locale}.png`), (await owner.webContents.capturePage()).toPNG());
       const triggerSelector = `aside button[aria-label="${locale === 'en-US' ? 'Quick actions' : '快捷操作'}"]`;
@@ -202,6 +213,11 @@ app.whenReady().then(async () => {
     await evaluate('document.querySelector("main").scrollTop = 0');
     owner.webContents.sendInputEvent({ type: 'mouseWheel', x: 700, y: 500, deltaY: -500, deltaX: 0, canScroll: true });
     await wait('document.querySelector("main").scrollTop > 0');
+    await clickLabel(snapshot.locale === 'en-US' ? 'documents record' : 'documents 记录');
+    await wait(`!!document.querySelector('[data-fixture="documents"]')`);
+    assert.deepEqual(await viewInsets(), defaultInsets, 'Switching back restores the default spacing');
+    await clickLabel(snapshot.locale === 'en-US' ? 'monitor record' : 'monitor 记录');
+    await wait(`!!document.querySelector('[data-fixture="monitor"]')`);
     const monitorInstalled = snapshot.plugins.find(plugin => plugin.id === monitor.plugin.package_id);
     monitorInstalled.enabled = false;
     owner.webContents.send('seed:event', { type: 'snapshot.changed', snapshot: structuredClone(snapshot) });

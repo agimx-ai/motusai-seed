@@ -45,6 +45,12 @@ export type Command = {
   checkCallback?: (checking: boolean) => boolean | void;
 };
 
+export type PluginViewOptions = {
+  toolbar?: boolean;
+  /** Let an independently opened view fill the space from the header divider to the bottom of the window. */
+  layout?: 'edge-to-edge';
+};
+
 export type App = {
   /** Application-lifetime navigation contributions, independent of the visible page. */
   sidebar?: PluginSidebar;
@@ -65,7 +71,7 @@ export type App = {
   data: PluginDataStore;
   service: { call<T = unknown>(method: string, args?: Record<string, unknown>, signal?: AbortSignal): Promise<T> };
   addSettingTab(tab: PluginSettingTab): () => void;
-  registerView(type: string, creator: (host: ViewHost) => View, options?: { toolbar?: boolean }): () => void;
+  registerView(type: string, creator: (host: ViewHost) => View, options?: PluginViewOptions): () => void;
   addCommand(command: Command): () => void;
   addToolbarItem(icon: string, title: string, callback: () => void): { element: HTMLElement; dispose(): void };
   addStatusBarItem(): { element: HTMLElement; dispose(): void };
@@ -122,7 +128,7 @@ export class Plugin extends Component {
     this.addChild(tab);
     this.register(this.app.addSettingTab(tab));
   }
-  registerView(type: string, creator: (host: ViewHost) => View, options?: { toolbar?: boolean }): void {
+  registerView(type: string, creator: (host: ViewHost) => View, options?: PluginViewOptions): void {
     this.register(this.app.registerView(type, creator, options));
   }
   addNavigationItem(item: PluginSidebarItem): PluginSidebarHandle {
