@@ -84,6 +84,15 @@ app.whenReady().then(async () => {
     };
     const clickLabel = label => evaluate(`(()=>{const label=[...document.querySelectorAll('aside button span')].find(el=>el.textContent===${JSON.stringify(label)});if(!label)throw Error('Missing navigation button');label.closest('button').click()})()`);
     await wait(`document.querySelector('aside')?.textContent.includes('documents record') && document.querySelector('aside')?.textContent.includes('monitor record')`);
+    assert.equal(await evaluate(`(() => {
+      const buttons = Array.from(document.querySelectorAll('aside nav button'));
+      const levels = [buttons[0], ...['documents', 'documents record'].map(title =>
+        buttons.find(button => button.querySelector('span')?.textContent === title))];
+      const iconPositions = levels.map(button => button.querySelector('svg').getBoundingClientRect().left);
+      const rows = levels.map(button => button.closest('li').firstElementChild.getBoundingClientRect());
+      return iconPositions[1] - iconPositions[0] === 12 && iconPositions[2] - iconPositions[1] === 12 &&
+        rows.every(row => row.left === rows[0].left && row.right === rows[0].right);
+    })()`), true, 'Each child level indents its content while keeping a full-width row');
     const quickTrigger = 'aside button[aria-haspopup="menu"][aria-label="Quick actions"]';
     const quickMenu = `document.querySelector('[role="menu"][aria-label="Quick actions"], [role="menu"][aria-label="快捷操作"]')`;
     const openQuickActions = () => evaluate(`document.querySelector(${JSON.stringify(quickTrigger)}).click()`);

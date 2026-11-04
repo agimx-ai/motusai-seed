@@ -66,7 +66,7 @@ export function SidebarNavigation({
           <button
             type="button"
             className="flex h-8 min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            style={depth ? { paddingInlineStart: 12 + depth * 21 } : undefined}
+            style={depth ? { paddingInlineStart: 12 + depth * 12 } : undefined}
             onClick={open ?? (() => toggle(key))}
             aria-current={active ? 'page' : undefined}
             aria-label={badge ? `${title}, ${badge}` : undefined}
@@ -97,7 +97,7 @@ export function SidebarNavigation({
           )}
         </div>
         {children.length > 0 && expanded && (
-          <ul className="m-0 grid gap-0.5 py-0.5 pl-0">{children.map((child) => pluginNode(child, key.startsWith('host:') ? 0 : depth + 1))}</ul>
+          <ul className="m-0 grid gap-0.5 py-0.5 pl-0">{children.map((child) => pluginNode(child, depth + 1))}</ul>
         )}
       </li>
     );
