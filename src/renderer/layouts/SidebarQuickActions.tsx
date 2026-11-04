@@ -156,7 +156,6 @@ export function SidebarQuickActions({ collapsed }: { collapsed: boolean }) {
                 type="button"
                 role="menuitem"
                 tabIndex={-1}
-                title={entry.title}
                 className="flex min-h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-foreground hover:bg-[var(--sidebar-item-active)] focus:bg-[var(--sidebar-item-active)] focus:outline-none"
                 onClick={() => {
                   close();

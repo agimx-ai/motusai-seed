@@ -154,11 +154,9 @@ export function Sidebar({
     >
       <div className="flex h-full w-[224px] min-h-0 shrink-0 flex-col px-4 pb-0">
         <div className="mb-4 flex min-h-6 items-center gap-1 px-1">
-          <Tooltip content={snapshot.appName}>
-            <div className="min-w-0 flex-1 truncate font-display text-[16px] font-semibold leading-6 tracking-[-.015em]">
-              {snapshot.appName}
-            </div>
-          </Tooltip>
+          <div className="min-w-0 flex-1 truncate font-display text-[16px] font-semibold leading-6 tracking-[-.015em]">
+            {snapshot.appName}
+          </div>
           <div className="-mr-3 flex shrink-0 items-center gap-1">
             <Tooltip
               content={t(pluginUpdateCount > 0 ? 'plugins.updateNotification' : 'plugins.updateNotificationEmpty', {
