@@ -17,6 +17,7 @@ const accountMenuSurfaceClass =
 
 type SidebarProps = {
   collapsed: boolean;
+  width: number;
   view: View;
   selectedNavigationKey?: string;
   snapshot: SeedSnapshot;
@@ -34,6 +35,7 @@ type SidebarProps = {
 
 export function Sidebar({
   collapsed,
+  width,
   view,
   selectedNavigationKey,
   snapshot,
@@ -145,6 +147,7 @@ export function Sidebar({
 
   return (
     <aside
+      id="seed-left-sidebar"
       className={cx(
         'seed-sidebar relative z-20 min-h-0 min-w-0 overflow-hidden border-r text-sidebar-foreground transition-[border-color] duration-200 ease-out motion-reduce:transition-none',
         collapsed ? 'border-transparent' : 'border-border',
@@ -152,7 +155,7 @@ export function Sidebar({
       aria-hidden={collapsed}
       inert={collapsed}
     >
-      <div className="flex h-full w-[224px] min-h-0 shrink-0 flex-col px-4 pb-0">
+      <div className="flex h-full min-h-0 shrink-0 flex-col px-4 pb-0" style={{ width }}>
         <div className="mb-4 flex min-h-6 items-center gap-1 px-1">
           <div className="min-w-0 flex-1 truncate font-display text-[16px] font-semibold leading-6 tracking-[-.015em]">
             {snapshot.appName}

@@ -63,6 +63,7 @@
     "integrations": "Integrations",
     "general": "General",
     "collapseSidebar": "Collapse sidebar",
+    "resizeSidebar": "Resize sidebar",
     "expandSidebar": "Expand sidebar"
   },
   "overview": {

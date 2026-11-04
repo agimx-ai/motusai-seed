@@ -10,6 +10,7 @@ import { Sidebar } from './layouts/Sidebar';
 import { AppLogo } from './components/AppBrand';
 import { ShimmerIcon } from './components/Shimmer';
 import { SidebarToggleButton } from './components/SidebarToggleButton';
+import { clampSidebarWidth, defaultSidebarWidth, SidebarResizeHandle } from './components/SidebarResizeHandle';
 import { Toaster } from '@motus-ai/seed-sdk/react';
 import { WindowChrome } from './components/WindowChrome';
 import { useSeed } from './hooks/use-seed';
@@ -33,7 +34,7 @@ import { PluginViewSurface } from './features/plugins/PluginViewSurface';
 
 const previewStartupScreen = false;
 const minimumStartupDurationMs = 1_200;
-const sidebarWidth = 224;
+const sidebarWidthStorageKey = 'seed.sidebarWidth';
 
 export default function App() {
   const { t } = useTranslation();
@@ -81,10 +82,28 @@ export default function App() {
   const updatingAllPlugins = snapshot?.pluginUpdates?.running ?? false;
   const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [resizingSidebar, setResizingSidebar] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(sidebarWidthStorageKey) ?? defaultSidebarWidth);
+      return Number.isFinite(saved) ? clampSidebarWidth(saved) : defaultSidebarWidth;
+    } catch {
+      return defaultSidebarWidth;
+    }
+  });
   const pluginSearchRef = useRef<HTMLInputElement>(null);
   const handledNavigationId = useRef('');
   const knownLocalClientScopes = useRef<Set<string> | null>(null);
   const isMac = window.motusWindow.platform === 'darwin';
+
+  useEffect(() => {
+    if (resizingSidebar) return;
+    try {
+      window.localStorage.setItem(sidebarWidthStorageKey, String(sidebarWidth));
+    } catch {
+      // The current session can still resize the sidebar when storage is unavailable.
+    }
+  }, [resizingSidebar, sidebarWidth]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMinimumStartupElapsed(true), minimumStartupDurationMs);
@@ -284,7 +303,7 @@ export default function App() {
   return (
     <>
       <div
-        className="relative grid h-full text-foreground transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
+        className={`relative grid h-full text-foreground ${resizingSidebar ? 'select-none' : 'transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none'}`}
         style={{ gridTemplateColumns: sidebarCollapsed ? '0 minmax(0,1fr)' : `${sidebarWidth}px minmax(0,1fr)` }}
       >
         <WindowChrome />
@@ -297,6 +316,7 @@ export default function App() {
         )}
         <Sidebar
           collapsed={sidebarCollapsed}
+          width={sidebarWidth}
           view={view}
           selectedNavigationKey={pluginRoute?.key}
           snapshot={snapshot}
@@ -319,6 +339,7 @@ export default function App() {
           onOpenPersonalWallet={() => void run('open-personal-wallet', (api) => api.openPersonalWallet())}
           onToggle={() => setSidebarCollapsed(true)}
         />
+        {!sidebarCollapsed && <SidebarResizeHandle width={sidebarWidth} onResize={setSidebarWidth} onDragChange={setResizingSidebar} />}
         <section className="seed-page-frame col-start-2 grid min-h-0 min-w-0 grid-rows-[58px_minmax(0,1fr)] bg-background pb-3">
           <AppHeader
             sidebarCollapsed={sidebarCollapsed}
