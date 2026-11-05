@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { IconButton } from './IconButton';
+import { dialogFocusReturnTargets } from './Tooltip';
 import { usePluginStyleScope } from '../style-scope';
 
 /** Native top-layer dialog; no document-global event handlers or plugin business state. */
@@ -27,10 +28,14 @@ export function Dialog({
     if (!open) return;
     const dialog = ref.current!;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    if (previousFocus) dialogFocusReturnTargets.add(previousFocus);
     dialog.showModal();
     return () => {
       dialog.close();
-      previousFocus?.focus();
+      if (previousFocus) {
+        previousFocus.focus();
+        dialogFocusReturnTargets.delete(previousFocus);
+      }
     };
   }, [open]);
   if (!open) return null;

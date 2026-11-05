@@ -15,6 +15,9 @@ type TooltipProps = {
 const defaultGap = 6;
 const viewportPadding = 8;
 
+// A dialog returns focus to its trigger without starting a new tooltip interaction.
+export const dialogFocusReturnTargets = new WeakSet<HTMLElement>();
+
 export function Tooltip({ children, content, delayMs = 300, gap = defaultGap, placement = 'top' }: TooltipProps) {
   const scope = usePluginStyleScope();
   const id = useId();
@@ -106,7 +109,11 @@ export function Tooltip({ children, content, delayMs = 300, gap = defaultGap, pl
         className="contents"
         aria-describedby={open ? id : undefined}
         onBlurCapture={hideTooltip}
-        onFocusCapture={showTooltip}
+        onFocusCapture={(event) => {
+          if (event.target instanceof HTMLElement && event.target.matches(':focus-visible') && !dialogFocusReturnTargets.has(event.target))
+            showTooltip();
+        }}
+        onPointerDownCapture={hideTooltip}
         onPointerEnter={showTooltipDelayed}
         onPointerLeave={hideTooltip}
       >
