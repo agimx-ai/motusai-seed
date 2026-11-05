@@ -1,6 +1,6 @@
 import { Blocks, ChevronDown, ChevronRight, Circle, History, Sprout, icons } from 'lucide-react';
 import { ThemedIcon } from '@motus-ai/seed-sdk/react';
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cx, type View } from '../lib/display';
 import { pluginSidebar, type PluginSidebarEntry } from '../features/plugins/plugin-sidebar';
@@ -10,6 +10,30 @@ export function SidebarEntryIcon({ name, sources }: { name?: string; sources?: P
   const key = name?.replace(/(^|-)([a-z])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
   const Icon = key ? (icons[key as keyof typeof icons] ?? Circle) : Circle;
   return <Icon size={17} strokeWidth={1.8} aria-hidden="true" className="shrink-0" />;
+}
+
+function SidebarNavigationLabel({ title }: { title: string }) {
+  const label = useRef<HTMLSpanElement>(null);
+  const text = useRef<HTMLSpanElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useLayoutEffect(() => {
+    const viewport = label.current!;
+    const content = text.current!;
+    const measure = () => setOverflowing(viewport.scrollWidth > viewport.clientWidth);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [title]);
+
+  return (
+    <span ref={label} data-overflowing={overflowing || undefined} className="seed-sidebar-label min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+      <span ref={text} className="block w-max">{title}</span>
+    </span>
+  );
 }
 
 export function SidebarNavigation({
@@ -75,9 +99,7 @@ export function SidebarNavigation({
             {...(!open ? { 'aria-expanded': expanded } : {})}
           >
             {icon}
-            <span className="min-w-0 flex-1 truncate">
-              {title}
-            </span>
+            <SidebarNavigationLabel title={title} />
             {!!badge && (
               <span className="shrink-0 rounded-full bg-muted px-1.5 text-[11px] tabular-nums">
                 {' '}

@@ -450,6 +450,14 @@
   background: linear-gradient(180deg, rgba(247, 250, 252, 0.95) 0%, rgba(238, 248, 251, 0.92) 100%);
 }
 
+.seed-sidebar-label[data-overflowing] {
+  mask-image: linear-gradient(to left, transparent, black min(20px, 50%));
+}
+
+.seed-sidebar-label[data-overflowing]:dir(rtl) {
+  mask-image: linear-gradient(to right, transparent, black min(20px, 50%));
+}
+
 .seed-app-header {
   position: relative;
   z-index: 40;

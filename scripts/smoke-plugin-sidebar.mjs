@@ -109,6 +109,13 @@ app.whenReady().then(async () => {
       return iconPositions[1] - iconPositions[0] === 12 && iconPositions[2] - iconPositions[1] === 12 &&
         rows.every(row => row.left === rows[0].left && row.right === rows[0].right);
     })()`), true, 'Each child level indents its content while keeping a full-width row');
+    const groupLabel = "[...document.querySelectorAll('.seed-sidebar-label')].find(label => label.textContent === 'documents')";
+    assert.equal(await evaluate(`getComputedStyle(${groupLabel}).maskImage`), 'none');
+    await evaluate(`${groupLabel}.closest('button').style.maxWidth = '100px'`);
+    await wait(`getComputedStyle(${groupLabel}).maskImage.startsWith('linear-gradient')`);
+    assert.equal(await evaluate(`getComputedStyle(${groupLabel}).textOverflow`), 'clip');
+    await evaluate(`${groupLabel}.closest('button').style.maxWidth = ''`);
+    await wait(`getComputedStyle(${groupLabel}).maskImage === 'none'`);
     const quickTrigger = 'aside button[aria-haspopup="menu"][aria-label="Quick actions"]';
     const quickMenu = `document.querySelector('[role="menu"][aria-label="Quick actions"], [role="menu"][aria-label="快捷操作"]')`;
     const openQuickActions = () => evaluate(`document.querySelector(${JSON.stringify(quickTrigger)}).click()`);
