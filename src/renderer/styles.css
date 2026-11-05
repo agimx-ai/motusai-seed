@@ -461,7 +461,16 @@
 
 .seed-page-frame:has(> main > [data-plugin-view-surface] .seed-plugin-body > [data-plugin-view-layout='edge-to-edge']) {
   --seed-view-inset-block-end: calc(var(--spacing) * 3);
+  --seed-view-inset-inline: calc(var(--spacing) * 8);
   padding-block-end: 0;
+
+  @media (width < 980px) {
+    --seed-view-inset-inline: calc(var(--spacing) * 6);
+  }
+
+  > main {
+    padding-inline: 0;
+  }
 
   &:has(> .seed-app-header--plugin-mac) {
     --seed-view-inset-block-start: 12px;

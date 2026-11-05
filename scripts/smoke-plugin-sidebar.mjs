@@ -151,8 +151,16 @@ app.whenReady().then(async () => {
         (header.matches('.seed-app-header--plugin-mac') ? parseFloat(getComputedStyle(header, '::after').bottom) : 0);
       return [main.top - divider, innerHeight - main.bottom];
     })()`);
+    const horizontalInsets = () => evaluate(`(() => {
+      const main = document.querySelector('[data-plugin-view-surface]').parentElement;
+      const bounds = main.getBoundingClientRect();
+      const page = document.querySelector('.seed-plugin-body > section').getBoundingClientRect();
+      // Classic scrollbars occupy client space independently of the page's padding.
+      return [page.left - bounds.left, bounds.left + main.clientWidth - page.right];
+    })()`);
     const defaultInsets = [process.platform === 'darwin' ? 12 : 0, 12];
     assert.deepEqual(await viewInsets(), defaultInsets, 'Default views keep their existing spacing');
+    assert.deepEqual(await horizontalInsets(), [24, 24], 'Default views keep responsive horizontal padding');
     assert.equal(await evaluate('document.querySelector(".seed-plugin-toolbar").hidden'), true);
     assert.deepEqual(await evaluate(`(() => {
       const title = getComputedStyle(document.querySelector('.seed-app-header h1'));
@@ -163,7 +171,7 @@ app.whenReady().then(async () => {
       const share = document.querySelector('.seed-app-header button[aria-label="Share record"]');
       const button = edit.getBoundingClientRect();
       return [button.width, button.height, share.getBoundingClientRect().left - button.right, edit.querySelector('svg').getBoundingClientRect().width];
-    })()`), [28, 28, 2, 15]);
+    })()`), [28, 28, 2, 13]);
     await clickLabel('documents broken');
     await wait(`document.querySelector('main [role="alert"]')?.textContent === 'Page failed to open'`);
     assert.equal(await evaluate(`document.querySelector('aside')?.textContent.includes('documents record')`), true);
@@ -188,6 +196,7 @@ app.whenReady().then(async () => {
     await clickLabel('monitor record');
     await wait(`!!document.querySelector('[data-fixture="monitor"]')`);
     assert.deepEqual(await viewInsets(), [0, 0], 'An opted-in view touches the header divider and window bottom');
+    assert.deepEqual(await horizontalInsets(), [0, 0], 'An opted-in view fills the horizontal content area');
     assert.equal(await evaluate('document.querySelectorAll("[data-plugin-view-owner]").length'), 1);
     assert.equal(await evaluate('document.querySelectorAll("iframe, webview").length'), 0);
     for (const theme of ['light', 'dark']) for (const width of [960, 1280]) for (const locale of ['zh-CN', 'en-US']) {
@@ -198,6 +207,7 @@ app.whenReady().then(async () => {
       const title = locale === 'en-US' ? 'monitor record' : 'monitor 记录';
       await wait(`document.documentElement.lang === ${JSON.stringify(locale)} && document.documentElement.dataset.theme === ${JSON.stringify(theme)} && document.querySelector('aside')?.textContent.includes(${JSON.stringify(title)})`);
       assert.deepEqual(await viewInsets(), [0, 0]);
+      assert.deepEqual(await horizontalInsets(), [0, 0]);
       assert.equal(await evaluate('document.documentElement.scrollWidth > innerWidth'), false);
       await writeFile(join(screenshots, `${theme}-${width}-${locale}.png`), (await owner.webContents.capturePage()).toPNG());
       const triggerSelector = `aside button[aria-label="${locale === 'en-US' ? 'Quick actions' : '快捷操作'}"]`;
@@ -233,6 +243,7 @@ app.whenReady().then(async () => {
     await clickLabel(snapshot.locale === 'en-US' ? 'documents record' : 'documents 记录');
     await wait(`!!document.querySelector('[data-fixture="documents"]')`);
     assert.deepEqual(await viewInsets(), defaultInsets, 'Switching back restores the default spacing');
+    assert.deepEqual(await horizontalInsets(), [32, 32], 'Switching back restores wide-window horizontal padding');
     await clickLabel(snapshot.locale === 'en-US' ? 'monitor record' : 'monitor 记录');
     await wait(`!!document.querySelector('[data-fixture="monitor"]')`);
     const monitorInstalled = snapshot.plugins.find(plugin => plugin.id === monitor.plugin.package_id);

@@ -47,7 +47,7 @@ export type Command = {
 
 export type PluginViewOptions = {
   toolbar?: boolean;
-  /** Let an independently opened view fill the space from the header divider to the bottom of the window. */
+  /** Let an independently opened view fill the content area, from the header divider to the window bottom and both side edges. */
   layout?: 'edge-to-edge';
 };
 

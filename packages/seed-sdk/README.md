@@ -307,7 +307,7 @@ export default class GreetingService extends PluginService {
 用 `this.addNavigationItem()` 把插件入口放到 Seed 侧栏。可以放在侧栏顶层、挂到内置栏目下，或在插件自己的分组中组织多个入口。
 
 - 打开页面时，先用 `this.registerView()` 注册页面，再在入口上指定对应的 `view`。需要区分多条记录时，通过 `params` 传入记录 ID。
-- 分栏视图可以在注册时传入 `{ layout: 'edge-to-edge' }`，让独立打开的页面纵向贴齐页头分隔线和窗口底部。想保留内容原有的留白，可用 CSS 变量 `--seed-view-inset-block-start` 和 `--seed-view-inset-block-end`，并把回退值设为 `0px`。旧客户端使用默认布局。
+- 分栏视图可以在注册时传入 `{ layout: 'edge-to-edge' }`，让独立打开的页面铺满内容区，贴齐页头分隔线、窗口底部与内容区左右边缘。页面内部的留白由插件设置。想保留内容原有的留白，可用 CSS 变量 `--seed-view-inset-block-start`、`--seed-view-inset-block-end` 和 `--seed-view-inset-inline`，并把回退值设为 `0px`。旧客户端使用默认布局。
 - 打开弹窗等操作用 `onSelect`，点击后用户留在当前页面。
 - 要把操作放到通知铃铛旁的「+」菜单，先用 `this.app.sidebar?.supportsHost?.('quick-actions')` 检查支持，再为操作指定 `parent: { host: 'quick-actions' }`。例如用 `onSelect` 打开插件自己的新建弹窗。
 - 标题、顺序或未读数变化时，用注册返回的句柄更新入口。要从插件内打开一个已注册的入口，可调用 `this.app.sidebar.open(id)`。
