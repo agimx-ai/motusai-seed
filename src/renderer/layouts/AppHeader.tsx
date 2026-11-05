@@ -142,8 +142,11 @@ export function AppHeader({
       {view === 'plugin-view' && navigation?.actions?.length ? <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">{navigation.actions.map((action) => {
         const key = action.icon.replace(/(^|-)([a-z])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
         const Icon = icons[key as keyof typeof icons];
-        const size = key === 'Pencil' ? 14 : 15;
-        return <HeaderActionButton compact key={action.id} aria-label={action.label} onClick={action.onClick}>{Icon && <Icon size={size} strokeWidth={1.8} aria-hidden="true" />}</HeaderActionButton>;
+        const size = key === 'Pencil' ? 13 : 15;
+        const lowerIcon = key === 'Pencil' || key === 'UserPlus' || key === 'Trash2';
+        return <HeaderActionButton compact key={action.id} aria-label={action.label} onClick={action.onClick}>
+          {Icon && <Icon size={size} strokeWidth={1.8} className={lowerIcon ? 'translate-y-[0.75px]' : undefined} aria-hidden="true" />}
+        </HeaderActionButton>;
       })}</div> : !isWindows && (actions || <span />)}
     </header>
   );
