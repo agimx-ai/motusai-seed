@@ -44,7 +44,7 @@ export function SidebarNavigation({
 }: {
   view: View;
   selectedKey?: string;
-  onNavigate(view: View): void;
+  onNavigate(view: Exclude<View, 'plugin-view'>): void;
   onOpenPlugin(entry: PluginSidebarEntry): void;
 }) {
   const { t } = useTranslation();

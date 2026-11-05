@@ -23,7 +23,7 @@ type SidebarProps = {
   snapshot: SeedSnapshot;
   loggingOut: boolean;
   pluginUpdateCount: number;
-  onNavigate: (view: View) => void;
+  onNavigate: (view: Exclude<View, 'plugin-view'>) => void;
   onOpenPlugin: (entry: PluginSidebarEntry) => void;
   onShowPluginUpdates: () => void;
   onLogout: () => void;
@@ -138,7 +138,7 @@ export function Sidebar({
     };
   }, [accountMenuOpen]);
 
-  const navigate = (nextView: View) => {
+  const navigate = (nextView: Exclude<View, 'plugin-view'>) => {
     setAccountMenuOpen(false);
     onNavigate(nextView);
   };

@@ -1,11 +1,11 @@
 import { ArrowLeft, Blocks, Settings, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NavItem } from '../components/NavItem'
-import type { SettingsView, View } from '../lib/display'
+import type { SettingsView } from '../lib/display'
 
 export function SettingsNavigation({ view, onNavigate }: {
   view: SettingsView
-  onNavigate: (view: View) => void
+  onNavigate: (view: SettingsView | 'overview') => void
 }) {
   const { t } = useTranslation()
   return <>

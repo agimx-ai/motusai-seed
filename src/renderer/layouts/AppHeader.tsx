@@ -93,7 +93,7 @@ export function AppHeader({
 
   return (
     <header
-      className={`seed-app-header flex min-w-0 items-center${view === 'plugin-view' ? isMac ? ' seed-app-header--plugin-mac' : ' border-b border-border' : ''}${isWindows && view !== 'plugin-view' ? '' : ' justify-between'}${isMac ? ' seed-app-header--mac' : ''}${isMac && sidebarCollapsed ? ' seed-app-header--sidebar-collapsed' : ''}${isWindows && sidebarCollapsed ? ' seed-app-header--windows-collapsed' : ''}`}
+      className={`seed-app-header flex min-w-0 items-center${view === 'plugin-view' ? isMac ? ' seed-app-header--plugin-mac' : ' border-b border-border' : ''}${isWindows && view !== 'plugin-view' ? '' : ' justify-between'}${isMac ? ' seed-app-header--mac' : ''}${isMac && sidebarCollapsed ? ' seed-app-header--sidebar-collapsed' : ''}${!isMac ? ' seed-app-header--window-navigation' : ''}${!isMac && sidebarCollapsed ? ' seed-app-header--window-navigation-collapsed' : ''}`}
     >
       {view === 'overview' ? (
         <span />

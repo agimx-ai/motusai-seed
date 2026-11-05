@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@motus-ai/seed-sdk';
 import type { SeedCatalogPage } from '../shared/contracts';
@@ -9,7 +9,7 @@ import { AnnouncementDialog } from './components/AnnouncementDialog';
 import { Sidebar } from './layouts/Sidebar';
 import { AppLogo } from './components/AppBrand';
 import { ShimmerIcon } from './components/Shimmer';
-import { SidebarToggleButton } from './components/SidebarToggleButton';
+import { WindowNavigation } from './components/WindowNavigation';
 import { clampSidebarWidth, defaultSidebarWidth, SidebarResizeHandle } from './components/SidebarResizeHandle';
 import { Toaster } from '@motus-ai/seed-sdk/react';
 import { WindowChrome } from './components/WindowChrome';
@@ -17,6 +17,7 @@ import { useSeed } from './hooks/use-seed';
 import { useReducedMotionPreference } from './hooks/use-reduced-motion';
 import { useTheme } from './hooks/use-theme';
 import type { View } from './lib/display';
+import { historyNeighbor, initialHistory, navigationHistory, type AppPage } from './lib/navigation-history';
 import { ActivityActions, ActivityPage } from './pages/ActivityPage';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -30,7 +31,7 @@ import type { PluginHeaderNavigation } from './features/plugins/plugin-navigatio
 import { userFacingErrorMessage } from './lib/errors';
 import { useSeedI18n } from './i18n';
 import { usePluginFrontends } from './features/plugins/use-plugin-frontends';
-import { pluginSidebar, type PluginSettingsTarget, type PluginSidebarRoute } from './features/plugins/plugin-sidebar';
+import { pluginSidebar } from './features/plugins/plugin-sidebar';
 import { PluginViewSurface } from './features/plugins/PluginViewSurface';
 
 const previewStartupScreen = false;
@@ -46,9 +47,13 @@ export default function App() {
   const presentationThemePreference = !snapshot?.user ? 'system' : themePreference;
   const { resolvedTheme } = useTheme(presentationThemePreference);
   const { reducedMotionPreference, setReducedMotionPreference } = useReducedMotionPreference();
-  const [view, setView] = useState<View>('overview');
+  const [history, dispatchHistory] = useReducer(navigationHistory, initialHistory);
+  const page = history.pages[history.index]!;
+  const { view, query: pluginQuery = '' } = page;
+  const pluginRoute = page.view === 'plugin-view' ? page.pluginRoute : undefined;
+  const selectedPluginId = page.view === 'plugins' ? page.pluginId ?? '' : '';
+  const pluginSettingsTarget = page.view === 'plugins' ? page.settingsTarget : undefined;
   const [profileEditing, setProfileEditing] = useState(false);
-  const [pluginQuery, setPluginQuery] = useState('');
   const [pluginSearchResults, setPluginSearchResults] = useState<{
     query: string;
     page: SeedCatalogPage;
@@ -57,38 +62,36 @@ export default function App() {
   const [pluginSearchLoading, setPluginSearchLoading] = useState(false);
   const currentPluginQuery = useRef('');
   currentPluginQuery.current = pluginQuery.trim();
-  const [selectedPluginId, setSelectedPluginId] = useState('');
-  const [pluginSettingsTarget, setPluginSettingsTarget] = useState<PluginSettingsTarget>();
   const [pluginNavigation, setPluginNavigation] = useState<PluginHeaderNavigation>();
-  const [pluginRoute, setPluginRoute] = useState<PluginSidebarRoute>();
   const navigationEntries = useSyncExternalStore(pluginSidebar.subscribe, pluginSidebar.snapshot);
+  const navigationUser = useRef<string | null>(null);
+  useEffect(() => {
+    if (!snapshot) return;
+    const user = snapshot.user?.id ?? null;
+    if (navigationUser.current !== null && navigationUser.current !== user) dispatchHistory({ type: 'reset' });
+    navigationUser.current = user;
+  }, [snapshot]);
+
   usePluginFrontends(snapshot);
   useEffect(() => pluginSidebar.onOpen((route) => {
-    setPluginRoute(route);
-    setPluginNavigation(undefined);
-    setView('plugin-view');
+    dispatchHistory({ type: 'open', page: { view: 'plugin-view', pluginRoute: route } });
   }), []);
   useEffect(() => pluginSidebar.onOpenSettings((pluginId, target) => {
-    setPluginSettingsTarget(target);
-    setPluginNavigation(undefined);
-    setSelectedPluginId(pluginId);
-    setPluginQuery('');
-    setView('plugins');
+    dispatchHistory({ type: 'open', page: { view: 'plugins', pluginId, settingsTarget: target, query: '' } });
   }), []);
+  useEffect(() => pluginSidebar.onRemove((key) => {
+    dispatchHistory({ type: 'remove', matches: (page) => page.view === 'plugin-view' && page.pluginRoute.key === key });
+  }), []);
+  useEffect(() => {
+    setPluginNavigation(undefined);
+  }, [view, pluginRoute, selectedPluginId, pluginSettingsTarget]);
   const currentNavigationEntry = navigationEntries.find((entry) => entry.key === pluginRoute?.key);
   const routePluginEnabled = snapshot?.plugins.some((plugin) => plugin.id === pluginRoute?.pluginId && plugin.enabled && plugin.status === 'ready');
   useEffect(() => {
-    if (view === 'plugin-view' && pluginRoute && !routePluginEnabled) {
-      setPluginRoute(undefined);
-      setView('overview');
+    if (pluginRoute && snapshot && !routePluginEnabled) {
+      dispatchHistory({ type: 'remove', matches: (page) => page.view === 'plugin-view' && page.pluginRoute.pluginId === pluginRoute.pluginId });
     }
-  }, [view, pluginRoute, routePluginEnabled]);
-  useEffect(() => pluginSidebar.onRemove((key) => {
-    if (view === 'plugin-view' && key === pluginRoute?.key) {
-      setPluginRoute(undefined);
-      setView('overview');
-    }
-  }), [view, pluginRoute?.key]);
+  }, [pluginRoute, snapshot, routePluginEnabled]);
   const updatingAllPlugins = snapshot?.pluginUpdates?.running ?? false;
   const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -125,10 +128,7 @@ export default function App() {
     if (!request || request.id === handledNavigationId.current) return;
     handledNavigationId.current = request.id;
     if (request.destination === 'plugins') {
-      setPluginSettingsTarget(undefined);
-      setView('plugins');
-      setSelectedPluginId(request.pluginId || '');
-      setPluginQuery(request.query || '');
+      dispatchHistory({ type: 'open', page: { view: 'plugins', pluginId: request.pluginId || undefined, query: request.query || '' } });
       if (!request.pluginId) window.setTimeout(() => pluginSearchRef.current?.focus(), 0);
     }
   }, [snapshot?.navigationRequest]);
@@ -302,16 +302,32 @@ export default function App() {
       if (currentPluginQuery.current === query) setPluginSearchLoading(false);
     }
   };
-  const backToPlugins = () => {
-    setPluginSettingsTarget(undefined);
-    setSelectedPluginId('');
+  const backToPlugins = () => dispatchHistory({ type: 'open', page: { view: 'plugins' } });
+  const navigate = (view: Exclude<View, 'plugin-view'>) => dispatchHistory({ type: 'open', page: { view } });
+  const available = (page: AppPage) => {
+    if (page.view === 'plugin-view') {
+      return snapshot.plugins.some((plugin) => plugin.id === page.pluginRoute.pluginId && plugin.enabled && plugin.status === 'ready')
+        && navigationEntries.some((entry) => entry.key === page.pluginRoute.key && entry.view === page.pluginRoute.view);
+    }
+    if (page.view === 'plugins' && page.settingsTarget) {
+      return snapshot.plugins.some((plugin) => plugin.id === page.pluginId && plugin.enabled && plugin.status === 'ready');
+    }
+    return true;
   };
-  const navigate = (nextView: View) => {
-    setView(nextView);
-    if (nextView !== 'plugins') return;
-    setPluginSettingsTarget(undefined);
-    setSelectedPluginId('');
-  };
+  const windowNavigation = (
+    <WindowNavigation
+      className={isMac
+        ? 'absolute left-[88px] top-2 z-[70]'
+        : 'absolute left-2 top-[14px] z-[70] col-start-2 col-end-3'}
+      canGoBack={historyNeighbor(history, -1, available) !== history.index}
+      canGoForward={historyNeighbor(history, 1, available) !== history.index}
+      onBack={() => dispatchHistory({ type: 'step', direction: -1, available })}
+      onForward={() => dispatchHistory({ type: 'step', direction: 1, available })}
+      showSidebarToggle={isMac || sidebarCollapsed}
+      collapsed={sidebarCollapsed}
+      onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
+    />
+  );
 
   return (
     <>
@@ -320,13 +336,7 @@ export default function App() {
         style={{ gridTemplateColumns: sidebarCollapsed ? '0 minmax(0,1fr)' : `${sidebarWidth}px minmax(0,1fr)` }}
       >
         <WindowChrome />
-        {(isMac || sidebarCollapsed) && (
-          <SidebarToggleButton
-            className={`absolute z-[70] [-webkit-app-region:no-drag] ${isMac ? 'left-[88px] top-[9px]' : 'left-2 top-[14px]'}`}
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
-          />
-        )}
+        {windowNavigation}
         <Sidebar
           collapsed={sidebarCollapsed}
           width={sidebarWidth}
@@ -336,16 +346,8 @@ export default function App() {
           loggingOut={busy === 'logout'}
           pluginUpdateCount={pluginUpdateCount}
           onNavigate={navigate}
-          onOpenPlugin={(entry) => {
-            if (!entry.view) return;
-            setPluginRoute({ key: entry.key, pluginId: entry.pluginId, title: entry.title, view: entry.view, params: entry.params });
-            setPluginNavigation(undefined);
-            setView('plugin-view');
-          }}
-          onShowPluginUpdates={() => {
-            navigate('plugins');
-            setPluginQuery('');
-          }}
+          onOpenPlugin={(entry) => pluginSidebar.open(entry.key)}
+          onShowPluginUpdates={() => dispatchHistory({ type: 'open', page: { view: 'plugins', query: '' } })}
           onLogout={() => void run('logout', (api) => api.logout())}
           onDownloadUpdate={() => void run('update-download', (api) => api.downloadUpdate())}
           onInstallUpdate={() => void run('update-install', (api) => api.installUpdate())}
@@ -417,12 +419,9 @@ export default function App() {
                 installProgress={pluginInstallProgress}
                 hasMore={searchQuery ? Boolean(currentSearch?.page.nextCursor) : Boolean(snapshot.catalogNextCursor)}
                 loadingMore={pluginQuery.trim() ? pluginSearchLoading : busy === 'plugin-catalog-load-more'}
-                onQueryChange={setPluginQuery}
+                onQueryChange={(query) => dispatchHistory({ type: 'search', query })}
                 onLoadMore={() => void loadMoreCatalog()}
-                onSelectPlugin={(id) => {
-                  setPluginSettingsTarget(undefined);
-                  setSelectedPluginId(id);
-                }}
+                onSelectPlugin={(id) => dispatchHistory({ type: 'open', page: { view: 'plugins', pluginId: id } })}
                 onInstall={(id, version) =>
                   void run(
                     `plugin-install-${id}`,

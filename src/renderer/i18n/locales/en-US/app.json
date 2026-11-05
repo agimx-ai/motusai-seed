@@ -64,6 +64,8 @@
     "general": "General",
     "collapseSidebar": "Collapse sidebar",
     "resizeSidebar": "Resize sidebar",
+    "goBack": "Go back",
+    "goForward": "Go forward",
     "expandSidebar": "Expand sidebar"
   },
   "overview": {
