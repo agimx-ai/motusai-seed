@@ -25,4 +25,6 @@ export type PluginNavigationHandle = {
 export type PluginNavigation = {
   /** Create while displaying a page. A new handle replaces the previous page's navigation. */
   create(options: PluginNavigationOptions): PluginNavigationHandle;
+  /** Open this plugin's settings under Plugins. Pass only small, non-secret identifiers. */
+  openSettings?(params?: Readonly<Record<string, string>>): boolean;
 };

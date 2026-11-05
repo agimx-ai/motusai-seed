@@ -7,7 +7,7 @@ import { I18nextProvider } from 'react-i18next';
 /** Optional React adapter. The plugin provides ordinary JSX, not a host form declaration. */
 export abstract class ReactSettingTab extends PluginSettingTab {
   private root?: Root;
-  abstract render(): ReactNode;
+  abstract render(params?: Readonly<Record<string, string>>): ReactNode;
   override onload(): void {
     this.registerEvent(this.app.events.on('appearance-change', () => this.renderRoot()));
   }
@@ -15,7 +15,7 @@ export abstract class ReactSettingTab extends PluginSettingTab {
     this.root?.render(
       <I18nextProvider i18n={this.app.i18n}>
         <ComponentProvider pluginId={this.plugin.manifest.id}>
-          {this.render()}
+          {this.render(this.pageParams)}
         </ComponentProvider>
       </I18nextProvider>,
     );

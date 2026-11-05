@@ -257,6 +257,8 @@ export class Setting extends Component {
 
 export class PluginSettingTab extends Component {
   readonly containerEl: HTMLElement;
+  /** Route parameters for the current display, if opened by the plugin. */
+  protected pageParams?: Readonly<Record<string, string>>;
   private displayScope?: Component;
   constructor(
     readonly app: App,
@@ -268,8 +270,9 @@ export class PluginSettingTab extends Component {
   }
   /** Plugin code owns rendering and persistence. No form schema or control-name interpreter. */
   display(): void | Promise<void> {}
-  async show(): Promise<void> {
+  async show(params?: Readonly<Record<string, string>>): Promise<void> {
     await this.hide();
+    this.pageParams = params;
     this.displayScope = super.addChild(new Component());
     try {
       await this.display();
@@ -286,11 +289,12 @@ export class PluginSettingTab extends Component {
     else super.register(disposer);
   }
   async update(): Promise<void> {
-    await this.show();
+    await this.show(this.pageParams);
   }
   async hide(): Promise<void> {
     const scope = this.displayScope;
     this.displayScope = undefined;
+    this.pageParams = undefined;
     if (scope) await this.removeChild(scope);
     this.containerEl.replaceChildren();
   }

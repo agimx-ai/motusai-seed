@@ -25,6 +25,7 @@ import { isCatalogPluginInstallable } from '../../shared/plugin-updates';
 import { compareSeedVersions } from '../../shared/seed-version';
 import { PluginViewSurface } from '../features/plugins/PluginViewSurface';
 import type { PluginHeaderNavigation } from '../features/plugins/plugin-navigation';
+import type { PluginSettingsTarget } from '../features/plugins/plugin-sidebar';
 import { useSeedI18n } from '../i18n';
 
 function searchableText(value: SeedLocalizedText) {
@@ -42,6 +43,7 @@ type PluginsPageProps = {
   catalogLoading: boolean;
   catalogError?: string;
   selectedPlugin?: SeedInstalledPlugin | SeedCatalogPlugin;
+  settingsTarget?: PluginSettingsTarget;
   pluginNavigation?: PluginHeaderNavigation;
   query: string;
   searchRef: RefObject<HTMLInputElement | null>;
@@ -72,6 +74,7 @@ export function PluginsPage({
   catalogLoading,
   catalogError,
   selectedPlugin,
+  settingsTarget,
   pluginNavigation,
   query,
   searchRef,
@@ -329,6 +332,7 @@ export function PluginsPage({
             <PluginViewSurface
               revision={selectedInstalledPlugin.manifestDigest}
               pluginId={selectedInstalledPlugin.id}
+              target={settingsTarget}
               onNavigationChange={onNavigationChange}
             />
           )}

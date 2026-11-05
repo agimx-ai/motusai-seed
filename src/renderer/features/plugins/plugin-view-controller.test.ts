@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Plugin, PluginSettingTab, View } from '@motus-ai/seed-sdk';
 import { PluginViewController } from './plugin-view-controller';
+import { pluginSidebar } from './plugin-sidebar';
 import type { PluginBreadcrumbState } from './plugin-navigation';
 import type { PluginNavigationHandle } from '@motus-ai/seed-sdk';
 
@@ -38,6 +39,37 @@ function fixture() {
 }
 
 describe('plugin view controller lifecycle', () => {
+  it('opens only its own settings with scoped parameters and clears them on a normal visit', async () => {
+    const { controller, surface } = fixture();
+    const route = vi.fn();
+    const unsubscribe = pluginSidebar.onOpenSettings(route);
+    class Tab extends PluginSettingTab {
+      display() { this.containerEl.textContent = this.pageParams?.item ?? 'root'; }
+    }
+    class Example extends Plugin {
+      onload() { this.addSettingTab(new Tab(this.app, this)); }
+    }
+    try {
+      await controller.start(Example, manifest);
+      const openSettings = controller.app.navigation!.openSettings!;
+      expect(openSettings({ item: 'detail' })).toBe(false);
+      await controller.show();
+      expect(() => openSettings({ invalidKey: 'detail' })).toThrow('Invalid plugin page parameters.');
+      const params = { item: 'detail' };
+      expect(openSettings(params)).toBe(true);
+      params.item = 'changed';
+      expect(route).toHaveBeenCalledExactlyOnceWith(manifest.id, { params: { item: 'detail' } });
+      await controller.show(route.mock.calls[0][1]);
+      expect(surface.content.textContent).toBe('detail');
+      await controller.hide();
+      await controller.show();
+      expect(surface.content.textContent).toBe('root');
+    } finally {
+      unsubscribe();
+      await controller.stop();
+    }
+  });
+
   it('registers navigation before display and opens plugin-owned views with route state', async () => {
     const { controller, surface } = fixture();
     const close = vi.fn();

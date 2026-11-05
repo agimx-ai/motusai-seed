@@ -148,6 +148,7 @@ await buildPlugin({
 | `files?.path(file)` | `string` | 获取 `File` 的本地路径 |
 | `clipboard?.writeText(text)` | `Promise<void>` | 写入剪贴板 |
 | `navigation?.create(options)` | `PluginNavigationHandle` | 为当前显示页面创建头部多级面包屑和返回句柄 |
+| `navigation?.openSettings?.(params)` | `boolean` | 跳转到当前插件在「插件」中的设置页，可传入简短的非敏感标识 |
 | `sidebar?.register(item)` | `PluginSidebarHandle` | 注册顶级、内置分组下或插件自身分组下的导航节点 |
 | `sidebar?.open(id)` | `Promise<boolean>` | 打开当前插件已注册的页面；没有可用目标时返回 `false` |
 
@@ -275,6 +276,8 @@ export default class GreetingService extends PluginService {
 
 创建设置页并添加文本、开关、下拉框、滑块和按钮。
 
+设置页子类可从 `this.pageParams` 读取跳转时传入的参数。
+
 | 接口 | 参数 / 用途 | 返回值 |
 | --- | --- | --- |
 | `new PluginSettingTab(app, plugin)` | 前端 `App` 与所属 `Plugin` | 设置页实例 |
@@ -395,12 +398,12 @@ export default class GreetingService extends PluginService {
 
 ### `ReactSettingTab`
 
-使用 React 编写设置页，实现 `render()` 返回 JSX。
+使用 React 编写设置页，实现 `render(params?)` 返回 JSX。
 
 | 接口 | 参数 | 返回值 |
 | --- | --- | --- |
 | `new Settings(app, plugin)` | 前端 `App` 与所属 `Plugin` | 设置页实例 |
-| `render()` | 无 | `ReactNode` |
+| `render(params?)` | 可选的设置页跳转参数 | `ReactNode` |
 
 #### 组件一览
 

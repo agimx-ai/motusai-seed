@@ -2,18 +2,27 @@ import type { PluginResources, PluginSidebar, PluginSidebarItem } from '@motus-a
 
 type RegisteredItem = PluginSidebarItem & { iconSources?: Readonly<{ light: string; dark?: string }> };
 export type PluginSidebarEntry = Readonly<RegisteredItem & { key: string; pluginId: string }>;
-export type PluginPageTarget = Readonly<{ view: string; params?: Readonly<Record<string, string>> }>;
-export type PluginSidebarRoute = PluginPageTarget & { key: string; pluginId: string; title: string };
+type PluginViewTarget = Readonly<{ view: string; params?: Readonly<Record<string, string>> }>;
+export type PluginSettingsTarget = Readonly<{ view?: never; params: Readonly<Record<string, string>> }>;
+export type PluginPageTarget = PluginViewTarget | PluginSettingsTarget;
+export type PluginSidebarRoute = PluginViewTarget & { key: string; pluginId: string; title: string };
 type Owner = { items: Map<string, RegisteredItem>; resolveResource?: PluginResources['url'] };
 const idPattern = /^[a-z][a-z0-9._-]{0,127}$/;
 const hostSlots = new Set(['overview', 'plugins', 'activity', 'quick-actions']);
 const empty: readonly PluginSidebarEntry[] = Object.freeze([]);
+
+function validatePageParams(params: Readonly<Record<string, string>>) {
+  if (!params || typeof params !== 'object' || Array.isArray(params) || Object.keys(params).length > 16 ||
+      Object.entries(params).some(([key, value]) => !idPattern.test(key) || typeof value !== 'string' || value.length > 512))
+    throw new Error('Invalid plugin page parameters.');
+}
 
 /** Owns only generic navigation metadata. Plugin data and page rendering stay in the plugin. */
 export class PluginSidebarRegistry {
   private readonly owners = new Map<string, Owner>();
   private readonly listeners = new Set<() => void>();
   private readonly routeListeners = new Set<(route: PluginSidebarRoute) => void>();
+  private readonly settingsListeners = new Set<(pluginId: string, target: PluginSettingsTarget) => void>();
   private readonly removalListeners = new Set<(key: string) => void>();
   private entries: readonly PluginSidebarEntry[] = empty;
   readonly subscribe = (listener: () => void) => {
@@ -29,6 +38,10 @@ export class PluginSidebarRegistry {
       this.routeListeners.delete(listener);
     };
   }
+  onOpenSettings(listener: (pluginId: string, target: PluginSettingsTarget) => void) {
+    this.settingsListeners.add(listener);
+    return () => { this.settingsListeners.delete(listener); };
+  }
 
   /** An item was explicitly removed, rather than temporarily withdrawn during frontend replacement. */
   onRemove(listener: (key: string) => void) {
@@ -38,7 +51,11 @@ export class PluginSidebarRegistry {
     };
   }
 
-  attach(pluginId: string, resolveResource?: PluginResources['url']): { api: PluginSidebar; dispose(): void } {
+  attach(pluginId: string, resolveResource?: PluginResources['url']): {
+    api: PluginSidebar;
+    openSettings(params?: Readonly<Record<string, string>>): boolean;
+    dispose(): void;
+  } {
     const owner: Owner = { items: new Map(), resolveResource };
     this.owners.set(pluginId, owner);
     this.publish();
@@ -88,6 +105,14 @@ export class PluginSidebarRegistry {
           return this.open(pluginId + ':' + id);
         },
       },
+      openSettings: (params = {}) => {
+        assertCurrent();
+        validatePageParams(params);
+        if (!this.settingsListeners.size) return false;
+        const target = { params: Object.freeze({ ...params }) };
+        for (const listener of this.settingsListeners) listener(pluginId, target);
+        return true;
+      },
       dispose: () => {
         if (this.owners.get(pluginId) !== owner) return;
         this.owners.delete(pluginId);
@@ -128,18 +153,10 @@ export class PluginSidebarRegistry {
     )
       throw new Error('Invalid plugin navigation item.');
     if (!owner.items.has(item.id) && owner.items.size >= 2000) throw new Error('Too many plugin navigation items.');
-    if (
-      item.params !== undefined &&
-      (!item.view || item.onSelect !== undefined ||
-        !item.params ||
-        typeof item.params !== 'object' ||
-        Array.isArray(item.params) ||
-        Object.keys(item.params).length > 16 ||
-        Object.entries(item.params).some(
-          ([key, value]) => !idPattern.test(key) || typeof value !== 'string' || value.length > 512,
-        ))
-    )
-      throw new Error('Invalid plugin page parameters.');
+    if (item.params !== undefined) {
+      if (!item.view || item.onSelect !== undefined) throw new Error('Invalid plugin page parameters.');
+      validatePageParams(item.params);
+    }
     if (item.parent !== undefined && (!item.parent || typeof item.parent !== 'object'))
       throw new Error('Invalid plugin navigation parent.');
     if (item.parent) {

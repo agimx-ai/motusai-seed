@@ -90,7 +90,10 @@ export class PluginViewController {
           return this.sidebar.api.open(id);
         },
       },
-      navigation: this.breadcrumbs.api,
+      navigation: {
+        ...this.breadcrumbs.api,
+        openSettings: (params) => this.visible && !!this.tabs.length && this.sidebar?.openSettings(params) === true,
+      },
       ...appearance,
       ...services,
       events: new Events(),
@@ -234,13 +237,13 @@ export class PluginViewController {
       throw error;
     }
   }
-  private async openTab(tab: PluginSettingTab) {
-    if (this.active?.key === tab) return;
+  private async openTab(tab: PluginSettingTab, params?: Readonly<Record<string, string>>) {
+    if (this.active?.key === tab && !params) return;
     await this.closeActive();
     this.active = { key: tab, hide: () => tab.hide() };
     this.surface.content.append(tab.containerEl);
     try {
-      await tab.show();
+      await tab.show(params);
     } catch (error) {
       await this.closeActive();
       throw error;
@@ -269,8 +272,8 @@ export class PluginViewController {
       if (this.visible && !target) return;
       this.visible = true;
       try {
-        if (target) await this.openView(target.view, target);
-        else if (this.tabs[0]) await this.openTab(this.tabs[0]);
+        if (target?.view) await this.openView(target.view, target);
+        else if (this.tabs[0]) await this.openTab(this.tabs[0], target?.params);
       } catch (error) {
         this.visible = false;
         throw error;

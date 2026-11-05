@@ -30,7 +30,7 @@ import type { PluginHeaderNavigation } from './features/plugins/plugin-navigatio
 import { userFacingErrorMessage } from './lib/errors';
 import { useSeedI18n } from './i18n';
 import { usePluginFrontends } from './features/plugins/use-plugin-frontends';
-import { pluginSidebar, type PluginSidebarRoute } from './features/plugins/plugin-sidebar';
+import { pluginSidebar, type PluginSettingsTarget, type PluginSidebarRoute } from './features/plugins/plugin-sidebar';
 import { PluginViewSurface } from './features/plugins/PluginViewSurface';
 
 const previewStartupScreen = false;
@@ -58,6 +58,7 @@ export default function App() {
   const currentPluginQuery = useRef('');
   currentPluginQuery.current = pluginQuery.trim();
   const [selectedPluginId, setSelectedPluginId] = useState('');
+  const [pluginSettingsTarget, setPluginSettingsTarget] = useState<PluginSettingsTarget>();
   const [pluginNavigation, setPluginNavigation] = useState<PluginHeaderNavigation>();
   const [pluginRoute, setPluginRoute] = useState<PluginSidebarRoute>();
   const navigationEntries = useSyncExternalStore(pluginSidebar.subscribe, pluginSidebar.snapshot);
@@ -66,6 +67,13 @@ export default function App() {
     setPluginRoute(route);
     setPluginNavigation(undefined);
     setView('plugin-view');
+  }), []);
+  useEffect(() => pluginSidebar.onOpenSettings((pluginId, target) => {
+    setPluginSettingsTarget(target);
+    setPluginNavigation(undefined);
+    setSelectedPluginId(pluginId);
+    setPluginQuery('');
+    setView('plugins');
   }), []);
   const currentNavigationEntry = navigationEntries.find((entry) => entry.key === pluginRoute?.key);
   const routePluginEnabled = snapshot?.plugins.some((plugin) => plugin.id === pluginRoute?.pluginId && plugin.enabled && plugin.status === 'ready');
@@ -117,6 +125,7 @@ export default function App() {
     if (!request || request.id === handledNavigationId.current) return;
     handledNavigationId.current = request.id;
     if (request.destination === 'plugins') {
+      setPluginSettingsTarget(undefined);
       setView('plugins');
       setSelectedPluginId(request.pluginId || '');
       setPluginQuery(request.query || '');
@@ -294,11 +303,13 @@ export default function App() {
     }
   };
   const backToPlugins = () => {
+    setPluginSettingsTarget(undefined);
     setSelectedPluginId('');
   };
   const navigate = (nextView: View) => {
     setView(nextView);
     if (nextView !== 'plugins') return;
+    setPluginSettingsTarget(undefined);
     setSelectedPluginId('');
   };
 
@@ -394,6 +405,7 @@ export default function App() {
                 catalogLoading={catalogLoading}
                 catalogError={catalogError}
                 selectedPlugin={selectedPlugin}
+                settingsTarget={pluginSettingsTarget}
                 pluginNavigation={pluginNavigation}
                 onNavigationChange={setPluginNavigation}
                 query={pluginQuery}
@@ -407,7 +419,10 @@ export default function App() {
                 loadingMore={pluginQuery.trim() ? pluginSearchLoading : busy === 'plugin-catalog-load-more'}
                 onQueryChange={setPluginQuery}
                 onLoadMore={() => void loadMoreCatalog()}
-                onSelectPlugin={setSelectedPluginId}
+                onSelectPlugin={(id) => {
+                  setPluginSettingsTarget(undefined);
+                  setSelectedPluginId(id);
+                }}
                 onInstall={(id, version) =>
                   void run(
                     `plugin-install-${id}`,
