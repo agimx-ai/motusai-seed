@@ -99,12 +99,12 @@ export function AppHeader({
         <span />
       ) : (view === 'plugins' && selectedPlugin || view === 'plugin-view' && navigation?.path.length) ? (
         <nav
-          className="seed-header-breadcrumbs flex min-w-0 items-center gap-2 whitespace-nowrap text-[14px] font-normal leading-none [-webkit-app-region:no-drag]"
+          className={`seed-header-breadcrumbs flex min-w-0 items-center whitespace-nowrap text-[14px] font-normal leading-none [-webkit-app-region:no-drag] ${view === 'plugins' ? 'gap-1' : 'gap-2'}`}
           aria-label={t('plugins.breadcrumb')}
           aria-busy={navigation?.busy || undefined}
         >
           {view === 'plugins' && <button
-            className="-ml-2 inline-flex h-9 shrink-0 items-center rounded-lg px-2 text-[16px] font-medium text-foreground transition"
+            className="-mx-2 inline-flex h-9 shrink-0 items-center rounded-lg px-2 text-[16px] font-medium text-foreground transition"
             type="button"
             onClick={onBackToPlugins}
           >
