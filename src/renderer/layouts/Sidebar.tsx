@@ -149,7 +149,7 @@ export function Sidebar({
     <aside
       id="seed-left-sidebar"
       className={cx(
-        'seed-sidebar relative z-20 min-h-0 min-w-0 overflow-hidden border-r text-sidebar-foreground transition-[border-color] duration-200 ease-out motion-reduce:transition-none',
+        'seed-sidebar relative z-20 min-h-0 min-w-0 overflow-hidden border-r text-sidebar-foreground transition-[border-color] duration-200 ease-out seed-reduced-motion:transition-none',
         collapsed ? 'border-transparent' : 'border-border',
       )}
       aria-hidden={collapsed}
@@ -251,7 +251,7 @@ export function Sidebar({
                 <div
                   ref={accountMenuRef}
                   id="account-menu"
-                  className={`${accountMenuSurfaceClass} animate-[rise_.12s_ease-out_both]`}
+                  className={`${accountMenuSurfaceClass} seed-full-motion:animate-[rise_.12s_ease-out_both]`}
                   role="menu"
                 >
                   <div className="border-b border-[var(--sidebar-menu-divider)] pb-1">
@@ -301,7 +301,7 @@ export function Sidebar({
                       disabled={loggingOut}
                       onClick={onLogout}
                     >
-                      {loggingOut ? <LoaderCircle className="animate-spin" size={12} /> : <LogOut size={12} />}
+                      {loggingOut ? <LoaderCircle className="seed-full-motion:animate-spin" size={12} /> : <LogOut size={12} />}
                       {t(loggingOut ? 'nav.loggingOut' : 'nav.logout')}
                     </button>
                   </div>

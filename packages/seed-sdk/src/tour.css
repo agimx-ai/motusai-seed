@@ -83,9 +83,9 @@
     border-right-color: transparent;
     border-left-color: transparent;
   }
-  @media (prefers-reduced-motion: reduce) {
-    .driver-fade .seed-tour,
-    .driver-fade .driver-overlay {
+  .driver-fade .seed-tour,
+  .driver-fade .driver-overlay {
+    @variant seed-sdk-reduced-motion {
       animation: none;
     }
   }

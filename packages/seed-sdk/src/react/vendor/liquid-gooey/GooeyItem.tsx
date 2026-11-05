@@ -16,7 +16,8 @@ import {
   type BlobBox,
   type CornerRadii,
 } from './geometry'
-import { useIsoLayoutEffect, useReducedMotion } from './hooks'
+import { useIsoLayoutEffect } from './hooks'
+import { useReducedMotion } from '../../use-reduced-motion'
 import { EVOLVE_DEFAULTS, MOVE_DEFAULTS, type EvolveOptions, type MoveOptions } from './observer'
 import { easingFunction, resolveTransition, type Transition } from './spring'
 

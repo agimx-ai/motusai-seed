@@ -1,4 +1,5 @@
 import { driver, type Driver, type PopoverDOM } from 'driver.js';
+import { prefersReducedMotion } from './reduced-motion.js';
 import type { Component } from './component.js';
 import { actionButtonClassName } from './button-style.js';
 
@@ -208,7 +209,7 @@ export function createTour(options: TourOptions): Tour {
     };
     run = current;
     current.driver = driver({
-      animate: !window!.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+      animate: !prefersReducedMotion(),
       smoothScroll: false,
       allowKeyboardControl: false,
       disableActiveInteraction: true,

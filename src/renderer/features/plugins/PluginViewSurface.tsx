@@ -34,7 +34,7 @@ export function PluginViewSurface({ pluginId, revision, target, onNavigationChan
     <div data-plugin-view-surface aria-busy={loading} className="flex min-h-full min-w-0 flex-col">
       {loading && (
         <div role="status" className="flex items-center justify-center gap-2 py-8 text-[13px] text-muted-foreground">
-          <LoaderCircle size={16} className="motion-safe:animate-spin" aria-hidden="true" />
+          <LoaderCircle size={16} className="seed-full-motion:animate-spin" aria-hidden="true" />
           {t('plugins.loadingView')}
         </div>
       )}

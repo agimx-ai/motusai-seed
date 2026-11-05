@@ -1,5 +1,6 @@
 import React, { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import { motion, useAnimationFrame, useMotionValue, useReducedMotion, useTransform } from 'motion/react'
+import { motion, useAnimationFrame, useMotionValue, useTransform } from 'motion/react'
+import { useReducedMotion } from '../hooks/use-reduced-motion'
 
 interface ShimmerAnimationOptions {
   delay: number

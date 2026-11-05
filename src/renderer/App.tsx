@@ -14,6 +14,7 @@ import { clampSidebarWidth, defaultSidebarWidth, SidebarResizeHandle } from './c
 import { Toaster } from '@motus-ai/seed-sdk/react';
 import { WindowChrome } from './components/WindowChrome';
 import { useSeed } from './hooks/use-seed';
+import { useReducedMotionPreference } from './hooks/use-reduced-motion';
 import { useTheme } from './hooks/use-theme';
 import type { View } from './lib/display';
 import { ActivityActions, ActivityPage } from './pages/ActivityPage';
@@ -44,6 +45,7 @@ export default function App() {
   const themePreference = snapshot?.themePreference ?? 'system';
   const presentationThemePreference = !snapshot?.user ? 'system' : themePreference;
   const { resolvedTheme } = useTheme(presentationThemePreference);
+  const { reducedMotionPreference, setReducedMotionPreference } = useReducedMotionPreference();
   const [view, setView] = useState<View>('overview');
   const [profileEditing, setProfileEditing] = useState(false);
   const [pluginQuery, setPluginQuery] = useState('');
@@ -181,9 +183,9 @@ export default function App() {
   if (previewStartupScreen || !minimumStartupElapsed || !snapshot || snapshot.startup.status === 'initializing')
     return (
       <>
-        <main className="relative grid h-full animate-[fade_.3s_ease_both] place-content-center justify-items-center bg-[var(--startup-surface)] text-foreground">
+        <main className="relative grid h-full seed-full-motion:animate-[fade_.3s_ease_both] place-content-center justify-items-center bg-[var(--startup-surface)] text-foreground">
           <WindowChrome />
-          <div className="animate-[seedWake_.8s_cubic-bezier(.2,.8,.2,1)_both]">
+          <div className="seed-full-motion:animate-[seedWake_.8s_cubic-bezier(.2,.8,.2,1)_both]">
             <ShimmerIcon baseClassName="opacity-55" delay={0} overlayClassName="brightness-0 invert opacity-90">
               <AppLogo />
             </ShimmerIcon>
@@ -303,7 +305,7 @@ export default function App() {
   return (
     <>
       <div
-        className={`relative grid h-full text-foreground ${resizingSidebar ? 'select-none' : 'transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none'}`}
+        className={`relative grid h-full text-foreground ${resizingSidebar ? 'select-none' : 'transition-[grid-template-columns] duration-200 ease-out seed-reduced-motion:transition-none'}`}
         style={{ gridTemplateColumns: sidebarCollapsed ? '0 minmax(0,1fr)' : `${sidebarWidth}px minmax(0,1fr)` }}
       >
         <WindowChrome />
@@ -452,6 +454,8 @@ export default function App() {
               <SettingsPage
                 snapshot={snapshot}
                 themePreference={themePreference}
+                reducedMotionPreference={reducedMotionPreference}
+                onReducedMotionChange={setReducedMotionPreference}
                 resolvedTheme={resolvedTheme}
                 notificationsBusy={busy === 'system-notifications'}
                 onSystemNotificationsChange={() =>

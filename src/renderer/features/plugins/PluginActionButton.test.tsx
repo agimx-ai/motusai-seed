@@ -42,7 +42,7 @@ describe('Plugin action geometry', () => {
     expect(html).toContain('left-1/2')
     expect(html).toContain('-translate-x-1/2')
     expect(html).toContain('transition-[width]')
-    expect(html).toContain('motion-reduce:transition-none')
+    expect(html).toContain('seed-reduced-motion:transition-none')
     expect(html).toContain('absolute inset-0 grid place-items-center')
     expect(html).toContain('size-[20px]')
     expect(html).not.toContain('scale(')

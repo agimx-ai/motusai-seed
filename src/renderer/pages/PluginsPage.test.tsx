@@ -41,7 +41,7 @@ describe('Plugin list loading states', () => {
     expect(html.match(/aria-busy="true"/g)).toHaveLength(2);
     expect(html).toContain('正在加载已安装插件');
     expect(html).toContain('正在加载可用插件');
-    expect(html).toContain('animate-pulse motion-reduce:animate-none');
+    expect(html).toContain('animate-pulse seed-reduced-motion:animate-none');
     expect(html.match(/<article/g)).toHaveLength(6);
     expect(html).toContain('grid-cols-[minmax(0,1fr)_auto]');
     expect(html).not.toContain('没有匹配的插件');

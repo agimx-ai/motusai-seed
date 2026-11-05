@@ -2,18 +2,22 @@ import { useTranslation } from 'react-i18next';
 import type { SeedSnapshot } from '../../shared/contracts';
 import {
   ActionButton,
+  SegmentedControl,
   SelectControl,
   type SelectControlOption,
 } from '@motus-ai/seed-sdk/react';
 import { SettingsRow } from '../components/SettingsControls';
 import { ToggleSwitch } from '../components/ToggleSwitch';
 import { ThemePreviewControl } from '../components/ThemePreviewControl';
+import type { ReducedMotionPreference } from '../hooks/use-reduced-motion';
 import type { ResolvedTheme, ThemePreference } from '../hooks/use-theme';
 import { useSeedI18n, type SeedLanguagePreference } from '../i18n';
 
 type SettingsPageProps = {
   snapshot: SeedSnapshot;
   themePreference: ThemePreference;
+  reducedMotionPreference: ReducedMotionPreference;
+  onReducedMotionChange: (preference: ReducedMotionPreference) => void;
   resolvedTheme: ResolvedTheme;
   onThemeChange: (preference: ThemePreference) => void;
   onPreventSystemSleepChange: () => void;
@@ -35,6 +39,8 @@ function formatRuntimePlatform(platform: NodeJS.Platform, architecture: NodeJS.A
 export function SettingsPage({
   snapshot,
   themePreference,
+  reducedMotionPreference,
+  onReducedMotionChange,
   resolvedTheme,
   onThemeChange,
   onPreventSystemSleepChange,
@@ -92,7 +98,7 @@ export function SettingsPage({
     );
 
   return (
-    <section className="mx-auto w-full max-w-[730px] pt-7 animate-[rise_.25s_ease_both]">
+    <section className="mx-auto w-full max-w-[730px] pt-7 seed-full-motion:animate-[rise_.25s_ease_both]">
       <section className="mb-12">
         <h2 className="mb-4 text-[14px] font-medium">{t('settings.visualStyle')}</h2>
         <div className="rounded-[16px] border border-border bg-card px-4">
@@ -100,6 +106,21 @@ export function SettingsPage({
             <strong className="text-[13px] font-medium text-foreground">{t('settings.themeMode')}</strong>
             <ThemePreviewControl value={themePreference} resolvedTheme={resolvedTheme} onValueChange={onThemeChange} />
           </div>
+          <SettingsRow
+            title={t('settings.reducedMotion')}
+            action={
+              <SegmentedControl
+                label={t('settings.reducedMotion')}
+                value={reducedMotionPreference}
+                options={[
+                  { value: 'system', label: t('settings.themeSystem') },
+                  { value: 'on', label: t('settings.reducedMotionOn') },
+                  { value: 'off', label: t('settings.reducedMotionOff') },
+                ]}
+                onValueChange={onReducedMotionChange}
+              />
+            }
+          />
           <SettingsRow
             title={t('settings.language')}
             action={

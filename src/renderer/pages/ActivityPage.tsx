@@ -317,7 +317,7 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
   };
 
   return (
-    <section className="mx-auto flex h-full w-full max-w-[840px] flex-col pt-4 animate-[rise_.25s_ease_both]">
+    <section className="mx-auto flex h-full w-full max-w-[840px] flex-col pt-4 seed-full-motion:animate-[rise_.25s_ease_both]">
       {showFilters && (
         <>
           <div className="flex flex-wrap items-center gap-2 pb-3">

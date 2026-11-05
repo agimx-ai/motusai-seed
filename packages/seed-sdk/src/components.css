@@ -199,9 +199,9 @@
     animation: seedModelMenuExit 120ms ease-in both;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .seed-model-menu--enter,
-    .seed-model-menu--exit {
+  .seed-model-menu--enter,
+  .seed-model-menu--exit {
+    @variant seed-sdk-reduced-motion {
       animation-duration: 0.01ms;
     }
   }
@@ -384,8 +384,8 @@
     outline-offset: 2px;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .seed-discrete-slider-thumb {
+  .seed-discrete-slider-thumb {
+    @variant seed-sdk-reduced-motion {
       transition: none;
     }
   }

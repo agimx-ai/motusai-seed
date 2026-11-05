@@ -3,6 +3,9 @@
 @import '../../packages/seed-sdk/dist/styles.css';
 @source './**/*.{ts,tsx}';
 
+@custom-variant seed-reduced-motion (&:where(:root[data-reduced-motion='true'] *));
+@custom-variant seed-full-motion (&:where(:root:not([data-reduced-motion='true']) *));
+
 @layer utilities {
   @tailwind utilities source(none);
 }
@@ -291,14 +294,6 @@
     transition: none;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .seed-discovery,
-    .seed-discovery-link {
-      transform: none;
-      transition: none;
-    }
-  }
-
   .seed-mcp-border-beam {
     position: absolute;
     inset: -1px;
@@ -331,12 +326,6 @@
 
   [data-reduced-motion='true'] .seed-mcp-border-beam {
     display: none;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .seed-mcp-border-beam {
-      display: none;
-    }
   }
 
   .seed-mcp-client-icon {
@@ -382,14 +371,6 @@
     animation: none !important;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .seed-mcp-client-icon {
-      transition: none;
-    }
-    .seed-mcp-client-mark {
-      animation: none !important;
-    }
-  }
 
   .seedling-mascot-button {
     --bloub-size: clamp(176px, 22vw, 208px);
@@ -437,11 +418,9 @@
     transform: scale(0.97);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .bloub-mascot {
-      animation: none !important;
-      transition: none !important;
-    }
+  [data-reduced-motion='true'] .bloub-mascot {
+    animation: none !important;
+    transition: none !important;
   }
 }
 
@@ -552,10 +531,8 @@
   padding-top: 16px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .seed-app-header {
-    transition: none;
-  }
+[data-reduced-motion='true'] .seed-app-header {
+  transition: none;
 }
 
 .seed-account-menu {

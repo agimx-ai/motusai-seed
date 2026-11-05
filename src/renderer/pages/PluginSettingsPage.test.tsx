@@ -97,6 +97,8 @@ describe('Plugin settings placement', () => {
         <SettingsPage
           snapshot={snapshot}
           themePreference="system"
+          reducedMotionPreference="system"
+          onReducedMotionChange={() => {}}
           resolvedTheme="dark"
           onThemeChange={() => {}}
           onPreventSystemSleepChange={() => {}}

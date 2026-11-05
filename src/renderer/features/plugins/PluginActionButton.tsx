@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useReducedMotion } from '../../hooks/use-reduced-motion'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { PluginInstallProgress } from '../../../shared/contracts'
@@ -154,7 +155,7 @@ export function PluginActionButton({ action, progress, busy = false, disabled = 
       type="button"
       style={{ width: active ? 26 : '100%' }}
       className={cx(
-        'seed-plugin-action-button absolute inset-y-0 left-1/2 z-20 grid h-[26px] min-w-0 -translate-x-1/2 place-items-center overflow-hidden rounded-full border-0 p-0 font-normal outline-none transition-[width] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+        'seed-plugin-action-button absolute inset-y-0 left-1/2 z-20 grid h-[26px] min-w-0 -translate-x-1/2 place-items-center overflow-hidden rounded-full border-0 p-0 font-normal outline-none transition-[width] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] seed-reduced-motion:transition-none',
         filled ? 'text-white' : uninstall ? 'text-danger' : action === 'details' && !active ? 'text-foreground' : 'text-[#007aff] dark:text-[#0a84ff]',
         'focus-visible:ring-2 focus-visible:ring-[#007aff]/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-[#0a84ff]/35',
         active

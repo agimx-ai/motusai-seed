@@ -27,7 +27,8 @@
 
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useReducedMotion } from '../hooks/use-reduced-motion';
 import { cx } from '../lib/display';
 
 export type ActivityLevel = 0 | 1 | 2 | 3 | 4;
@@ -110,7 +111,7 @@ function ActivityTooltip({
 }: {
   hovered: HoveredDay;
   describeDay: (day: ActivityContribution) => string;
-  reduceMotion: boolean | null;
+  reduceMotion: boolean;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const [left, setLeft] = React.useState(hovered.x);
@@ -182,7 +183,7 @@ export function ActivityGrid({
                 onPointerEnter={hover(day)}
                 initial={reduceMotion ? false : { opacity: 0, scale: 0.4 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ ...CELL_FADE, delay: reduceMotion ? 0 : weekIndex * COLUMN_STAGGER }}
+                transition={reduceMotion ? { duration: 0 } : { ...CELL_FADE, delay: weekIndex * COLUMN_STAGGER }}
               >
                 <div className="h-full w-full rounded-[3px]" style={scale[day.level] ?? scale[0]} />
               </motion.div>
@@ -197,7 +198,7 @@ export function ActivityGrid({
           style={{ ...gridStyle, marginTop: gap + 8 }}
           initial={reduceMotion ? false : { opacity: 0, filter: 'blur(6px)' }}
           animate={{ opacity: 1, filter: 'blur(0px)' }}
-          transition={{ ...LABEL_REVEAL, delay: reduceMotion ? 0 : sweepEnd }}
+          transition={reduceMotion ? { duration: 0 } : { ...LABEL_REVEAL, delay: sweepEnd }}
         >
           {toMonthLabels(visible, monthNames, rangeStart, rangeEnd).map(({ label: month, start, span }) => (
             <span

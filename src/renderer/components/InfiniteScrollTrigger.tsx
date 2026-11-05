@@ -27,7 +27,7 @@ export function InfiniteScrollTrigger({
   if (!hasMore && !loading) return null
   return <div ref={triggerRef} className="flex min-h-12 items-center justify-center py-3 text-[12px] text-muted-foreground">
     {loading && <span className="inline-flex items-center gap-2">
-      <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+      <LoaderCircle className="size-4 seed-full-motion:animate-spin" aria-hidden="true" />
       {label}
     </span>}
   </div>

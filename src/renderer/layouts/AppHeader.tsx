@@ -70,7 +70,7 @@ export function AppHeader({
         onClick={onRefreshPlugins}
         aria-label={t('plugins.refresh')}
       >
-        <RotateCw size={18} className={refreshing ? 'animate-spin' : ''} />
+        <RotateCw size={18} className={refreshing ? 'seed-full-motion:animate-spin' : ''} />
       </button>
     </Tooltip>
   );

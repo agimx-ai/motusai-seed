@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Play, RotateCcw } from 'lucide-react';
+import { useReducedMotion } from '../hooks/use-reduced-motion';
 
 export const announcementMediaControlClass =
   'inline-grid size-10 shrink-0 place-items-center rounded-full border-0 bg-card/65 p-0 text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 disabled:opacity-50';
@@ -26,18 +27,14 @@ export function AnnouncementVideo({
   const [attempt, setAttempt] = useState(0);
   const [playRequest, setPlayRequest] = useState(0);
   const [visible, setVisible] = useState(!document.hidden);
+  const reducedMotion = useReducedMotion();
+  useEffect(() => {
+    if (reducedMotion) setPaused(true);
+  }, [reducedMotion]);
   useEffect(() => {
     const visibility = () => setVisible(!document.hidden);
-    const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    const reduce = () => {
-      if (motion?.matches) setPaused(true);
-    };
     document.addEventListener('visibilitychange', visibility);
-    motion?.addEventListener('change', reduce);
-    return () => {
-      document.removeEventListener('visibilitychange', visibility);
-      motion?.removeEventListener('change', reduce);
-    };
+    return () => document.removeEventListener('visibilitychange', visibility);
   }, []);
   useEffect(() => {
     const element = video.current;

@@ -46,7 +46,7 @@ describe('Plugin detail loading feedback', () => {
     expect(surface.getAttribute('aria-busy')).toBe('true');
     const icon = screen.getByRole('status').querySelector('svg')!;
     expect(icon.getAttribute('width')).toBe('16');
-    expect(icon.classList.contains('motion-safe:animate-spin')).toBe(true);
+    expect(icon.classList.contains('seed-full-motion:animate-spin')).toBe(true);
     act(() => mount.mock.calls[0][3](false));
     expect(screen.queryByRole('status')).toBeNull();
     expect(surface.getAttribute('aria-busy')).toBe('false');

@@ -93,7 +93,7 @@ function AnimatedDisclosure({ expanded, children }: { expanded: boolean; childre
     <div
       aria-hidden={!visible}
       className={cx(
-        'grid transition-[grid-template-rows,opacity] duration-150 ease-out motion-reduce:transition-none',
+        'grid transition-[grid-template-rows,opacity] duration-150 ease-out seed-reduced-motion:transition-none',
         visible ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0',
       )}
       inert={!visible ? true : undefined}
@@ -250,7 +250,7 @@ function ActivityRow({
           <ChevronRight
             aria-hidden="true"
             className={cx(
-              'transition-transform duration-150 ease-out motion-reduce:transition-none',
+              'transition-transform duration-150 ease-out seed-reduced-motion:transition-none',
               expanded && 'rotate-90',
             )}
             size={13}

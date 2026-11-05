@@ -1,7 +1,7 @@
 import { ResourceCard, resourceCardGridClass } from '../../components/ResourceCard'
 
 export function PluginListSkeleton({ installed = false, label }: { installed?: boolean; label: string }) {
-  return <div role="status" aria-label={label} className="animate-pulse motion-reduce:animate-none">
+  return <div role="status" aria-label={label} className="animate-pulse seed-reduced-motion:animate-none">
     {installed ? <div className="flex min-h-[52px] flex-wrap items-center justify-start gap-x-2 gap-y-3 px-2 py-2" aria-hidden="true">
       {Array.from({ length: 8 }, (_, index) => <span className="block h-9 w-9 rounded-[10px] bg-border" key={index} />)}
     </div> : <div className={resourceCardGridClass()} aria-hidden="true">

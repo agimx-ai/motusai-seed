@@ -231,7 +231,7 @@ export function PluginsPage({
   if (selectedPlugin)
     return (
       <>
-        <section className="mx-auto flex min-h-full w-full max-w-[730px] flex-col animate-[rise_.25s_ease_both]">
+        <section className="mx-auto flex min-h-full w-full max-w-[730px] flex-col seed-full-motion:animate-[rise_.25s_ease_both]">
           <div
             data-plugin-information
             hidden={isPluginSubpage}
@@ -352,7 +352,7 @@ export function PluginsPage({
 
   return (
     <>
-      <section className="mx-auto w-full max-w-[730px] [--plugin-search-sticky-height:60px] animate-[rise_.25s_ease_both]">
+      <section className="mx-auto w-full max-w-[730px] [--plugin-search-sticky-height:60px] seed-full-motion:animate-[rise_.25s_ease_both]">
         <div className="sticky top-0 z-20 flex h-[var(--plugin-search-sticky-height)] items-start bg-background pt-4">
           <SearchInput
             className="gap-2"

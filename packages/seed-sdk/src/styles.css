@@ -10,6 +10,17 @@
 @source './dom.ts';
 @source './button-style.ts';
 
+@custom-variant seed-sdk-reduced-motion {
+  &:where(:root[data-reduced-motion='true'] *) {
+    @slot;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:where(:root:not([data-reduced-motion]) *) {
+      @slot;
+    }
+  }
+}
+
 @layer utilities {
   @tailwind utilities source(none);
 }

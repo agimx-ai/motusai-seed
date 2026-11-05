@@ -55,7 +55,7 @@ export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
   }
   const CopyIcon = copyState === 'copied' ? Check : copyState === 'failed' ? RotateCcw : Copy
 
-  return <section className="seed-overview flex min-h-full flex-col items-center justify-center gap-6 text-center animate-[rise_.25s_ease_both]">
+  return <section className="seed-overview flex min-h-full flex-col items-center justify-center gap-6 text-center seed-full-motion:animate-[rise_.25s_ease_both]">
     <div className="flex flex-col items-center">
       <CompanionDiscoveries state={state} label={`${t('overview.interact')} · ${statusText}`} items={snapshot.companionDiscoveries ?? emptyDiscoveries} />
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">{statusText}</p>

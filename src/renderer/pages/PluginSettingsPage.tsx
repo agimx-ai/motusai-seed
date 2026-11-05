@@ -25,7 +25,7 @@ export function PluginSettingsPage({
 }) {
   const { t } = useTranslation();
   return (
-    <section className="mx-auto w-full max-w-[730px] pt-7 animate-[rise_.25s_ease_both]">
+    <section className="mx-auto w-full max-w-[730px] pt-7 seed-full-motion:animate-[rise_.25s_ease_both]">
       <div className="rounded-[14px] border border-border bg-card px-5">
         <SettingsRow
           title={t('settings.autoUpdatePlugins')}

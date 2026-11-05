@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { buildConfig } from '../shared/build-config.generated'
 import App from './App'
+import { initializeReducedMotion } from './hooks/use-reduced-motion'
 import { initializeTheme } from './hooks/use-theme'
 import { SeedI18nProvider } from './i18n'
 import './styles.css'
@@ -20,6 +21,7 @@ window.addEventListener('unhandledrejection', (event) => {
 })
 document.documentElement.dataset.platform = window.motusWindow.platform
 initializeTheme()
+initializeReducedMotion()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

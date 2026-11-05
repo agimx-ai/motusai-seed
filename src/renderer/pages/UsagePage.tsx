@@ -130,7 +130,7 @@ export function UsagePage({ plugins, user }: { plugins: SeedInstalledPlugin[]; u
   }, [usage]);
 
   return (
-    <section className="mx-auto w-full max-w-[920px] pt-7 animate-[rise_.25s_ease_both]">
+    <section className="mx-auto w-full max-w-[920px] pt-7 seed-full-motion:animate-[rise_.25s_ease_both]">
       <div className="mb-9 flex flex-col items-center text-center">
         <UserAvatar
           className="grid size-20 place-items-center overflow-hidden rounded-full bg-muted text-[25px] text-foreground"

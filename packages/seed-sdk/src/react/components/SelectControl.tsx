@@ -444,7 +444,7 @@ export function SelectControl<Value extends string>({
       ref={rootRef}
       className={cx(
         'relative inline-flex shrink-0',
-        variant === 'model' && 'transition-[width] duration-200 ease-out motion-reduce:transition-none',
+        variant === 'model' && 'transition-[width] duration-200 ease-out seed-sdk-reduced-motion:transition-none',
         className,
       )}
       style={variant === 'model' ? { width: modelWidth } : undefined}

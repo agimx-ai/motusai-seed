@@ -83,14 +83,14 @@ export function ConfirmDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-black/20 px-6 backdrop-blur-[2px] animate-[fade_.15s_ease_both]"
+      className="fixed inset-0 z-[100] grid place-items-center bg-black/20 px-6 backdrop-blur-[2px] seed-full-motion:animate-[fade_.15s_ease_both]"
       onPointerDown={(event) => {
         if (event.target === event.currentTarget && !busy) onCancel();
       }}
     >
       <div
         ref={panelRef}
-        className="w-full max-w-[390px] rounded-[18px] border border-border bg-card p-5 text-foreground shadow-[0_18px_55px_rgba(0,0,0,.18)] animate-[rise_.18s_ease_both]"
+        className="w-full max-w-[390px] rounded-[18px] border border-border bg-card p-5 text-foreground shadow-[0_18px_55px_rgba(0,0,0,.18)] seed-full-motion:animate-[rise_.18s_ease_both]"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}

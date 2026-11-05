@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Liquid } from '../vendor/liquid-gooey';
+import { useReducedMotion } from '../use-reduced-motion';
 
 type Option = { value: string; label: string };
 type Props = {
@@ -30,9 +31,7 @@ export function DiscreteSlider({
   const [dragging, setDragging] = useState(false);
   const [keyboardFocus, setKeyboardFocus] = useState(false);
   const [width, setWidth] = useState(0);
-  const [reduced, setReduced] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  );
+  const reduced = useReducedMotion();
   const rangeRef = useRef<HTMLInputElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
@@ -43,14 +42,6 @@ export function DiscreteSlider({
   selectedIndexRef.current = selectedIndex;
   const index = preview ?? selectedIndex;
   const progress = pointerProgress ?? progressAt(index, options.length);
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
 
   useLayoutEffect(() => {
     if (!active || !trackRef.current) return;
