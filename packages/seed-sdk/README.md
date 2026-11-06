@@ -469,6 +469,8 @@ export default class GreetingService extends PluginService {
 
 ### 动画偏好
 
+需要 Seed SDK 和客户端 `0.3.17` 或更新版本。
+
 自定义动画应跟随客户端的「减少动态效果」选择；客户端选择跟随系统时使用系统偏好。返回 `true` 表示应减少动态效果，可使用静态状态代替循环、位移或抛物线动画。
 
 | 接口 | 导入入口 | 返回值 | 用途 |
