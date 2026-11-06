@@ -153,7 +153,7 @@
 
   .seed-overview .seed-mcp-connect {
     /* Include the separation in layout so centering also accounts for the client icons. */
-    margin-block-start: clamp(56px, calc(20dvh - 76px), 152px);
+    margin-block-start: clamp(88px, calc(20dvh - 44px), 184px);
   }
 
   .seed-companion-stage {
