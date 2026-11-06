@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ActionButton,
@@ -18,7 +18,7 @@ describe('shared settings presentation', () => {
         <FieldLabel description="Scoped help">Field</FieldLabel>
       </ComponentProvider>,
     );
-    fireEvent.focus(screen.getByLabelText('Scoped help'));
+    act(() => screen.getByLabelText('Scoped help').focus());
     expect((await screen.findByRole('tooltip')).dataset.pluginViewPortal).toBe('com.example.scoped');
   });
   it('retains primary and disabled styles in the shared button', () => {
@@ -35,9 +35,9 @@ describe('shared settings presentation', () => {
   it('shows field help on keyboard focus, without putting the hint in the page layout', async () => {
     render(<FieldLabel description="Private service hint">Strategy</FieldLabel>);
     expect(screen.queryByRole('tooltip')).toBeNull();
-    fireEvent.focus(screen.getByLabelText('Private service hint'));
+    act(() => screen.getByLabelText('Private service hint').focus());
     expect((await screen.findByRole('tooltip')).textContent).toBe('Private service hint');
-    fireEvent.blur(screen.getByLabelText('Private service hint'));
+    act(() => screen.getByLabelText('Private service hint').blur());
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
   it('keeps a status action separate from a disclosure and exposes the expanded state', () => {
