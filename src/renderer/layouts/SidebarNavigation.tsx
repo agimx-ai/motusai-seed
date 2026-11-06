@@ -91,7 +91,7 @@ export function SidebarNavigation({
         >
           <button
             type="button"
-            className="flex h-8 min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex h-8 min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             style={depth ? { paddingInlineStart: 12 + depth * 12 } : undefined}
             onClick={open ?? (() => toggle(key))}
             aria-current={active ? 'page' : undefined}
@@ -111,7 +111,7 @@ export function SidebarNavigation({
           {open && children.length > 0 && (
             <button
               type="button"
-              className="mr-1 grid h-7 w-6 shrink-0 place-items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="mr-1 grid h-7 w-6 shrink-0 place-items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
               aria-label={t(expanded ? 'nav.collapseSection' : 'nav.expandSection', { name: title })}
               aria-expanded={expanded}
               onClick={() => toggle(key)}
