@@ -1,5 +1,6 @@
 export { pluginDevelopmentStatusFile, type PluginDevelopmentStatus } from './development-status.js';
 export { Component, type Disposer } from './component.js';
+export { prefersReducedMotion } from './reduced-motion.js';
 export { Events, type EventRef } from './events.js';
 export type { SeedUserProfile, SeedUserService } from './user-profile.js';
 export type { CloudResourceRequest, CloudResourceChange, CloudResourceSubscription, CloudResourceService } from './cloud-resources.js';

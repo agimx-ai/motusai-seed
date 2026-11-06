@@ -467,6 +467,35 @@ export default class GreetingService extends PluginService {
 
 ---
 
+### 动画偏好
+
+自定义动画应跟随客户端的「减少动态效果」选择；客户端选择跟随系统时使用系统偏好。返回 `true` 表示应减少动态效果，可使用静态状态代替循环、位移或抛物线动画。
+
+| 接口 | 导入入口 | 返回值 | 用途 |
+| --- | --- | --- | --- |
+| `prefersReducedMotion()` | `@motus-ai/seed-sdk` | `boolean` | 读取当前偏好，适合在触发动画前判断 |
+| `useReducedMotion()` | `@motus-ai/seed-sdk/react` | `boolean` | React Hook，随客户端选择和系统偏好变化自动更新 |
+
+```ts
+import { prefersReducedMotion } from '@motus-ai/seed-sdk';
+
+function showResult() {
+  if (prefersReducedMotion()) showStaticResult();
+  else playResultAnimation();
+}
+```
+
+```tsx
+import { useReducedMotion } from '@motus-ai/seed-sdk/react';
+
+function ProgressIndicator() {
+  const reducedMotion = useReducedMotion();
+  return <span className={reducedMotion ? '' : 'animate-pulse'}>处理中</span>;
+}
+```
+
+`prefersReducedMotion()` 不订阅后续变化，需要时重新调用。持续播放的 React 动画使用 `useReducedMotion()`，并在偏好变化时停止或恢复自己的动画；Hook 的监听在组件卸载时自动释放。非浏览器环境中调用 `prefersReducedMotion()` 返回 `false`。
+
 ### 通用样式
 
 可直接用于 DOM 和 React 视图。
@@ -1677,8 +1706,8 @@ import type { App, PluginManifest, CapabilityDefinition } from '@motus-ai/seed-s
 
 | 入口 | 主要内容 | 使用位置 |
 | --- | --- | --- |
-| `@motus-ai/seed-sdk` | `Plugin`、`PluginService`、`Component`、`Events`、能力 / 数据 / 事件类型；前端还可使用 DOM 控件和 `toast` | 插件运行代码 |
-| `@motus-ai/seed-sdk/react` | `ReactSettingTab`、共享组件、`ComponentProvider`、`usePluginStyleScope` | React 前端 |
+| `@motus-ai/seed-sdk` | `Plugin`、`PluginService`、`Component`、`Events`、`prefersReducedMotion`、能力 / 数据 / 事件类型；前端还可使用 DOM 控件和 `toast` | 插件运行代码 |
+| `@motus-ai/seed-sdk/react` | `ReactSettingTab`、共享组件、`ComponentProvider`、`usePluginStyleScope`、`useReducedMotion` | React 前端 |
 | `@motus-ai/seed-sdk/testing` | 服务挂载、翻译与能力测试辅助 | Node.js 测试 |
 | `@motus-ai/seed-sdk/tools` | 构建、开发同步、打包与工具类型 | Node.js 构建脚本 |
 | `@motus-ai/seed-sdk/theme.css` / `styles.css` | 主题变量 / 组件样式 | 独立页面预览 |

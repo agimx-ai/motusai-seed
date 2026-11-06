@@ -15,6 +15,7 @@ export { DiscreteSlider } from './components/DiscreteSlider';
 export { ThemedIcon, isCurrentColorIcon } from './components/ThemedIcon';
 export { cx } from './utils';
 export { ComponentProvider, usePluginStyleScope } from './style-scope';
+export { useReducedMotion } from './use-reduced-motion';
 export { ReactSettingTab } from './react-setting-tab';
 export { Flow, FlowStep } from './components/Flow';
 export { MarkdownContent, type MarkdownImage, type MarkdownLink } from './components/MarkdownContent';
