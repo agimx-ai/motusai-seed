@@ -427,6 +427,16 @@ export default class GreetingService extends PluginService {
 | `MarkdownContent` | `children: string`、`streaming`、`renderImage?: (image: MarkdownImage) => ReactNode`、`imageProtocols?: readonly string[]` | 静态和流式 Markdown。长表格滚动时保留表头。图片解析由调用方提供，额外协议仅用于图片回调。 |
 | `Collection` / `CollectionCard` | `children`；卡片使用 `icon`、`title`、`description`、`onOpen`、`actions` | 集合与可打开的卡片 |
 
+#### `MarkdownContent` 表格背景
+
+在外层容器设置 CSS 变量 `--seed-markdown-table-surface`，可统一调整表格和吸顶表头的背景。请使用不透明颜色，让滚动经过表头的内容保持清晰。省略时使用当前主题的默认表格底色。
+
+```css
+.example-content {
+  --seed-markdown-table-surface: var(--card);
+}
+```
+
 #### `SelectControl` 参数
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |

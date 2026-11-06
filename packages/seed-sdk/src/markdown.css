@@ -4,14 +4,13 @@
 }
 
 .seed-markdown [data-streamdown='table-wrapper'] {
-  --seed-markdown-table-surface: color-mix(in srgb, var(--card) 65%, var(--muted));
   gap: 0;
   max-width: 100%;
   margin-block: 0.9rem;
   padding: 0;
   border-color: var(--overlay-border);
   border-radius: 14px;
-  background: var(--seed-markdown-table-surface);
+  background: var(--seed-markdown-table-surface, color-mix(in srgb, var(--card) 65%, var(--muted)));
 }
 
 .seed-markdown > div > [data-streamdown='table-wrapper']:first-child {
@@ -94,7 +93,7 @@
 }
 
 .seed-markdown .seed-markdown-table-head {
-  background: var(--seed-markdown-table-surface, var(--card));
+  background: var(--seed-markdown-table-surface, color-mix(in srgb, var(--card) 65%, var(--muted)));
   position: relative;
   z-index: 1;
 }
