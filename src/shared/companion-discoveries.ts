@@ -1,5 +1,8 @@
 import { z } from 'zod';
-const url = z.url().max(2048).refine((value) => { const parsed = new URL(value); return parsed.protocol === 'https:' && !parsed.username && !parsed.password; });
+const url = z.string().trim().pipe(z.union([
+  z.literal(''),
+  z.url().max(2048).refine((value) => { if (!URL.canParse(value)) return false; const parsed = new URL(value); return parsed.protocol === 'https:' && !parsed.username && !parsed.password; }),
+])).optional();
 export const companionDiscoverySchema = z.object({
   corner: z.enum(['top-left', 'bottom-left', 'top-right', 'bottom-right']),
   enabled: z.boolean(),

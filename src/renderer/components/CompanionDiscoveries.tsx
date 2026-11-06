@@ -36,7 +36,8 @@ function DiscoveryBubble({ discovery, phase, looking, setHovered, setFocused }: 
   setFocused: (value: boolean) => void
 }) {
   const { t, i18n } = useTranslation()
-  const bubbleRef = useRef<HTMLAnchorElement>(null)
+  const bubbleRef = useRef<HTMLAnchorElement | HTMLSpanElement>(null)
+  const Bubble = discovery.url ? 'a' : 'span'
   const [bubbleSize, setBubbleSize] = useState({ width: 260, height: 46 })
 
   useLayoutEffect(() => {
@@ -53,7 +54,7 @@ function DiscoveryBubble({ discovery, phase, looking, setHovered, setFocused }: 
     const observer = new ResizeObserver(measure)
     observer.observe(bubble)
     return () => observer.disconnect()
-  }, [])
+  }, [Bubble])
 
   return <div className="seed-discovery" data-corner={discovery.corner} data-phase={phase} data-looking={looking}
       aria-label={t('overview.discoveries.label')}
@@ -63,16 +64,17 @@ function DiscoveryBubble({ discovery, phase, looking, setHovered, setFocused }: 
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false)
       }}>
-      <a ref={bubbleRef} className="seed-discovery-link" href={discovery.url} target="_blank" rel="noopener noreferrer">
+      <Bubble ref={(element) => { bubbleRef.current = element }} className="seed-discovery-link"
+        {...(discovery.url ? { href: discovery.url, target: '_blank', rel: 'noopener noreferrer' } : {})}>
         <svg className="seed-discovery-outline" viewBox={`0 0 ${bubbleSize.width + 48} ${bubbleSize.height + 48}`}
           aria-hidden="true" focusable="false">
           <path d={bubbleOutline(bubbleSize.width, bubbleSize.height, looking)} transform="translate(24 24)" vectorEffect="non-scaling-stroke" />
         </svg>
         <span className="seed-discovery-title">
           {discovery.title[i18n.resolvedLanguage?.startsWith('en') ? 'en-US' : 'zh-CN']}
-          <ArrowUpRight size={12} strokeWidth={1.5} aria-hidden="true" />
+          {discovery.url && <ArrowUpRight size={12} strokeWidth={1.5} aria-hidden="true" />}
         </span>
-      </a>
+      </Bubble>
   </div>
 }
 

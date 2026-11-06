@@ -251,7 +251,7 @@
     transform: scale(-1);
   }
 
-  .seed-discovery-link:hover .seed-discovery-outline {
+  a.seed-discovery-link:hover .seed-discovery-outline {
     stroke: var(--border);
   }
 

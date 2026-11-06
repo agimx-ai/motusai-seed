@@ -52,6 +52,50 @@ function visibleBubble(container: HTMLElement) {
 }
 
 describe('companion discovery rotation', () => {
+  it('shows link arrows only for destinations and keeps plain introductions out of the tab order', () => {
+    document.documentElement.dataset.reducedMotion = 'true'
+    const mixed = items.map((item, index) => ({ ...item, url: index === 0 ? '' : index === 1 ? undefined : item.url }))
+    const view = render(<I18nextProvider i18n={i18n}><CompanionDiscoveries state="idle" label="和伙伴互动" items={mixed} /></I18nextProvider>)
+    advance(discoveryIdleDelay)
+    expect(view.container.querySelectorAll('.seed-discovery[data-phase="visible"]')).toHaveLength(4)
+    expect(view.getAllByRole('link')).toHaveLength(2)
+    for (const item of mixed) {
+      const title = view.getByText(item.title['zh-CN'])
+      const bubble = title.parentElement!
+      expect(bubble.tagName).toBe(item.url ? 'A' : 'SPAN')
+      expect(title.querySelector('svg') !== null).toBe(!!item.url)
+      if (!item.url) {
+        expect(bubble.hasAttribute('href')).toBe(false)
+        expect(bubble.hasAttribute('tabindex')).toBe(false)
+        expect(bubble.hasAttribute('target')).toBe(false)
+        expect(bubble.tabIndex).toBe(-1)
+      }
+    }
+    const renderItems = (values: CompanionDiscovery[]) => <I18nextProvider i18n={i18n}><CompanionDiscoveries state="idle" label="和伙伴互动" items={values} /></I18nextProvider>
+    view.rerender(renderItems(mixed.map((item) => ({ ...item, url: undefined }))))
+    expect(view.queryAllByRole('link')).toHaveLength(0)
+    expect(view.container.querySelectorAll('.seed-discovery-title svg')).toHaveLength(0)
+    view.rerender(renderItems(items))
+    expect(view.getAllByRole('link')).toHaveLength(4)
+    expect(view.container.querySelectorAll('.seed-discovery-title svg')).toHaveLength(4)
+  })
+
+  it('rotates plain introductions normally and preserves their hover reading time', () => {
+    const plain = items.map((item) => ({ ...item, url: '' }))
+    const view = render(<I18nextProvider i18n={i18n}><CompanionDiscoveries state="idle" label="和伙伴互动" items={plain} /></I18nextProvider>)
+    advance(discoveryIdleDelay)
+    advance(discoveryTiming.look)
+    expect(visibleBubble(view.container)?.textContent).toBe(plain[0]!.title['zh-CN'])
+    expect(view.queryAllByRole('link')).toHaveLength(0)
+    fireEvent.mouseEnter(visibleBubble(view.container)!)
+    advance(discoveryTiming.visible + 5000)
+    expect(view.container.querySelectorAll('.seed-discovery[data-phase="visible"]')).toHaveLength(1)
+    fireEvent.mouseLeave(visibleBubble(view.container)!)
+    advance(discoveryTiming.visible)
+    advance(discoveryTiming.look)
+    expect(view.container.querySelectorAll('.seed-discovery[data-phase="visible"]')).toHaveLength(2)
+  })
+
   it('retains each introduction, faces front and winks, then clears all four before restarting', () => {
     const looks = vi.spyOn(BotEngine.prototype, 'setLook')
     const states = vi.spyOn(BotEngine.prototype, 'setState')

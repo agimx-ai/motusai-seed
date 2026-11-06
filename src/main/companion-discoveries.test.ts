@@ -39,4 +39,23 @@ describe('companion discovery feed', () => {
     expect(feed.snapshot()).toEqual([]);
     expect(writeCache).not.toHaveBeenCalled();
   });
+  it('loads, refreshes and caches introductions without destinations', async () => {
+    const items = fixture.items.map((item, index) => ({ ...item, url: index === 0 ? undefined : index === 1 ? '' : item.url }));
+    let cache = JSON.stringify({ ...fixture, items });
+    const changed = vi.fn();
+    const feed = new CompanionDiscoveryFeed({
+      eventsUrl: async () => 'wss://cloud.example.com/api/v1/distributions/motusai/events',
+      readCache: async () => cache,
+      writeCache: async (value) => { cache = value; },
+      changed,
+      fetch: vi.fn(async () => new Response(JSON.stringify({ ...fixture, revision: 2, items: items.map((item) => ({ ...item, url: '   ' })) }))),
+    });
+    await feed.loadCache();
+    expect(feed.snapshot()).toEqual(items);
+    await feed.refresh();
+    expect(feed.snapshot()).toHaveLength(4);
+    expect(feed.snapshot().every((item) => item.url === '')).toBe(true);
+    expect(JSON.parse(cache).items.every((item: { url: string }) => item.url === '')).toBe(true);
+    expect(changed).toHaveBeenCalledOnce();
+  });
 });
