@@ -152,8 +152,8 @@
   }
 
   .seed-overview .seed-mcp-connect {
-    /* Use spare window height while keeping the companion and bubbles fixed. */
-    translate: 0 clamp(56px, calc(20dvh - 76px), 152px);
+    /* Include the separation in layout so centering also accounts for the client icons. */
+    margin-block-start: clamp(56px, calc(20dvh - 76px), 152px);
   }
 
   .seed-companion-stage {
