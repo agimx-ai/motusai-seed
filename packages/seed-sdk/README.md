@@ -424,7 +424,7 @@ export default class GreetingService extends PluginService {
 | `StatusBadge` | `children`、`tone`、可选 `onClick` | 状态胶囊 |
 | `Dialog` | `open`、`title`、`closeLabel`、`onClose`、`children`、`busy` | 带焦点管理的对话框 |
 | `Flow` / `FlowStep` | `children`；步骤还需 `icon`、`title`，可选 `muted` | 步骤布局 |
-| `MarkdownContent` | `children: string`、`streaming`、`renderImage?: (image: MarkdownImage) => ReactNode`、`imageProtocols?: readonly string[]` | 静态和流式 Markdown。长表格滚动时保留表头。图片解析由调用方提供，额外协议仅用于图片回调。 |
+| `MarkdownContent` | `children: string`、`streaming`、`renderImage?: (image: MarkdownImage) => ReactNode`、`imageProtocols?: readonly string[]`、`renderLink?: (link: MarkdownLink) => ReactNode`、`linkProtocols?: readonly string[]` | 静态和流式 Markdown。长表格滚动时保留表头。资源解析由调用方提供；图片与链接的额外协议独立生效，只传给对应回调。未提供链接回调或回调返回空值时链接保持不可点击。 |
 | `Collection` / `CollectionCard` | `children`；卡片使用 `icon`、`title`、`description`、`onOpen`、`actions` | 集合与可打开的卡片 |
 
 #### `MarkdownContent` 表格背景
@@ -636,6 +636,8 @@ Manifest 为准，在发送请求、交付结果、建立订阅和分发提示�
 返回值：`Promise<unknown>`。
 
 `seed.shell.open-url` 使用系统默认浏览器打开网页，要求插件声明 `shell.open-url` 权限。参数为 `{ url: string }`，成功返回 `{ opened: true }`。支持 HTTP（含内网站点）和 HTTPS，拒绝包含用户名／密码、控制字符及非网页协议的地址。
+
+`seed.shell.open-path` 要求 `shell.open-path` 权限，且路径必须在当前插件私有数据目录内。参数 `{ path: string, operation?: 'open' | 'open_with' }`；默认用系统关联应用打开，`open_with` 显示原生应用选择框再用所选应用打开文件。取消返回 `{ opened: false }`。下载缓存和文档资源由插件管理；宿主不解析文件业务或群聊信息。
 
 ### `mountPluginService` 详细说明
 

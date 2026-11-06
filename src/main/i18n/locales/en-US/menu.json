@@ -19,6 +19,8 @@
   "minimize": "Minimize",
   "zoom": "Zoom",
   "openApp": "Open {{appName}}",
+  "openWith": "Open With",
+  "application": "Application",
   "recordingActive": "Recording",
   "recordingPaused": "Recording paused",
   "stopRecording": "Stop and cancel recording",

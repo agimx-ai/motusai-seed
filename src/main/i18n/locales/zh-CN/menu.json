@@ -19,6 +19,8 @@
   "minimize": "最小化",
   "zoom": "缩放",
   "openApp": "打开 {{appName}}",
+  "openWith": "打开方式",
+  "application": "应用程序",
   "recordingActive": "正在录音",
   "recordingPaused": "录音已暂停",
   "stopRecording": "停止并取消录音",

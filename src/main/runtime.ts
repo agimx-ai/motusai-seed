@@ -1,6 +1,5 @@
-import { isAbsolute, join, relative, sep } from 'node:path';
+import { join } from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { realpath } from 'node:fs/promises';
 import { app, BrowserWindow, clipboard, nativeTheme, powerSaveBlocker, shell, session } from 'electron';
 import { z } from 'zod';
 import { buildConfig } from '../shared/build-config.generated';
@@ -27,6 +26,8 @@ import type {
   WorkerEvent,
 } from '../shared/contracts';
 import { resolveSeedLocale } from './i18n/locale';
+import { nativeMenuMessages } from './i18n/native-menu';
+import { openPluginPath } from './plugin-path-opening';
 import { fetchMcpSetupPrompt } from './mcp-setup-prompt';
 import { invokePluginSettings } from './plugin-settings';
 import { pluginUserProfile } from './plugin-user-profile';
@@ -3025,20 +3026,18 @@ export class SeedRuntime {
     }
     if (service === 'seed.shell.open-path') {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId);
-      if (!plugin?.permissions.includes('shell.open-path'))
+      if (!plugin?.permissions.includes('shell.open-path') || !this.pluginIsAuthorized(packageId))
         throw Object.assign(new Error('插件未声明打开路径权限。'), { code: 'broker_permission_denied' });
-      const requestedPath = String(argumentsValue.path || '');
-      if (!isAbsolute(requestedPath))
-        throw Object.assign(new Error('只能打开插件私有目录中的绝对路径。'), { code: 'broker_path_denied' });
-      const pluginDataPath = await realpath(join(app.getPath('userData'), 'plugin-data', packageId));
-      const targetPath = await realpath(requestedPath);
-      const boundary = relative(pluginDataPath, targetPath);
-      if (boundary === '..' || boundary.startsWith(`..${sep}`) || isAbsolute(boundary)) {
-        throw Object.assign(new Error('只能打开当前插件的私有目录。'), { code: 'broker_path_denied' });
-      }
-      const error = await shell.openPath(targetPath);
-      if (error) throw new Error(error);
-      return { opened: true };
+      const messages = nativeMenuMessages(this.store.languagePreference());
+      const input = Object.fromEntries(Object.entries(argumentsValue).filter(([key]) => key !== 'package_id'));
+      return openPluginPath(join(app.getPath('userData'), 'plugin-data', packageId), input, {
+        window: this.window(), title: messages.openWith, applicationLabel: messages.application,
+        assertActive: () => {
+          assertActive?.();
+          if (!this.runtimePlugins.includes(plugin) || !this.pluginIsAuthorized(packageId))
+            throw Object.assign(new Error('File action owner is no longer active.'), { code: 'broker_owner_inactive' });
+        },
+      });
     }
     if (service === 'seed.process') {
       return await this.sidecarProcessService.invoke(packageId, argumentsValue);

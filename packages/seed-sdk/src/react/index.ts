@@ -17,7 +17,7 @@ export { cx } from './utils';
 export { ComponentProvider, usePluginStyleScope } from './style-scope';
 export { ReactSettingTab } from './react-setting-tab';
 export { Flow, FlowStep } from './components/Flow';
-export { MarkdownContent, type MarkdownImage } from './components/MarkdownContent';
+export { MarkdownContent, type MarkdownImage, type MarkdownLink } from './components/MarkdownContent';
 export { Collection, CollectionCard, PreviewDialog } from './components/Collection';
 export { ActionButton } from './components/ActionButton';
 export { IconButton } from './components/IconButton';

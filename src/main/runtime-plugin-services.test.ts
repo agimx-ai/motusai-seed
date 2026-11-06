@@ -48,6 +48,16 @@ function fixture(kind = 'sandboxed-web') {
   return { runtime, call };
 }
 describe('generic plugin SDK brokers', () => {
+  it('rejects missing or revoked private-file opening authority without trusting a supplied plugin identity', async () => {
+    const { runtime, call } = fixture('native-host');
+    runtime.runtimePlugins[1].permissions = ['shell.open-path'];
+    await expect(call('one', 'seed.shell.open-path', { path: '/private/file.txt', package_id: 'com.example.two' }))
+      .rejects.toMatchObject({ code: 'broker_permission_denied' });
+    runtime.runtimePlugins[0].permissions = ['shell.open-path'];
+    runtime.pluginIsAuthorized.mockReturnValue(false);
+    await expect(call('one', 'seed.shell.open-path', { path: '/private/file.txt' }))
+      .rejects.toMatchObject({ code: 'broker_permission_denied' });
+  });
   it.each(['native-host', 'sandboxed-web'])(
     'returns only the current public profile to an active %s plugin',
     async (kind) => {
