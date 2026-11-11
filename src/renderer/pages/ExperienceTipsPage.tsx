@@ -90,20 +90,44 @@ function TipMetadata({ item }: { item: ExperienceTipSummary }) {
 }
 
 function TipListSkeleton({ label, mine, ranked }: { label: string; mine: boolean; ranked: boolean }) {
+  const List = ranked ? 'ol' : 'ul';
   return (
     <LoadingSkeleton label={label}>
-      <ul className="experience-list">
+      <List className="experience-list">
         {Array.from({ length: 4 }, (_, index) => (
-          <li key={index} className="experience-row">
-            {ranked && <span className="experience-rank"><span className="mx-auto block h-4 w-3 rounded bg-border/70" /></span>}
-            <div className="experience-row-main me-auto w-3/5">
-              <span className={`my-0.5 block h-3.5 max-w-full rounded bg-border ${index % 2 ? 'w-32' : 'w-44'}`} />
-              <span className="my-1 block h-2.5 w-24 max-w-full rounded bg-border/70" />
-            </div>
-            {mine && <span className="block h-6 w-16 rounded-full bg-border/70" />}
+          <li key={index}>
+            {mine ? (
+              <div className="experience-row">
+                <div className="experience-row-main">
+                  <strong><span className="inline-block h-3.5 w-44 max-w-full rounded bg-border align-middle" /></strong>
+                  <small><span className="inline-block h-2.5 w-24 max-w-full rounded bg-border/70 align-middle" /></small>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <span className="experience-status w-16 border-transparent bg-border/70">&nbsp;</span>
+                  <span className="grid size-7 place-items-center">
+                    <span className="size-3.5 rounded bg-border/70" />
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="experience-row experience-article-row">
+                {ranked && <span className="experience-rank"><span className="mx-auto block h-4 w-3 rounded bg-border/70" /></span>}
+                <div className="experience-row-main experience-article-row-main">
+                  <span className={`h-3.5 max-w-full self-center rounded bg-border ${index % 2 ? 'w-32' : 'w-44'}`} />
+                  <span className="h-3 w-4/5 self-center rounded bg-border/70" />
+                  <span className="experience-meta">
+                    <span className="h-2.5 w-12 rounded bg-border/70" />
+                    <span className="h-2.5 w-7 rounded bg-border/70" />
+                    <span className="h-2.5 w-7 rounded bg-border/70" />
+                    <span className="h-2.5 w-16 rounded bg-border/70" />
+                  </span>
+                </div>
+                <span className="experience-cover aspect-[3/2] rounded-md bg-border/70" />
+              </div>
+            )}
           </li>
         ))}
-      </ul>
+      </List>
     </LoadingSkeleton>
   );
 }
@@ -516,7 +540,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
                   </div>
                 </div>
               ) : (
-                <button type="button" className="experience-row" onClick={(event) => {
+                <button type="button" className="experience-row experience-article-row" onClick={(event) => {
                   openButton.current = event.currentTarget;
                   setArticleId(item.tip_id);
                 }}>

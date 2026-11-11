@@ -37,11 +37,14 @@
   border: 0;
 }
 
-button.experience-row {
+.experience-article-row {
   --experience-title-line: 1.3125rem;
   --experience-excerpt-line: 1.25rem;
   --experience-meta-line: 1.125rem;
   --experience-line-gap: .1875rem;
+}
+
+button.experience-row {
   cursor: pointer;
 }
 
