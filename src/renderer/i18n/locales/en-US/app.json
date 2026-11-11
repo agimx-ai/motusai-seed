@@ -18,7 +18,7 @@
       "latest": "Latest",
       "popular": "Popular"
     },
-    "breadcrumb": "Experience tip details",
+    "backToList": "Back to Experience tips",
     "loading": "Loading…",
     "loadFailed": "Could not load experience tips",
     "submissionsLoadFailed": "Could not load your submissions",

@@ -278,7 +278,7 @@ function ArticlePage({ id, dark, onCountsChange }: {
 export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: {
   actionsContainer: HTMLDivElement | null;
   dark: boolean;
-  onArticleChange: (article: { title: string; onBack: () => void } | undefined) => void;
+  onArticleChange: (article: { onBack: () => void } | undefined) => void;
 }) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
@@ -287,8 +287,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
   const [searchInput, setSearchInput] = useState('');
   const [query, setQuery] = useState('');
   const [composingSearch, setComposingSearch] = useState(false);
-  const [selectedArticle, setSelectedArticle] = useState<ExperienceTipSummary>();
-  const articleId = selectedArticle?.tip_id;
+  const [articleId, setArticleId] = useState<string>();
   const [items, setItems] = useState<ExperienceTipSummary[]>([]);
   const updateCounts = useCallback((tipId: string, { view_count, like_count }: TipCounts) => {
     if (view_count === undefined && like_count === undefined) return;
@@ -312,16 +311,15 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
   const searchLabel = t(mine ? 'experienceTips.searchSubmissions' : 'experienceTips.searchArticles');
 
   useLayoutEffect(() => {
-    if (!selectedArticle) return;
+    if (!articleId) return;
     onArticleChange({
-      title: selectedArticle.title,
       onBack: () => {
-        setSelectedArticle(undefined);
+        setArticleId(undefined);
         requestAnimationFrame(() => openButton.current?.focus());
       },
     });
     return () => onArticleChange(undefined);
-  }, [selectedArticle, onArticleChange]);
+  }, [articleId, onArticleChange]);
 
   async function load(before: string | null) {
     active.current?.abort();
@@ -495,7 +493,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
               ) : (
                 <button type="button" className="experience-row" onClick={(event) => {
                   openButton.current = event.currentTarget;
-                  setSelectedArticle(item);
+                  setArticleId(item.tip_id);
                 }}>
                   {ranked && (
                     <span className="experience-rank font-bold" data-place={index < 3 ? index + 1 : undefined}>

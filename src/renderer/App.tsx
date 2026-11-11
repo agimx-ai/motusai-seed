@@ -57,7 +57,7 @@ export default function App() {
   const pluginSettingsTarget = page.view === 'plugins' ? page.settingsTarget : undefined;
   const [profileEditing, setProfileEditing] = useState(false);
   const [experienceTipsActions, setExperienceTipsActions] = useState<HTMLDivElement | null>(null);
-  const [experienceArticle, setExperienceArticle] = useState<{ title: string; onBack: () => void }>();
+  const [experienceArticle, setExperienceArticle] = useState<{ onBack: () => void }>();
   const [pluginSearchResults, setPluginSearchResults] = useState<{
     query: string;
     page: SeedCatalogPage;

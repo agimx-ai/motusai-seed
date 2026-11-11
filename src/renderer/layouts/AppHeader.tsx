@@ -1,4 +1,4 @@
-import { ChevronRight, Pencil, Plus, icons } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pencil, Plus, icons } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Fragment, type ReactNode, type Ref } from 'react';
 import type { SeedCatalogPlugin, SeedInstalledPlugin } from '../../shared/contracts';
@@ -22,7 +22,7 @@ type AppHeaderProps = {
   onAddCredits: () => void;
   activityActions?: ReactNode;
   experienceTipsActionsRef?: Ref<HTMLDivElement>;
-  experienceArticle?: { title: string; onBack: () => void };
+  experienceArticle?: { onBack: () => void };
 };
 
 export function AppHeader({
@@ -44,9 +44,9 @@ export function AppHeader({
   const { locale } = useSeedI18n();
   const navigation = pluginNavigation?.pluginId === selectedPlugin?.id ? pluginNavigation : undefined;
   const article = view === 'experience-tips' ? experienceArticle : undefined;
-  const hasBreadcrumbRoot = view === 'plugins' || Boolean(article);
+  const hasBreadcrumbRoot = view === 'plugins';
   const breadcrumbs = [
-    { id: null, label: article?.title ?? (view === 'plugin-view' ? pageTitle ?? '' : selectedPlugin ? resolveSeedLocalizedText(selectedPlugin.name, locale) : '') },
+    { id: null, label: view === 'plugin-view' ? pageTitle ?? '' : selectedPlugin ? resolveSeedLocalizedText(selectedPlugin.name, locale) : '' },
     ...(navigation?.path ?? []),
   ];
   const isWindows = window.motusWindow.platform === 'win32';
@@ -98,16 +98,26 @@ export function AppHeader({
     >
       {view === 'overview' ? (
         <span />
-      ) : (article || view === 'plugins' && selectedPlugin || view === 'plugin-view' && navigation?.path.length) ? (
+      ) : article ? (
+        <button
+          className="-mx-2 inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-[16px] font-medium text-foreground hover:bg-muted"
+          type="button"
+          onClick={article.onBack}
+          aria-label={t('experienceTips.backToList')}
+        >
+          <ChevronLeft size={16} aria-hidden="true" />
+          {title}
+        </button>
+      ) : (view === 'plugins' && selectedPlugin || view === 'plugin-view' && navigation?.path.length) ? (
         <nav
           className={`seed-header-breadcrumbs flex min-w-0 items-center whitespace-nowrap text-[14px] font-normal leading-none [-webkit-app-region:no-drag] ${hasBreadcrumbRoot ? 'gap-1' : 'gap-2'}`}
-          aria-label={t(article ? 'experienceTips.breadcrumb' : 'plugins.breadcrumb')}
+          aria-label={t('plugins.breadcrumb')}
           aria-busy={navigation?.busy || undefined}
         >
           {hasBreadcrumbRoot && <button
             className="-mx-2 inline-flex h-9 shrink-0 items-center rounded-lg px-2 text-[16px] font-medium text-foreground transition"
             type="button"
-            onClick={article?.onBack ?? onBackToPlugins}
+            onClick={onBackToPlugins}
           >
             {title}
           </button>}

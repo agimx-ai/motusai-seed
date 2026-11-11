@@ -48,17 +48,17 @@ describe('product header breadcrumbs', () => {
     expect(back).toHaveBeenCalledOnce();
   });
 
-  it('uses the same two-level header to return from an experience tip', async () => {
+  it('shows only the back button in the experience tip header', async () => {
     window.motusWindow = { platform: 'darwin' } as any;
     window.motusSeed = { snapshot: async () => ({ locale: 'zh-CN', languagePreference: 'zh-CN' }), subscribe: () => () => {} } as any;
     const onBack = vi.fn();
     render(<SeedI18nProvider><AppHeader
-      sidebarCollapsed={false} view="experience-tips" experienceArticle={{ title: '会议技巧', onBack }}
+      sidebarCollapsed={false} view="experience-tips" experienceArticle={{ onBack }}
       refreshing={false} onBackToPlugins={vi.fn()} onRefreshPlugins={vi.fn()} onEditProfile={vi.fn()} onAddCredits={vi.fn()}
     /></SeedI18nProvider>);
-    const breadcrumb = await screen.findByRole('navigation', { name: '使用技巧详情路径' });
-    expect(breadcrumb.querySelector('[aria-current="page"]')?.textContent).toBe('会议技巧');
-    fireEvent.click(screen.getByRole('button', { name: '使用技巧' }));
+    const back = await screen.findByRole('button', { name: '返回使用技巧' });
+    expect(screen.getByRole('banner').textContent).toBe('使用技巧');
+    fireEvent.click(back);
     expect(onBack).toHaveBeenCalledOnce();
   });
 

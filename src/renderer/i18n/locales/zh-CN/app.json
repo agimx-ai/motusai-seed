@@ -18,7 +18,7 @@
       "latest": "最新",
       "popular": "热门"
     },
-    "breadcrumb": "使用技巧详情路径",
+    "backToList": "返回使用技巧",
     "loading": "正在加载…",
     "loadFailed": "无法加载使用技巧",
     "submissionsLoadFailed": "无法加载投稿",
