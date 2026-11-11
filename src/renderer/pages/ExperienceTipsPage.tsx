@@ -1,6 +1,6 @@
 import { toast } from '@motus-ai/seed-sdk';
 import { ActionButton, SegmentedControl, StatusBadge } from '@motus-ai/seed-sdk/react';
-import { Clock, Eye, MoreHorizontal, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
+import { Clock, Eye, MoreHorizontal, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -557,7 +557,15 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
                     </span>
                   )}
                   <div className="experience-row-main experience-article-row-main">
-                    <strong className="truncate">{item.title}</strong>
+                    <div className="flex min-w-0 items-center gap-2">
+                      {!ranked && item.pinned && (
+                        <StatusBadge tone="info" className="h-5! gap-1 px-1.5!">
+                          <Pin size={11} aria-hidden="true" />
+                          {t('experienceTips.pinned')}
+                        </StatusBadge>
+                      )}
+                      <strong className="truncate">{item.title}</strong>
+                    </div>
                     <span className="experience-row-excerpt truncate text-[13px] text-muted-foreground">{item.excerpt}</span>
                     <TipMetadata item={item} />
                   </div>

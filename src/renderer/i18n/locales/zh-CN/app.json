@@ -2,6 +2,7 @@
   "experienceTips": {
     "articles": "浏览技巧",
     "submissions": "我的投稿",
+    "pinned": "置顶",
     "unlisted": {
       "status": "已停止展示",
       "date": "停止展示于 {{date}}",

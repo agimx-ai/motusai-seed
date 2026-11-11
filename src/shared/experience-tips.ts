@@ -68,6 +68,7 @@ const experienceTipSummarySchema = z.object({
   like_count: experienceTipEngagementSchema.shape.like_count.optional(),
   removal_action: experienceTipRemovalActionSchema.nullable().optional(),
   unlisted: z.object({ at: z.iso.datetime(), reason: z.string() }).optional(),
+  pinned: z.boolean().optional(),
 });
 
 export const experienceTipPageSchema = z.object({
