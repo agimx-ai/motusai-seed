@@ -1,5 +1,5 @@
 import { toast } from '@motus-ai/seed-sdk';
-import { ActionButton, SegmentedControl } from '@motus-ai/seed-sdk/react';
+import { ActionButton, SegmentedControl, StatusBadge } from '@motus-ai/seed-sdk/react';
 import { Clock, Eye, MoreHorizontal, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -103,7 +103,7 @@ function TipListSkeleton({ label, mine, ranked }: { label: string; mine: boolean
                   <small><span className="inline-block h-2.5 w-24 max-w-full rounded bg-border/70 align-middle" /></small>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <span className="experience-status w-16 border-transparent bg-border/70">&nbsp;</span>
+                  <StatusBadge className="w-16">&nbsp;</StatusBadge>
                   <span className="grid size-7 place-items-center">
                     <span className="size-3.5 rounded bg-border/70" />
                   </span>
@@ -133,6 +133,15 @@ function TipListSkeleton({ label, mine, ranked }: { label: string; mine: boolean
 }
 
 type SubmissionRemoval = ExperienceTipRemoval & { title: string; unlisted: boolean };
+
+function SubmissionStatus({ item }: { item: ExperienceTipSummary }) {
+  const { t } = useTranslation();
+  if (item.unlisted) return <StatusBadge>{t('experienceTips.unlisted.status')}</StatusBadge>;
+
+  const state = item.state === 'published' && item.removal_action === null ? 'superseded' : item.state;
+  const tone = state === 'pending' ? 'info' : state === 'returned' ? 'warning' : state === 'published' ? 'success' : 'neutral';
+  return <StatusBadge tone={tone}>{t(`experienceTips.state.${state}`)}</StatusBadge>;
+}
 
 function SubmissionActions({ item, action, onSelect }: {
   item: ExperienceTipSummary;
@@ -244,7 +253,7 @@ function ArticlePage({ id, title, dark, onCountsChange }: {
   return (
     <>
       {article ? (
-        <article className="experience-article">
+        <article className="experience-article seed-selectable-text">
           <header className="experience-article-header">
             <h1 ref={heading} tabIndex={-1} className="experience-article-title">{article.title}</h1>
             <div className="experience-meta experience-article-byline">
@@ -528,9 +537,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <span className="experience-status" data-state={item.unlisted ? 'unlisted' : item.state}>
-                      {t(item.unlisted ? 'experienceTips.unlisted.status' : `experienceTips.state.${item.state === 'published' && item.removal_action === null ? 'superseded' : item.state}`)}
-                    </span>
+                    <SubmissionStatus item={item} />
                     {item.removal_action && (
                       <SubmissionActions item={item} action={item.removal_action} onSelect={(request) => {
                         setRemovalError('');

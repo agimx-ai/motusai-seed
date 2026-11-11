@@ -183,19 +183,6 @@ button.experience-row:focus-visible {
   white-space: pre-wrap;
 }
 
-.experience-status {
-  flex: none;
-  padding: .2rem .55rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: .75rem;
-  overflow-wrap: anywhere;
-}
-
-.experience-status[data-state="returned"] {
-  color: var(--color-status-error, var(--foreground));
-}
-
 .experience-article {
   max-width: 46rem;
   margin: 1.4rem 0;
