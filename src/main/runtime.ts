@@ -1988,6 +1988,10 @@ export class SeedRuntime {
       await this.announcements.refresh();
       return;
     }
+    if (event.type === 'experience.articles.changed') {
+      if (this.user) this.emit({ type: 'experience.articles.changed' });
+      return;
+    }
     if (event.type === 'plugin.catalog.changed') {
       this.pluginCatalogRefreshQueue = this.pluginCatalogRefreshQueue
         .catch(() => undefined)
@@ -2013,6 +2017,7 @@ export class SeedRuntime {
   }
 
   private async reconcileDistributionState() {
+    if (this.user) this.emit({ type: 'experience.articles.changed' });
     await this.currentDistribution(true);
     await this.companionDiscoveries.refresh();
     if (this.user)

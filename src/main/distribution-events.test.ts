@@ -39,7 +39,7 @@ function setup() {
     heartbeatTimeoutMs: 50,
     stableConnectionMs: 300,
   })
-  return { events, sockets, connected }
+  return { events, sockets, connected, received }
 }
 
 afterEach(() => {
@@ -47,6 +47,21 @@ afterEach(() => {
 })
 
 describe('SeedDistributionEvents', () => {
+  it('receives experience article changes on the existing distribution connection', () => {
+    vi.useFakeTimers()
+    const { events, sockets, received } = setup()
+    events.configure('https://cloud.example.com/api/v1/distributions/motusai/events')
+    sockets[0].open()
+    const notice = {
+      ver: 1, type: 'experience.articles.changed', dist_id: 'motusai',
+      revision: '11111111-1111-4111-8111-111111111111', occurred_at: '2026-11-11T12:00:00.000Z',
+    }
+    sockets[0].emit('message', JSON.stringify(notice))
+    expect(received).toHaveBeenCalledExactlyOnceWith(notice)
+    expect(sockets).toHaveLength(1)
+    events.stop()
+  })
+
   it('terminates a connection that does not finish its handshake and reconnects', () => {
     vi.useFakeTimers()
     const { events, sockets } = setup()

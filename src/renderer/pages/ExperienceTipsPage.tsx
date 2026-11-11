@@ -1,7 +1,7 @@
 import { toast } from '@motus-ai/seed-sdk';
 import { ActionButton, SegmentedControl, StatusBadge } from '@motus-ai/seed-sdk/react';
 import { Clock, Eye, MoreHorizontal, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { experienceTipSearchLimit, type ExperienceTipArticle, type ExperienceTipRead, type ExperienceTipRemoval, type ExperienceTipSort, type ExperienceTipSummary } from '../../shared/experience-tips';
@@ -365,7 +365,10 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
     onArticleChange({
       onBack: () => {
         setArticleId(undefined);
-        requestAnimationFrame(() => openButton.current?.focus());
+        requestAnimationFrame(() => {
+          if (openButton.current?.isConnected) openButton.current.focus();
+          else section.current?.focus({ preventScroll: true });
+        });
       },
     });
     return () => onArticleChange(undefined);
@@ -396,6 +399,14 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
       if (!controller.signal.aborted) setLoading(false);
     }
   }
+
+  const refreshArticles = useEffectEvent(() => {
+    if (!mine) void load(null);
+  });
+
+  useEffect(() => window.motusSeed.subscribe((event) => {
+    if (event.type === 'experience.articles.changed') refreshArticles();
+  }), []);
 
   useEffect(() => {
     void load(null);

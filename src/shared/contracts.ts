@@ -29,6 +29,7 @@ export type SeedDistributionEvent =
   | { ver: 1; type: 'announcement.changed'; dist_id: string; revision: string; occurred_at: string }
   | { ver: 1; type: 'client.discoveries.changed'; dist_id: string; revision: string; occurred_at: string }
   | { ver: 1; type: 'plugin.catalog.changed'; dist_id: string; revision: string; occurred_at: string }
+  | { ver: 1; type: 'experience.articles.changed'; dist_id: string; revision: string; occurred_at: string }
   | {
       ver: 1;
       type: 'client.release.changed';
@@ -351,6 +352,7 @@ export type PluginUpdateResult = {
 
 export type SeedEvent =
   | { type: 'snapshot.changed'; snapshot: SeedSnapshot }
+  | { type: 'experience.articles.changed' }
   | { type: 'logs.upload.progress'; progress: TerminalLogUploadProgress | null }
   | { type: 'plugin.install.progress'; pluginId: string; progress: PluginInstallProgress }
   | { type: 'plugin.install.progress'; pluginId: string; operationId: string; progress: null };
