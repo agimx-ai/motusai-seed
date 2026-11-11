@@ -464,11 +464,13 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
                   <div className="experience-row-main">
                     <strong>{item.title}</strong>
                     <small>{formatDate(item.submitted_at, locale)}</small>
-                    {item.review_note && (
+                    {item.review_notes?.length ? (
                       <blockquote className="experience-feedback border-s-2 border-border ps-3 text-muted-foreground">
-                        {item.review_note}
+                        <ol className="m-0 list-decimal space-y-1 ps-5">
+                          {item.review_notes.map((note, index) => <li key={index}>{note}</li>)}
+                        </ol>
                       </blockquote>
-                    )}
+                    ) : null}
                     {item.unlisted && (
                       <>
                         <small>{t('experienceTips.unlisted.date', { date: formatDate(item.unlisted.at, locale) })}</small>

@@ -59,7 +59,7 @@ const experienceTipSummarySchema = z.object({
   title: z.string(),
   author: z.string(),
   state: z.enum(['pending', 'returned', 'published']),
-  review_note: z.string().nullable(),
+  review_notes: z.array(z.string()).optional(),
   submitted_at: z.iso.datetime().nullable(),
   published_at: z.iso.datetime().nullable(),
   cover_url: z.url({ protocol: /^https?$/ }).optional(),

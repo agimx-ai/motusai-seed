@@ -20,7 +20,7 @@
   list-style: none;
 }
 
-.experience-list li+li {
+.experience-list > li + li {
   border-top: 1px solid var(--border);
 }
 
