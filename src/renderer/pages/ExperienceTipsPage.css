@@ -203,10 +203,15 @@ button.experience-row:focus-visible {
   margin-block-end: 1.5rem;
 }
 
-.experience-article-header h1 {
+.experience-article-title {
   margin: 0 0 1rem;
   font-size: clamp(var(--text-2xl), 3vw, var(--text-3xl));
+  font-weight: var(--font-weight-bold);
   line-height: 1.25;
+}
+
+.experience-article-body {
+  padding: 1rem;
 }
 
 .experience-article-byline {

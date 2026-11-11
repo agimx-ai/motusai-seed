@@ -42,7 +42,7 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
   }, [article.images, dark, onReadingMinutes]);
 
   return (
-    <div ref={attachRoot}>
+    <div ref={attachRoot} className="experience-article-body">
       {root && createPortal(
         <>
           <style>{`
@@ -56,7 +56,7 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
             :where(.markdown-body table) { border-collapse: collapse; }
             ${embeddedArticleStyles(theme, dark)}
           `}</style>
-          <div onErrorCapture={onImageError} style={{ padding: 16 }}>
+          <div onErrorCapture={onImageError}>
             <MarkdownRenderer markdown={article.body} plugins={plugins} />
           </div>
         </>,

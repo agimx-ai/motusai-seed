@@ -161,8 +161,9 @@ function SubmissionActions({ item, action, onSelect }: {
 
 type TipCounts = Pick<ExperienceTipSummary, 'view_count' | 'like_count'>;
 
-function ArticlePage({ id, dark, onCountsChange }: {
+function ArticlePage({ id, title, dark, onCountsChange }: {
   id: string;
+  title?: string;
   dark: boolean;
   onCountsChange: (id: string, counts: TipCounts) => void;
 }) {
@@ -221,7 +222,7 @@ function ArticlePage({ id, dark, onCountsChange }: {
       {article ? (
         <article className="experience-article">
           <header className="experience-article-header">
-            <h1 ref={heading} tabIndex={-1} className="font-bold">{article.title}</h1>
+            <h1 ref={heading} tabIndex={-1} className="experience-article-title">{article.title}</h1>
             <div className="experience-meta experience-article-byline">
               <span>{article.author}</span>
               {article.published_at && <time dateTime={article.published_at}>{formatDate(article.published_at, locale)}</time>}
@@ -258,13 +259,29 @@ function ArticlePage({ id, dark, onCountsChange }: {
       ) : (
         <LoadingSkeleton label={t('experienceTips.loading')} contentClassName="experience-article">
           <div className="experience-article-header">
-            <span className="mb-4 block h-8 w-1/2 rounded bg-border" />
-            <span className="block h-3 w-28 rounded bg-border/70" />
+            <div className="experience-article-title">
+              <span className={`rounded bg-border text-transparent [box-decoration-break:clone]${title ? '' : ' inline-block w-3/5'}`}>
+                {title || '\u00a0'}
+              </span>
+            </div>
+            <div className="experience-meta experience-article-byline min-h-6">
+              <span className="h-3 w-16 rounded bg-border/70" />
+              <span className="h-3 w-24 rounded bg-border/70" />
+              <span className="h-3 w-8 rounded bg-border/70" />
+              <span className="h-3 w-8 rounded bg-border/70" />
+              <span className="h-3 w-20 rounded bg-border/70" />
+            </div>
           </div>
-          <div className="space-y-3">
-            <span className="block h-3.5 w-full rounded bg-border/70" />
-            <span className="block h-3.5 w-11/12 rounded bg-border/70" />
-            <span className="block h-3.5 w-3/5 rounded bg-border/70" />
+          <div className="experience-article-body space-y-6">
+            <div className="space-y-3">
+              <span className="block h-3.5 w-full rounded bg-border/70" />
+              <span className="block h-3.5 w-11/12 rounded bg-border/70" />
+              <span className="block h-3.5 w-3/5 rounded bg-border/70" />
+            </div>
+            <div className="space-y-3">
+              <span className="block h-3.5 w-full rounded bg-border/70" />
+              <span className="block h-3.5 w-4/5 rounded bg-border/70" />
+            </div>
           </div>
         </LoadingSkeleton>
       )}
@@ -411,7 +428,15 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
         <HeaderRefreshButton label={refreshLabel} refreshing={loading} onClick={() => void load(null)} />,
         actionsContainer,
       )}
-      {articleId && <ArticlePage key={articleId} id={articleId} dark={dark} onCountsChange={updateCounts} />}
+      {articleId && (
+        <ArticlePage
+          key={articleId}
+          id={articleId}
+          title={items.find((item) => item.tip_id === articleId)?.title}
+          dark={dark}
+          onCountsChange={updateCounts}
+        />
+      )}
       <div hidden={Boolean(articleId)} className={showListState ? 'flex flex-1 flex-col' : undefined}>
         <div className="sticky top-0 z-20 shrink-0 bg-background pt-4">
           <div className="flex flex-wrap items-center gap-2 pb-3">
