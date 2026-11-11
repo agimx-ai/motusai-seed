@@ -2,11 +2,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MarkdownRenderer,
-  articleStyles,
   defaultMarkdownTheme,
+  embeddedArticleStyles,
   isTheme,
   markdownPlugins,
-  markdownSurface,
   restrictedMarkdownMedia,
 } from '@motus-ai/seed-sdk/reader';
 import type { ExperienceTipArticle } from '../../shared/experience-tips';
@@ -25,8 +24,6 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
     if (host) setRoot(host.shadowRoot ?? host.attachShadow({ mode: 'open' }));
   }, []);
   const theme = isTheme(article.theme) ? article.theme : defaultMarkdownTheme;
-  const darkTheme = theme === 'cyanosis' && dark;
-  const surface = markdownSurface(darkTheme);
   const plugins = useMemo(() => {
     const images = new Map(article.images.map(({ id, url }) => ['experience-image:' + id, url]));
     return markdownPlugins({
@@ -41,8 +38,8 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
         }
         onReadingMinutes(Math.ceil(words / wordsPerMinute));
       },
-    }, darkTheme);
-  }, [article.images, darkTheme, onReadingMinutes]);
+    }, dark);
+  }, [article.images, dark, onReadingMinutes]);
 
   return (
     <div ref={attachRoot}>
@@ -57,9 +54,9 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
             :where(.markdown-body .contains-task-list, .markdown-body .task-list-item) { list-style: none; }
             :where(.markdown-body .contains-task-list) { padding-inline-start: 0; }
             :where(.markdown-body table) { border-collapse: collapse; }
-            ${articleStyles(theme, darkTheme)}
+            ${embeddedArticleStyles(theme, dark)}
           `}</style>
-          <div onErrorCapture={onImageError} style={{ background: surface.paper, color: surface.ink, padding: 16 }}>
+          <div onErrorCapture={onImageError} style={{ padding: 16 }}>
             <MarkdownRenderer markdown={article.body} plugins={plugins} />
           </div>
         </>,

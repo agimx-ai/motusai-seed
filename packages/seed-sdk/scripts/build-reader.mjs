@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url);
 const assets = resolve(import.meta.dirname, '../src/reader/themes');
 const output = resolve(import.meta.dirname, '../dist/reader');
 const catalog = JSON.parse(await readFile(join(assets, 'themes.json'), 'utf8'));
-const palettes = new Set(['github', ...Object.values(catalog).map((theme) => theme.highlight)]);
+const palettes = new Set(['github', 'atom-one-dark', ...Object.values(catalog).map((theme) => theme.highlight)]);
 const themes = Object.fromEntries(await Promise.all(Object.entries(catalog).map(async ([id, theme]) => [
   id, { style: await readFile(join(assets, 'styles', theme.file), 'utf8'), highlight: theme.highlight },
 ])));

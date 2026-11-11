@@ -26,6 +26,58 @@ export function articleStyles(theme: Theme, dark: boolean): string {
   return `${preset.style}\n${highlights[palette]}`;
 }
 
+// Embedded readers inherit host tokens across the shadow boundary.
+const embeddedSurfaceStyles = `
+  :host { color: var(--foreground, CanvasText); }
+  @layer reader-surface {
+    .markdown-body { background-image: none !important; }
+  }
+`;
+
+const embeddedDarkStyles = `
+  :host {
+    color-scheme: dark;
+    background-color: var(--background, var(--color-background, Canvas));
+  }
+  @layer reader-surface {
+    :where(.markdown-body, .markdown-body *:not(.hljs, .hljs *)) {
+      color: inherit !important;
+      -webkit-text-fill-color: currentColor !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      border-color: var(--border, #454545) !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+    :where(.markdown-body, .markdown-body *)::before,
+    :where(.markdown-body, .markdown-body *)::after {
+      color: inherit !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      border-color: var(--border, #454545) !important;
+      box-shadow: none !important;
+    }
+    .markdown-body :where(h1, h2, h3, h4, h5, h6, a) {
+      color: var(--color-info, #75a7ff) !important;
+    }
+    .markdown-body :where(blockquote, pre, th, :not(pre) > code) {
+      background-color: var(--muted, var(--color-muted, #292929)) !important;
+    }
+    .markdown-body pre > code.hljs {
+      color: var(--foreground, CanvasText) !important;
+      background-color: transparent !important;
+      background-image: none !important;
+      text-shadow: none !important;
+    }
+  }
+`;
+
+export function embeddedArticleStyles(theme: Theme, dark: boolean): string {
+  if (!dark) return `${articleStyles(theme, false)}\n${embeddedSurfaceStyles}`;
+  if (!isTheme(theme)) throw new Error('Unknown article theme');
+  return `${themes[theme].style}\n${highlights['atom-one-dark']}\n${embeddedSurfaceStyles}\n${embeddedDarkStyles}`;
+}
+
 function createPlugin(factory: (() => BytemdPlugin) | { default: () => BytemdPlugin }) {
   return (typeof factory === 'function' ? factory : factory.default)();
 }
