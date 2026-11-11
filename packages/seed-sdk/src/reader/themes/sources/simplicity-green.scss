@@ -1,0 +1,197 @@
+$monospace-font: Menlo, Monaco, Consolas, "Courier New", monospace;
+$line-space: 1.6em;
+
+.markdown-body {
+  word-break: break-word;
+  line-height: 1.6em;
+  font-weight: 400;
+  font-size: 15px;
+  overflow-x: hidden;
+  color: #303133;
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.6em;
+    margin: 1.3em 0;
+  }
+  h1 {
+    font-size: 30px;
+    margin-top: 50px;
+    margin-bottom: 10px;
+  }
+  h2 {
+    margin-top: 45px;
+    margin-bottom: 10px;
+    font-size: 26px;
+  }
+  h3 {
+    margin-top: 40px;
+    margin-bottom: 10px;
+    font-size: 22px;
+  }
+  h4 {
+    font-size: 18px;
+  }
+  h5 {
+    font-size: 16px;
+  }
+  h6 {
+    font-size: 15px;
+    margin-top: 5px;
+  }
+
+  p {
+    line-height: inherit;
+    margin-top: $line-space;
+    margin-bottom: $line-space;
+  }
+
+  img {
+    max-width: 100%;
+  }
+
+  hr {
+    border-top: 1px solid #ddd;
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+    margin-top: 32px;
+    margin-bottom: 32px;
+  }
+
+  code {
+    font-family: $monospace-font;
+    word-break: break-word;
+    border-radius: 2px;
+    overflow-x: auto;
+    background-color: #fff5f5;
+    color: #e96900;
+    font-size: 0.87em;
+    padding: 0.065em 0.4em;
+    margin: 0 2px;
+    padding: 3px 5px;
+    white-space: pre-wrap;
+  }
+  .markdown-section > :not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) code {
+    font-size: 0.8rem;
+    font-family: Roboto Mono, Monaco, courier, monospace;
+  }
+
+  pre {
+    font-family: $monospace-font;
+    overflow: auto;
+    position: relative;
+    line-height: 1.75;
+    border-radius: 4px;
+    > code {
+      font-size: 12px;
+      padding: 15px 12px;
+      margin: 0;
+      word-break: normal;
+      display: block;
+      overflow-x: auto;
+      color: #333;
+      background: #f8f8f8;
+    }
+  }
+
+  a {
+    text-decoration: none;
+    color: #42b983;
+    line-height: 1.2em;
+    &:hover,
+    &:active {
+      color: rgba($color: #42b983, $alpha: 0.85);
+      border-bottom: 1px solid rgba($color: #42b983, $alpha: 0.6);
+    }
+  }
+
+  table {
+    display: inline-block !important;
+    font-size: 12px;
+    max-width: 100%;
+    overflow: auto;
+    border: solid 1px #f6f6f6;
+    border-collapse: collapse;
+  }
+  thead {
+    background: #f6f6f6;
+    color: #000;
+    text-align: left;
+  }
+  tr:nth-child(2n) {
+    background-color: #fafafa;
+  }
+  th,
+  td {
+    padding: 12px 6px;
+    line-height: 24px;
+  }
+  td {
+    min-width: 120px;
+  }
+
+  blockquote {
+    color: rgba($color: #34495e, $alpha: 0.95);
+    padding: 1px 23px;
+    margin: 22px 0;
+    border-left: 4px solid #42b983;
+    background-color: rgba($color: #42b983, $alpha: 0.1);
+    &::after {
+      display: block;
+      content: "";
+    }
+    & > p {
+      margin: 10px 0;
+    }
+  }
+
+  ol,
+  ul {
+    padding-left: 28px;
+    li {
+      margin-bottom: 0;
+      list-style: inherit;
+      & .task-list-item {
+        list-style: none;
+        ul,
+        ol {
+          margin-top: 0;
+        }
+      }
+    }
+
+    ul,
+    ol {
+      margin-top: 3px;
+    }
+  }
+  ol li {
+    padding-left: 6px;
+  }
+
+  .contains-task-list {
+    padding-left: 0;
+  }
+
+  .task-list-item {
+    list-style: none;
+  }
+
+  @media (max-width: 720px) {
+    h1 {
+      font-size: 24px;
+    }
+    h2 {
+      font-size: 20px;
+    }
+    h3 {
+      font-size: 18px;
+    }
+  }
+}

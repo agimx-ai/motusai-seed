@@ -1,4 +1,4 @@
-import { ListFilter, PackageCheck } from 'lucide-react';
+import { ListFilter } from 'lucide-react';
 import { useEffect, useState, type RefObject } from 'react';
 import type { PluginInstallProgress, SeedCatalogPlugin, SeedInstalledPlugin } from '../../shared/contracts';
 import { resolveSeedLocalizedText, type SeedLocalizedText } from '../../shared/plugin-manifest';
@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SearchInput } from '../components/SearchInput';
 import { InfiniteScrollTrigger } from '../components/InfiniteScrollTrigger';
+import { PageEmptyState } from '../components/PageEmptyState';
 import { MarkdownContent, SelectControl, Tooltip } from '@motus-ai/seed-sdk/react';
 import { resourceCardGridClass } from '../components/ResourceCard';
 import {
@@ -161,6 +162,9 @@ export function PluginsPage({
     }
   }, [catalogLoading, selectedOrganizationMissing]);
   const visiblePlugins = sourcePlugins.filter(matches);
+  const hasCatalogFilters = Boolean(normalizedQuery) || labelFilter !== 'all' || sourceFilter !== 'all';
+  const showCatalogLoading = catalogLoading || (hasMore && !catalogError);
+  const showCatalogEmpty = !visiblePlugins.length && !showCatalogLoading && !catalogError;
   const selectedInstalledPlugin = selectedPlugin && 'source' in selectedPlugin ? selectedPlugin : undefined;
   const isPluginSubpage =
     selectedInstalledPlugin?.status === 'ready' &&
@@ -356,8 +360,8 @@ export function PluginsPage({
 
   return (
     <>
-      <section className="mx-auto w-full max-w-[730px] [--plugin-search-sticky-height:60px] seed-full-motion:animate-[rise_.25s_ease_both]">
-        <div className="sticky top-0 z-20 flex h-[var(--plugin-search-sticky-height)] items-start bg-background pt-4">
+      <section className={`mx-auto w-full max-w-[730px] [--plugin-search-sticky-height:60px] seed-full-motion:animate-[rise_.25s_ease_both]${showCatalogEmpty ? ' flex min-h-full flex-col' : ''}`}>
+        <div className="sticky top-0 z-20 flex h-[var(--plugin-search-sticky-height)] shrink-0 items-start bg-background pt-4">
           <SearchInput
             className="gap-2"
             leading={
@@ -419,7 +423,7 @@ export function PluginsPage({
             )}
           </section>
         )}
-        <section aria-busy={catalogLoading}>
+        <section aria-busy={catalogLoading} className={showCatalogEmpty ? 'flex flex-1 flex-col' : undefined}>
           <div className="px-1">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
               <h3 className="m-0 text-[16px] font-medium">{t('plugins.availableSection')}</h3>
@@ -452,7 +456,7 @@ export function PluginsPage({
               </div>
             )}
           </div>
-          <div>
+          <div className={showCatalogEmpty ? 'flex flex-1 flex-col' : undefined}>
             {visiblePlugins.length ? (
               <div className={resourceCardGridClass()}>
                 {visiblePlugins.map((plugin) => {
@@ -480,7 +484,7 @@ export function PluginsPage({
                   );
                 })}
               </div>
-            ) : catalogLoading || (labelFilter !== 'all' && hasMore && !catalogError) ? (
+            ) : showCatalogLoading ? (
               <PluginListSkeleton label={t('plugins.loadingAvailable')} />
             ) : catalogError ? (
               <div
@@ -491,13 +495,10 @@ export function PluginsPage({
                 <p className="mb-0 mt-2 max-w-full break-words text-[12px]">{catalogError}</p>
               </div>
             ) : (
-              <div className="flex min-h-[240px] flex-col items-center justify-center text-center text-muted-foreground">
-                <PackageCheck size={27} />
-                <strong className="mb-1.5 mt-3 text-[14px] font-medium text-foreground">
-                  {t('plugins.noMatches')}
-                </strong>
-                <p className="m-0 text-[12px]">{t('plugins.searchHint')}</p>
-              </div>
+              <PageEmptyState
+                title={t(hasCatalogFilters ? 'plugins.noMatches' : 'plugins.noAvailable')}
+                description={t(hasCatalogFilters ? 'plugins.searchHint' : 'plugins.noAvailableDescription')}
+              />
             )}
           </div>
           <InfiniteScrollTrigger

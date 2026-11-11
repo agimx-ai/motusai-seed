@@ -12,7 +12,7 @@ Seed 的吉祥物是由框架状态驱动的 Bloub SVG 动画系统，不是一�
 1. 按当前请求定位相关文件：
    - 渲染与交互：`src/renderer/components/SeedlingMascot.tsx`、`src/renderer/styles.css`
    - 状态选择：`src/renderer/lib/companion.ts`、`src/renderer/lib/bloub/presentation.ts` 及测试
-   - 动画数据或形变：`src/renderer/lib/bloub/engine.ts`、`states.ts` 及其直接依赖
+   - 动画数据或形变：`packages/seed-sdk/src/companion/engine.ts`、`states.ts` 及其直接依赖
    - 页面布局：`src/renderer/pages/OverviewPage.tsx`
    - 任务时序：`src/main/mascot-timing.ts`、`src/main/runtime.ts`、`src/connector/global-task-activity-observer.ts`、`src/connector/plugin-host.ts`
    - 应用配色：`scripts/generate-build-config.mjs`、`resources/app/theme.json`
@@ -27,4 +27,4 @@ Seed 的吉祥物是由框架状态驱动的 Bloub SVG 动画系统，不是一�
 
 ## 上游代码范围
 
-`src/renderer/lib/bloub` 只保留动画所需核心、来源说明和许可，不复制上游页面、编辑器、路由、导出工具或整站样式。更新上游代码时记录来源 commit。
+`packages/seed-sdk/src/companion` 保留动画核心、共享 SVG 组件、来源说明和许可，不复制上游页面、编辑器、路由、导出工具或整站样式。更新上游代码时记录来源 commit。

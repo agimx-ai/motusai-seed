@@ -1,0 +1,479 @@
+// styllint not yet ok
+// no instructions for file splitting... so i put all the stuff here
+// non-color related
+$font-family-base: '-apple-system', 'BlinkMacSystemFont', 'PingFang SC', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+$font-family-mono: 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
+$line-height: 1.75;
+$line-height-pre: 1.4;
+// color base light
+$color-gray-primary: #333;
+$color-gray-primary-bd: #d1d5d9;
+$color-gray-primary-bg: #fff;
+$color-gray-secondary: #666;
+$color-gray-secondary-bd: #e3e4e6;
+$color-gray-secondary-bg: #f4f6f7;
+$color-gray-secondary-bg-fade: rgb(0 46 70 / 4.31%);
+$color-gray-tertiary: #999;
+$color-gray-tertiary-bd: #ebebeb;
+$color-gray-tertiary-bg: #eee;
+$color-gray-tertiary-bg-fade: rgb(0 0 0 / 6.67%);
+$color-gray-disabled: #bbb;
+$color-accent: #0064c8;
+$color-code: #39f;
+$color-em: #ff6a00;
+$color-shadow: rgb(0 0 0 / 20%);
+// color base dark overrides
+$color-gray-primary-dark: #d8d9da;
+$color-gray-primary-bd-dark: #888;
+$color-gray-primary-bg-dark: #3a3a3a;
+$color-gray-secondary-dark: #ccc;
+$color-gray-secondary-bd-dark: #e3e4e6;
+$color-gray-secondary-bg-dark: #272727;
+$color-gray-secondary-bg-fade-dark: rgb(255 255 255 / 8%);
+$color-gray-tertiary-dark: #999;
+$color-gray-tertiary-bd-dark: #ebebeb;
+$color-gray-tertiary-bg-dark: #1f1f1f;
+$color-gray-tertiary-bg-fade-dark: rgb(255 255 255 / 10%);
+$color-gray-disabled-dark: #666;
+$color-accent-dark: #0070cc;
+$color-code-dark: #39f;
+$color-em-dark: #ff6a00;
+$color-shadow-dark: rgb(0 0 0 / 32%);
+// components light
+$link-fg: $color-accent;
+$code-fg: $color-code;
+$code-bg: $color-gray-secondary-bg-fade;
+$em-fg: $color-em;
+$del-fg: $color-gray-disabled;
+$small-fg: $color-gray-disabled;
+$heading-fg: $color-gray-primary;
+$body-fg: $color-gray-secondary;
+$blockquote-fg: $color-gray-secondary;
+$blockquote-bg: fade-out($color-accent, 0.9);
+$blockquote-bd: fade-out($color-accent, 0.3);
+$pre-fg: $color-gray-secondary;
+$pre-bg: $color-gray-secondary-bg-fade;
+$pre-bd: $color-gray-tertiary-bd;
+$table-head-fg: $color-gray-primary;
+$table-head-bg: $color-gray-secondary-bg;
+$table-th-bd: $color-gray-secondary-bd;
+$table-td-bd: $color-gray-tertiary-bd;
+// components dark
+$link-fg-dark: $color-accent-dark;
+$code-fg-dark: $color-code-dark;
+$code-bg-dark: $color-gray-secondary-bg-fade-dark;
+$em-fg-dark: $color-em-dark;
+$del-fg-dark: $color-gray-disabled-dark;
+$small-fg-dark: $color-gray-disabled-dark;
+$heading-fg-dark: $color-gray-primary-dark;
+$body-fg-dark: $color-gray-secondary-dark;
+$blockquote-fg-dark: $color-gray-secondary-dark;
+$blockquote-bg-dark: fade-out($color-accent-dark, 0.9);
+$blockquote-bd-dark: fade-out($color-accent-dark, 0.3);
+$pre-fg-dark: $color-gray-secondary-dark;
+$pre-bg-dark: $color-gray-secondary-bg-fade-dark;
+$pre-bd-dark: $color-gray-tertiary-bg-fade-dark;
+$table-head-fg-dark: $color-gray-primary-dark;
+$table-head-bg-dark: $color-gray-secondary-bg-fade-dark;
+$table-th-bd-dark: $color-gray-secondary-bg-dark;
+$table-td-bd-dark: $color-gray-tertiary-bg-fade-dark;
+
+// 等 jjsm 和 jj 允许黑色主题，杀掉这个判断就醒了，加这个判断是为了 CI 不报错
+@mixin dark-theme($dark-is-supported: false) {
+  @if ($dark-is-supported) {
+    //.__dark & { // jjsm 测试用
+    [data-theme='dark'] & { // jj 站点
+      @content;
+    }
+  }
+}
+
+.markdown-body {
+  font-family: $font-family-base;
+  word-break: break-word;
+  line-height: $line-height;
+  font-weight: 200;
+  font-size: 16px;
+  overflow-x: hidden;
+  color: $body-fg;
+  letter-spacing: 0.5px;
+  
+  @include dark-theme() {
+    color: $body-fg-dark;
+  }
+  
+  // inline elements
+  
+  a {
+    text-decoration: none;
+    color: $link-fg;
+    position: relative;
+    
+    &::after {
+      content: "";
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background-color: fade-out($link-fg, 0.3);
+      transform: scale(0);
+      transition: all 400ms ease-in-out;
+    }
+    
+    @include dark-theme() {
+      color: $link-fg-dark;
+      
+      &::after {
+        background-color: fade-out($link-fg-dark, 0.3);
+      }
+    }
+    
+    &:link:hover::after {
+      transform: scale(1);
+    }
+  }
+  
+  code {
+    padding: 2px 4px;
+    font-size: 0.9em;
+    font-family: $font-family-mono;
+    border-radius: 2px;
+    background-color: $code-bg;
+    color: $code-fg;
+    
+    @include dark-theme() {
+      color: $code-fg-dark;
+    }
+  }
+  
+  strong {
+    font-weight: 400;
+  }
+  
+  em {
+    color: $em-fg;
+    
+    @include dark-theme() {
+      color: $em-fg-dark;
+    }
+  }
+  
+  del,
+  s {
+    color: $del-fg;
+    
+    @include dark-theme() {
+      color: $del-fg-dark;
+    }
+  }
+  
+  small {
+    font-size: 0.8em;
+    color: $small-fg;
+    
+    @include dark-theme() {
+      color: $small-fg-dark;
+    }
+  }
+  
+  kbd {
+    margin: 0 0.1em;
+    padding: 5px 8px 3px;
+    border: 1px solid $color-gray-primary-bd;
+    border-radius: 3px;
+    box-shadow: 0 1px 0 0 $color-gray-secondary-bd, 0 0 0 2px $color-gray-primary-bg inset;
+    background-color: $color-gray-tertiary-bg;
+    font-weight: 600;
+    font-size: 0.8em;
+    font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+    white-space: nowrap;
+    color: $color-gray-secondary;
+    
+    @include dark-theme() {
+      border-color: $color-gray-primary-bd-dark;
+      box-shadow: 0 1px 0 $color-gray-secondary-bg-dark, 0 0 0 2px $color-gray-primary-bg-dark inset;
+      background-color: $color-gray-secondary-bg-dark;
+      color: $color-gray-secondary-dark;
+    }
+    
+    &:first-child {
+      margin-left: 0;
+    }
+    
+    &:last-child {
+      margin-right: 0;
+    }
+  }
+  
+  img {
+    display: block;
+    border: 0;
+    max-width: calc(100% - 20px);
+    min-width: 20px;
+    min-height: 20px;
+    margin: 0 10px;
+    box-shadow: 0 2px 8px 2px $color-shadow;
+    transition: all 250ms ease-in-out;
+    
+    @include dark-theme() {
+      box-shadow: 0 2px 8px 2px $color-shadow-dark;
+    }
+    
+    &:hover {
+      transform: translateY(-4px);
+    }
+  }
+  
+  // block elements
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  pre,
+  ul,
+  ol,
+  blockquote,
+  table {
+    line-height: inherit;
+    font-size: inherit;
+    color: inherit;
+    
+    &:first-child {
+      margin-top: 0;
+    }
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin: 1.6em 0 0.6em;
+    color: $heading-fg;
+    font-weight: 400;
+    position: relative;
+    
+    &::before {
+      position: absolute;
+      left: -2em;
+    }
+    
+    @include dark-theme() {
+      color: $heading-fg-dark;
+    }
+  }
+  
+  h1 {
+    font-size: 1.75em;
+    
+    &::before {
+      content: '#';
+    }
+    
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+  
+  h2 {
+    font-size: 1.5em;
+  }
+  
+  h3 {
+    font-size: 1.35em;
+  }
+  
+  h4 {
+    font-size: 1.2em;
+  }
+  
+  h5 {
+    font-size: 1.1em;
+  }
+  
+  h6 {
+    font-size: 1em;
+  }
+  
+  pre,
+  ul,
+  ol,
+  blockquote,
+  table {
+    margin: 1em 0;
+  }
+  
+  p {
+    margin: 0.7em 0;
+    word-break: break-word;
+  }
+  
+  pre {
+    padding: 8px 12px;
+    color: $pre-fg;
+    background-color: $pre-bg;
+    border: 1px solid $pre-bd;
+    tab-size: 4;
+    white-space: pre-wrap;
+    line-height: $line-height-pre;
+    
+    code {
+      color: inherit;
+      background-color: transparent;
+      padding: 0;
+    }
+    
+    @include dark-theme() {
+      color: $pre-fg-dark;
+      background-color: $pre-bg-dark;
+      border-color: $pre-bd-dark;
+      
+      code {
+        color: inherit;
+      }
+    }
+  }
+  
+  ul,
+  ol {
+    margin: 1em 0 1em 2em;
+    padding: 0;
+    line-height: 1.5 !important;
+    font-size: inherit;
+    color: inherit;
+    
+    &:first-child {
+      margin-top: 0;
+    }
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+    
+    li {
+      margin: 0.5em 0;
+      list-style: inherit;
+    }
+  }
+  
+  ul {
+    list-style: disc outside;
+    
+    ul {
+      list-style-type: circle;
+      
+      ul {
+        list-style-type: square;
+      }
+    }
+  }
+  
+  ol {
+    list-style: decimal outside;
+    
+    ol {
+      list-style-type: lower-alpha;
+      
+      ol {
+        list-style-type: lower-roman;
+      }
+    }
+  }
+  
+  blockquote {
+    font-size: 0.9em;
+    padding: 8px 20px 8px 15px;
+    color: $blockquote-fg;
+    border-left: 5px solid $blockquote-bd;
+    background-color: $blockquote-bg;
+    
+    @include dark-theme() {
+      color: $blockquote-fg-dark;
+      border-color: $blockquote-bd-dark;
+      background-color: $blockquote-bg-dark;
+    }
+  }
+  
+  table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    max-width: 100%;
+    min-width: 50%;
+    word-wrap: break-word;
+    color: inherit;
+    
+    thead {
+      tr {
+        background-color: $table-head-bg;
+        
+        @include dark-theme() {
+          background-color: $table-head-bg-dark;
+        }
+      }
+    }
+    
+    th,
+    td {
+      padding: 4px 16px;
+      font-size: 0.95em;
+      text-align: left;
+      color: inherit;
+      border: 0;
+      min-width: 72px; // make most of the table layout look good
+      
+      &[align="center"] {
+        text-align: center;
+      }
+      
+      &[align="right"] {
+        text-align: right;
+      }
+    }
+    
+    th {
+      border-bottom: 2px solid $table-th-bd;
+      color: $table-head-fg;
+      font-weight: 400;
+      white-space: nowrap;
+      
+      @include dark-theme() {
+        border-color: $table-th-bd-dark;
+        color: $table-head-fg-dark;
+      }
+    }
+    
+    td {
+      border-bottom: 1px solid $table-td-bd;
+      
+      @include dark-theme() {
+        border-bottom: 1px solid $table-td-bd-dark;
+      }
+    }
+  }
+  
+  hr {
+    margin: 1.5em 0;
+    padding: 0;
+    border: 0;
+    background: linear-gradient(90deg, $color-gray-secondary-bg-fade 0%, $color-gray-tertiary-bd 50%, $color-gray-secondary-bg-fade 100%);
+    height: 1px;
+    
+    @include dark-theme() {
+      background: linear-gradient(90deg, $color-gray-secondary-bg-fade-dark 0%, fade-out($color-gray-primary-bd-dark, 0.5) 50%, $color-gray-secondary-bg-fade-dark 100%);
+    }
+  }
+  
+  br {
+    content: '';
+    display: block;
+  }
+}

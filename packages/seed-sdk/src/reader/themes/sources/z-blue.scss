@@ -1,0 +1,350 @@
+$monospace-font: Menlo,
+Monaco,
+Consolas,
+'Courier New',
+monospace;
+$line-space: 22px;
+
+$theme-color: #3c9dff;
+$background-color-1: #5eaeff;
+$background-color-2: #90c7ff;
+$background-color-3: #beddff;
+$background-color-4: #d2e8ff;
+$background-color-5: #ecf5ff;
+$background-color-6: #f3f9ff;
+
+.markdown-body {
+  word-break: break-word;
+  line-height: 1.75;
+  font-weight: 400;
+  font-size: 15px;
+  overflow-x: hidden;
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.5;
+    margin-top: 35px;
+    margin-bottom: 10px;
+    color: $theme-color;
+    // border-bottom: 0.1em solid $theme-color;
+  }
+
+  h1 {
+    font-size: 30px;
+    margin-bottom: 5px;
+    padding-bottom: 8px;
+    text-align: center;
+  }
+
+  h2 {
+    font-size: 24px;
+    padding-bottom: 6px;
+    &::before {
+      content: '🍋';
+    }
+  }
+
+  h3 {
+    font-size: 18px;
+    padding-bottom: 0;
+    &::before {
+      content: '🍓';
+    }
+  }
+
+  h4 {
+    font-size: 16px;
+    &::before {
+      content: '🍑';
+    }
+  }
+
+  h5 {
+    font-size: 15px;
+    &::before {
+      content: '🍉';
+    }
+  }
+
+  h6 {
+    margin-top: 5px;
+    &::before {
+      content: '🍒';
+    }
+  }
+
+  p {
+    line-height: inherit;
+    margin-top: $line-space;
+    margin-bottom: $line-space;
+  }
+
+  img {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    border-radius: 4px;
+    padding: 1px;
+    border: 1px solid $background-color-4;
+    &:hover {
+      box-shadow: 0 1px 3px $background-color-1;
+    }
+  }
+
+  hr {
+    height: 4px;
+    margin: 34px 0;
+    background-size: 4px 1px;
+    background-image: linear-gradient(270deg, $background-color-1, $background-color-6 25%, transparent 50%);
+    border-style: none;
+  }
+
+  code {
+    font-family: $monospace-font;
+    word-break: break-word;
+    border-radius: 3px;
+    overflow-x: auto;
+    background-color: $background-color-4;
+    color: $theme-color;
+    font-size: 0.9em;
+    padding: 0.1em 0.5em;
+    margin: 0 3px;
+    transition: all .3s;
+  }
+
+  pre {
+    font-family: $monospace-font;
+    overflow: auto;
+    position: relative;
+    line-height: 1.75;
+    transition: all .3s;
+    border: 1px solid $background-color-2;
+    border-radius: 4px;
+    &:hover {
+      box-shadow: 0 1px 10px $background-color-3;
+    }
+
+    >code {
+      font-size: 12px;
+      padding: 15px 12px;
+      margin: 0;
+      word-break: normal;
+      display: block;
+      overflow-x: auto;
+      color: #333;
+      background: #f8f8f8;
+    }
+  }
+
+  a {
+    text-decoration: none;
+    color: $theme-color;
+    border-bottom: 1px solid $background-color-2;
+    transition: all .3s;
+    &:hover {
+      color: #007fff;
+      border-bottom: 2px solid $background-color-1;
+    }
+  }
+
+  a[href]:not(:empty) {
+    padding-right: 18px;
+    &::after {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      margin-left: 2px;
+      content: "";
+      background: url(data:image/svg+xml;base64,PHN2ZyB0PSIxNjkzNjQ1MDEwMjYxIiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjE4NzU2IiB3aWR0aD0iMTYiIGhlaWdodD0iMTYiPjxwYXRoIGQ9Ik0zODQgMTI4YTQ4IDQ4IDAgMCAxIDIuODE2IDk1LjkyTDM4NCAyMjRoLTEyOGEzMiAzMiAwIDAgMC0zMS45MiAyOS42TDIyNCAyNTZ2NTEyYTMyIDMyIDAgMCAwIDI5LjYgMzEuOTJMMjU2IDgwMGg1MTJhMzIgMzIgMCAwIDAgMzEuOTItMjkuNkw4MDAgNzY4di0xMTJhNDggNDggMCAwIDEgOTUuOTItMi44MTZMODk2IDY1NnYxMTJhMTI4IDEyOCAwIDAgMS0xMjQgMTI3LjkzNkw3NjggODk2SDI1NmExMjggMTI4IDAgMCAxLTEyNy45MzYtMTI0TDEyOCA3NjhWMjU2YTEyOCAxMjggMCAwIDEgMTI0LTEyNy45MzZMMjU2IDEyOGgxMjh6IG0zODQgMGExMjggMTI4IDAgMCAxIDEyNy45MzYgMTI0TDg5NiAyNTZ2MTYwYTQ4IDQ4IDAgMCAxLTk1LjkyIDIuODE2TDgwMCA0MTZ2LTEyNC4xMjhsLTM4Mi4wNjQgMzgyLjA4YTQ4IDQ4IDAgMCAxLTcwLjAzMi02NS42bDIuMTYtMi4yODhMNzMyLjA5NiAyMjRINjA4YTQ4IDQ4IDAgMCAxLTIuODE2LTk1LjkyTDYwOCAxMjhoMTYweiIgZmlsbD0iIzNjOWRmZiIgZmlsbC1vcGFjaXR5PSIuNTYiIHAtaWQ9IjE4NzU3IiBkYXRhLXNwbS1hbmNob3ItaWQ9ImEzMTN4LnNlYXJjaF9pbmRleC4wLmkwLjVjNzUzYTgxODBrZEpYIiBjbGFzcz0ic2VsZWN0ZWQiPjwvcGF0aD48L3N2Zz4=);
+      background-size: 100%;
+    }
+  }
+
+  table {
+    // display: inline-block !important;
+    margin: 0px auto 10px;
+    font-size: 12px;
+    width: auto;
+    max-width: 100%;
+    overflow: auto;
+    border-collapse: collapse;
+    border: 1px solid $theme-color;
+  }
+
+  thead {
+    text-align: center;
+    th {
+      color: #fff;
+      background-color: $background-color-1;
+    }
+  }
+
+  tr {
+    text-align: center;
+  }
+
+  tbody {
+    tr:hover {
+      background-color: $background-color-4;
+      code {
+        background-color: $background-color-2;
+      }
+    }
+  }
+
+  tr:nth-child(2n) {
+    background-color: $background-color-5;
+  }
+
+  th,
+  td {
+    padding: 12px 7px;
+    line-height: 24px;
+  }
+
+  td {
+    min-width: 120px;
+  }
+
+  ol,
+  ul {
+    padding-left: 28px;
+
+    li {
+      margin-bottom: 0;
+      list-style: inherit;
+      &::marker {
+        color: $background-color-1;
+      }
+
+      & .task-list-item {
+        list-style: none;
+
+        ul,
+        ol {
+          margin-top: 0;
+        }
+      }
+    }
+
+    ul,
+    ol {
+      margin-top: 3px;
+    }
+  }
+
+  ol li {
+    padding-left: 6px;
+  }
+
+  // 粗体样式
+  b, strong {
+    font-weight: 900;
+    padding: 0 1px;
+    // color: $background-color-1;
+    font-size: 17px;
+  }
+
+  // 小号字体样式
+  small {
+    color: #cbcbcb;
+    padding: 0 1px;
+    font-size: 22px;
+    zoom: .5;
+  }
+
+  // 斜体样式
+  em {
+    padding: 0 1px;
+  }
+
+  // 删除线样式
+  del {
+    padding: 0 1px;
+    text-decoration-thickness: 2px;
+  }
+
+  // 引用标签样式
+  blockquote {
+    color: #1a1b1c;
+    padding: 1px 20px;
+    margin: 22px 0;
+    border-radius: 4px;
+    border-left: 4px solid rgba($color: $theme-color, $alpha: .5);
+    background-color: rgba($color: $background-color-3, $alpha:.3);
+    // 二级引用
+    blockquote {
+      margin: 8px 0;
+    }
+
+    &::after {
+      display: block;
+      content: '';
+    }
+
+    &>p {
+      margin: 10px 0;
+    }
+  }
+
+  // 折叠标签样式
+  details {
+    margin: 12px 0;
+    padding: 4px 10px;
+    border: 2px solid $theme-color;
+    border-radius: 8px;
+    background-color: $background-color-5;
+    transition: all .3s;
+    summary {
+      cursor: pointer;
+    }
+  }
+
+  // 待办事项
+  input[type="checkbox"] {
+    position: relative;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+    vertical-align: middle;
+    transform: translateY(-2px);
+    box-sizing: border-box;
+    border: 1px solid $background-color-3;
+    &:checked {
+      border: 1px solid $background-color-1;
+      background-color: $background-color-1;
+      &::before {
+        position: absolute;
+        top: 3px;
+        left: 1px;
+        width: 11px;
+        height: 6px;
+        background-color: transparent;
+        border-left: 2px solid #fff;
+        border-bottom: 2px solid #fff;
+        transform: rotate(-45deg);
+        content: '';
+        box-sizing: border-box;
+      }
+    }
+  }
+
+  @media (max-width: 720px) {
+    h1 {
+      font-size: 24px;
+    }
+
+    h2 {
+      font-size: 20px;
+    }
+
+    h3 {
+      font-size: 18px;
+    }
+  }
+}

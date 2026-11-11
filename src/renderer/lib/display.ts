@@ -1,4 +1,4 @@
-export type View = 'overview' | 'plugins' | 'activity' | 'settings' | 'usage' | 'plugin-settings' | 'plugin-view';
+export type View = 'overview' | 'plugins' | 'activity' | 'experience-tips' | 'settings' | 'usage' | 'plugin-settings' | 'plugin-view';
 
 export type SettingsView = Extract<View, 'settings' | 'usage' | 'plugin-settings'>;
 

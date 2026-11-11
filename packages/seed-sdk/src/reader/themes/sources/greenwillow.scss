@@ -1,0 +1,203 @@
+$font-size: 16px;
+$font-bold: 600;
+$font-normal: 400;
+$dark: #333;
+$white: #FFF;
+$green: #77AF9C;
+$gray: #6E7783;
+$green-bg: rgba(119,175,156, .22);
+$green-border:  rgba(119,175,156);
+.markdown-body {
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  word-break: break-word;
+  font-size: $font-size;
+  overflow-x: hidden;
+
+  p, li {
+    font-size: .9em;
+    letter-spacing: 2px;
+    color: $dark;
+    code {
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-weight: 500;
+      background: $green-bg;
+      border-radius: 0;
+      padding: 2px 5px;
+      border-left: 2px solid $green-border;
+      color: $gray;
+    }
+  }
+
+  @for $i from 1 through 6 {
+    h#{$i} {
+      display: table;
+      line-height: 1.5;
+      margin-top: 35px;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+    }
+  }
+
+  %title {
+    background: $green-bg;
+    color: $gray;
+    padding: 5px 10px;
+    border: 1px solid $green-bg;
+    transition: all .5s;
+    &:hover {
+      border: 1px solid $green-border;
+    }
+  }
+
+  h1 {
+    @extend %title;
+    font-size: 1.6em;
+  }
+
+  h2 {
+    @extend %title;
+    font-size: 1.4em;
+  }
+
+  
+  h3 {
+    @extend %title;
+    font-size: 1.1em;
+  }
+
+  %description-text {
+    text-align: center;
+    &::after {
+      content: "/";
+      color: $green;
+      font-weight: $font-normal;
+      margin-left: 15px;
+      
+    }
+    &::before {
+      content: "/";
+      color:$green;
+      font-weight: $font-normal;
+      margin-right: 15px;
+    }
+  }
+
+  h4, h5, h6 {
+    display: block;
+    @extend %description-text;
+    color: $green;
+    font-size: $font-normal;
+    font-weight: $font-normal;
+  }
+
+  hr {
+    border: none;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    border-top: 2px solid $green;
+  }
+
+  blockquote {
+    position: relative;
+    line-height: 1.8;
+    font-style: $font-normal;
+    text-indent: 0;
+    margin: 0;
+    padding: 10px;
+    border: {
+      width: 1px;
+      style: solid;
+      color: #FFF;
+    };
+    color: #888;
+    background: $green-bg;
+    transition: border .5s;
+    &:hover {
+      border: {
+        style: solid;
+        color: $green-border;
+      };
+    }
+    &::before {
+      content: "“";
+      display: inline;
+      color: $gray;
+      font-size: 4em;
+      font-family: Arial, serif;
+      line-height: 1em;
+    }
+    &::after {
+      position: absolute;
+      content: "Tips";
+      display: inline;
+      bottom: 5px;
+      right: 15px;
+      color: $gray;
+      font-size: .9em;
+    }
+    p {
+      display: inline;
+    }
+  }
+
+  table {
+    border-collapse: collapse ;
+    width: auto;
+    min-width: 50%;
+    font-size: .8em;
+    tr {
+      th {
+        text-align: center;
+        border: 1px solid $green-border;
+        background: $green-bg;
+        font-weight: 500;
+        padding: 5px;
+      }
+      td {
+        text-align: center;
+        border: 1px solid $green-bg;
+        padding: 5px;
+      }
+    }
+  }
+
+  
+  pre {
+    font-family: Arial, serif;
+    overflow: auto;
+    position: relative;
+    line-height: 1.75;
+
+    >code {
+      font-family: Arial, serif;
+      border-left: 2px solid $green-border;
+      display: block;
+      padding: 16px 12px;
+      margin: 0;
+      font-size: .9em;
+      color: $gray;
+      word-break: normal;
+      overflow-x: auto;
+      background: #f8f8f8;
+    }
+  }
+
+  a {
+    color: $green;
+    font-weight: $font-normal;
+    background: $white;
+    border-bottom: none;
+    padding: 2px 5px;
+    text-decoration: none;
+    transition: all .5s;
+    &:hover {
+      background:$green-bg;
+      color: $gray;
+    }
+  }
+
+  strong {
+    font-weight: bold;
+    color: $gray;
+  }
+}

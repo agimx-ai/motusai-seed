@@ -1,3 +1,4 @@
+import type { ExperienceTipArticle, ExperienceTipEngagement, ExperienceTipLike, ExperienceTipPage, ExperienceTipRead, ExperienceTipRemoval } from './experience-tips';
 import type { SeedBillingReceipt, SeedNavigationTarget } from '@motus-ai/seed-sdk';
 import type { SeedConsumedCapability, SeedPluginLabel } from './plugin-manifest';
 import type { SeedLocalizedText } from './plugin-manifest';
@@ -376,6 +377,9 @@ export type SeedApi = {
   listOrphanedPluginData(): Promise<string[]>;
   resetOrphanedPluginData(pluginIds: string[]): Promise<PluginDataResetResult>;
   snapshot(): Promise<SeedSnapshot>;
+  readExperienceTips(input: ExperienceTipRead): Promise<ExperienceTipPage | ExperienceTipArticle>;
+  setExperienceTipLike(input: ExperienceTipLike): Promise<ExperienceTipEngagement>;
+  removeExperienceTip(input: ExperienceTipRemoval): Promise<void>;
   personalCreditWallet(): Promise<{ available: number; total?: number }>;
   personalCreditGrants(cursor?: string): Promise<PersonalCreditGrantPage>;
   signIn(): Promise<void>;
@@ -434,6 +438,9 @@ export const ipcChannels = {
   listOrphanedPluginData: 'seed:plugins:list-orphaned-data',
   resetOrphanedPluginData: 'seed:plugins:reset-orphaned-data',
   snapshot: 'seed:snapshot',
+  readExperienceTips: 'seed:experience-tips:read',
+  setExperienceTipLike: 'seed:experience-tips:like',
+  removeExperienceTip: 'seed:experience-tips:remove',
   personalCreditWallet: 'seed:credits:personal-wallet',
   personalCreditGrants: 'seed:credits:personal-grants',
   signIn: 'seed:account:sign-in',

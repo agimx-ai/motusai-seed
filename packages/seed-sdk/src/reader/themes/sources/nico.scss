@@ -1,0 +1,242 @@
+@use "sass:color";
+
+$theme-font-color: #00325e;
+$code-font-color: #00325e;
+$sub-font-color: #795548;
+$artical-body-color: #595959;
+$color-blue: #8cc0f3;
+$color-yellow: rgb(243 202 142);
+
+$super-link-icon: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAAXNSR0IArs4c6QAAAQdJREFUKFNt0DtLA0EUBeBzZle0Eks7rcUfEfBRCha7NorYa6NmVJzgyi4smUgKtdZGCJktLMVH4Y8QeztLWyE7VyLEuNFbXj4Oh0P8c8mZm+uJrEN4BJFTeP/MUVe3bnocfALwkOlo1zS7iZAzf6Cx7oXgbaqjxiDEWCcVaGyxQ8pSWo9XhqhoQ/xUFbaKjhe5V+CmR7mnSplEEF6GSmJ+F/d0KHvbCIIJCLc85U6BC5mONgbJNM3uFag++sX7z8O8MzsWBucifMx0dDGE1kmm458KDVukAlnNdDz/exEeW3dNkbfsYC0xtmgDWP6ELLZ0/F6BJu/UoFQN5AkoeUjeJPvx6+i+X5Sjah4tA6gYAAAAAElFTkSuQmCC);
+
+$h-icons: "🍺", "🍻", "🥂", "🥃", "", "";
+.markdown-body {
+    font-family: -apple-system, system-ui, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif,
+        BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial;
+    color: $theme-font-color;
+    *::selection {
+        background-color: $theme-font-color;
+        color: white;
+    }
+
+    // 引用块
+    blockquote {
+        padding: 10px 20px;
+        background-color: floralwhite;
+        box-shadow: 0px 3px 10px 0px rgb(255 172 194 / 24%);
+
+        border: 1px solid $color-yellow;
+        transition: all 0.2s;
+        margin: 1em 0;
+        border-radius: 5px;
+
+        p {
+            font-size: 14px;
+            line-height: 25px;
+            color: #795548;
+            &:nth-last-child(1) {
+                margin: 0;
+            }
+        }
+        &:hover {
+            border-color: #ff9800;
+            background-color: #fff8e0;
+            box-shadow: 0px 6px 10px -5px #e1ad6261;
+        }
+        code {
+            color: #ff502c;
+        }
+    }
+
+    //  代码块
+    pre {
+        border: 1px solid $color-blue;
+        box-shadow: 0px 3px 10px 0px rgb(255 198 198 / 28%);
+        border-radius: 5px;
+        transition: all 0.2s;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        &:hover {
+            border-color: rgb(109, 157, 206);
+        }
+        > code {
+            padding: 10px 20px;
+            color: $code-font-color;
+            background: aliceblue;
+            font-size: 12px;
+            line-height: 1.6;
+            display: block;
+        }
+    }
+    // 代码引用
+    code {
+        background: #f6fbff;
+        color: #0b5393;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    //  正文
+    p {
+        font-size: 14px;
+        line-height: 28px;
+        text-align: justify;
+        margin-bottom: 17px;
+        color: $artical-body-color;
+    }
+
+    // 超链接
+    a {
+        color: $code-font-color;
+        text-decoration: none;
+        &::after {
+            content: $super-link-icon;
+            margin-left: 2px;
+        }
+        &:hover {
+            box-shadow: 0 1px;
+        }
+    }
+    // 表格
+    table {
+        max-width: 100%;
+        border-collapse: collapse;
+        border-spacing: 0;
+        box-shadow: 0px 3px 10px 0px rgb(255 238 172 / 24%);
+        transition: all 0.2s;
+        &:hover {
+            box-shadow: 0px 3px 10px 0px rgba(185, 169, 103, 0.24);
+        }
+        tr {
+            th {
+                border: 1px solid $color-blue;
+                background-color: #f0f8ff;
+                padding: 12px 15px;
+            }
+            td {
+                border: 1px solid color.change($color: $color-yellow, $alpha: 0.4);
+                padding: 12px 15px;
+            }
+        }
+        tbody {
+            tr {
+                transition: all 0.2s;
+                &:hover {
+                    td {
+                        border-color: $color-yellow;
+                        background-color: #fff8e0;
+                        z-index: 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // 图像
+    img {
+        max-width: 100%;
+    }
+
+    // 标题文字
+    @for $index from 1 to 7 {
+        $size: #{22 - ($index * 2)}px;
+        h#{$index} {
+            font-size: $size;
+            margin-top: 30px;
+            margin-bottom: 10px;
+            > code {
+                font-size: $size;
+            }
+            @if $index < 5 {
+                padding-left: #{22 - ($index * 2) + 10}px;
+                position: relative;
+                &::before {
+                    content: nth($h-icons, $index);
+                    display: block;
+                    font-size: calc($size - 2px);
+                    width: calc($size - 2px);
+                    height: calc($size - 2px);
+                    left: 0px;
+                    position: absolute;
+                }
+            }
+        }
+        h1,
+        h2 {
+            color: #ff502c;
+        }
+    }
+
+    // 分割线
+
+    hr {
+        height: 4px;
+        border: none;
+        margin-top: 32px;
+        margin-bottom: 32px;
+        background-size: 4px 1px;
+        background-image: linear-gradient(270deg, #6d9dce 0, $color-blue 25%, transparent 50%);
+        &:nth-child(2n) {
+            background-image: linear-gradient(270deg, #ff9800 0, #fff8e0 25%, transparent 50%);
+        }
+    }
+
+    // 无序列表
+
+    ul {
+        padding-inline-start: 20px;
+        li {
+            list-style-type: "🔸";
+            li {
+                list-style-type: "◻️";
+                li {
+                    list-style-type: "▫️";
+                }
+            }
+        }
+    }
+    ol {
+        padding-inline-start: 20px;
+        ::marker {
+            color: #ff9800;
+        }
+    }
+    ol,
+    ul {
+        line-height: 2em;
+    }
+    // 任务列表
+    li {
+        padding-inline-start: 1ch;
+        &.task-list-item {
+            list-style: none;
+            padding-inline-start: 0;
+        }
+        input {
+            padding-right: 2px;
+        }
+        input[type="checkbox" i] {
+            appearance: none;
+        }
+        input::before {
+            content: "🟩";
+            display: block;
+            width: 13px;
+            height: 13px;
+        }
+        input:checked::before {
+            content: "✅";
+        }
+    }
+    @media (max-width: 720px) {
+        h1 {
+            font-size: 24px;
+        }
+        h2 {
+            font-size: 20px;
+        }
+        h3 {
+            font-size: 18px;
+        }
+    }
+}

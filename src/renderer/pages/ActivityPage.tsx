@@ -10,6 +10,7 @@ import type {
 } from '../../shared/contracts';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InfiniteScrollTrigger } from '../components/InfiniteScrollTrigger';
+import { PageEmptyState } from '../components/PageEmptyState';
 import { SearchInput } from '../components/SearchInput';
 import {
   SegmentedControl,
@@ -353,14 +354,7 @@ export function ActivityPage({ entries, appName }: { entries: AuditEntry[]; appN
       )}
 
       {!entries.length && total === 0 && !hasActiveFilters ? (
-        <div className="grid min-h-[240px] flex-1 place-items-center px-6 py-10 text-center">
-          <div className="max-w-[420px]">
-            <strong className="block text-[14px] font-medium text-foreground">{t('activity.empty')}</strong>
-            <p className="mb-0 mt-1.5 text-[12px] leading-5 text-muted-foreground">
-              {t('activity.emptyDescription', { appName })}
-            </p>
-          </div>
-        </div>
+        <PageEmptyState title={t('activity.empty')} description={t('activity.emptyDescription', { appName })} />
       ) : !results.length ? (
         <div className="grid min-h-[220px] flex-1 place-items-center px-6 py-10 text-center">
           <div>

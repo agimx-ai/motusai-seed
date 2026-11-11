@@ -1,3 +1,4 @@
+import { RotateCw } from 'lucide-react';
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cx } from '../lib/display';
 
@@ -10,3 +11,15 @@ export const HeaderActionButton = forwardRef<HTMLButtonElement, ButtonHTMLAttrib
     )} {...props} />;
   },
 );
+
+export function HeaderRefreshButton({ label, refreshing, onClick }: {
+  label: string;
+  refreshing: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <HeaderActionButton aria-label={label} disabled={refreshing} onClick={onClick}>
+      <RotateCw size={18} className={refreshing ? 'seed-full-motion:animate-spin' : undefined} aria-hidden="true" />
+    </HeaderActionButton>
+  );
+}

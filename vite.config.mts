@@ -20,6 +20,11 @@ export default defineConfig(({ command }) => ({
       async generateBundle() {
         this.emitFile({
           type: 'asset',
+          fileName: 'third-party-notices/bloub.txt',
+          source: await readFile(resolve(projectRoot, 'packages/seed-sdk/src/companion/LICENSE'), 'utf8'),
+        });
+        this.emitFile({
+          type: 'asset',
           fileName: 'third-party-notices/liquid-gooey.txt',
           source: await readFile(
             resolve(projectRoot, 'packages/seed-sdk/src/react/vendor/liquid-gooey/LICENSE'),

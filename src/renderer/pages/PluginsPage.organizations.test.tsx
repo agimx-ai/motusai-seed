@@ -110,6 +110,13 @@ it('uses organization IDs even when two organizations have the same name', () =>
   expectPlugins(['EP']);
 });
 
+it('shows no matches when a source filter alone excludes every plugin', () => {
+  render(page([plugin('IQ', w)]));
+  fireEvent.click(screen.getByRole('button', { name: '通用插件' }));
+  expect(screen.getByText('没有匹配的插件')).toBeTruthy();
+  expect(screen.queryByText('暂无可用插件')).toBeNull();
+});
+
 it('keeps search inside the selected organization and preserves selection across catalog reordering', () => {
   const view = render(page());
   fireEvent.click(screen.getByRole('button', { name: 'AGIMX' }));

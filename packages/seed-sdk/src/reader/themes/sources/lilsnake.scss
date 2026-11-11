@@ -1,0 +1,434 @@
+// 字体
+$base-font: Menlo, Monaco, Consolas, 'Courier New', monospace;
+$title-font: Menlo, Monaco, Consolas, 'Courier New', monospace;
+
+// 颜色
+$title-color: #444444; //标题
+$text-color: #444444; //普通文本
+$title-boder: #5e5e5e; //h2标题边框
+$title-boder-h3: #8d8d8d; //h3标题边框
+$border: #cfcfcf; //普通边框
+$link-bottom: #bbb; //链接下划线
+//列表边距 
+$ol-padding: 32px;
+$ul-padding: 32px;
+$li-padding: 6px;
+// 标题字体大小 font-size
+$font-size-base: 14px;
+$font-size-h1: ceil($font-size-base * 2.91);
+$font-size-h2: ceil($font-size-base * 2.14);
+$font-size-h3: ceil($font-size-base * 1.71);
+$font-size-h4: ceil($font-size-base * 1.42);
+$font-size-h5: ceil($font-size-base * 1.14);
+$font-size-h6: ceil($font-size-base * 1);
+
+.markdown-body {
+    word-break: break-word;
+    line-height: 1.75;
+    font-weight: 400;
+    font-size: 16px;
+    overflow-x: hidden;
+    color: $text-color;
+    background-image:
+        linear-gradient(90deg, rgba(59, 59, 59, 0.1) 3%, rgba(0, 0, 0, 0) 3%),
+        linear-gradient(360deg, rgba(122, 120, 121, 0.1) 3%, rgba(0, 0, 0, 0) 3%);
+    background-size: 30px 30px;
+    background-position: center center;
+    letter-spacing: 1px;
+    word-spacing: 1px;
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        position: relative;
+        margin-top: 34px;
+        margin-bottom: 16px;
+        font-weight: bold;
+        line-height: 1.3;
+        cursor: text;
+        color: $title-color;
+        font-family: $title-font;
+    }
+
+    h1 {
+        font-size: $font-size-h1;
+        margin-bottom: 34px;
+        line-height: 1.5;
+
+        &::before {
+            content: '';
+
+        }
+    }
+
+    h2 {
+        font-size: $font-size-h2;
+        padding-left: 0.4em;
+        border-left: 0.4em solid $title-boder;
+        border-bottom: 1px solid $title-color;
+
+        &::after {
+            content: '🕛';
+            position: absolute;
+            top: 0;
+            right: 0;
+            transition: all;
+            animation: rotate 10s linear infinite;
+        }
+
+        @keyframes rotate {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    }
+
+    h3 {
+        border-left: 0.4em solid $title-boder-h3;
+        font-size: $font-size-h3;
+        padding-left: 0.4em;
+
+    }
+
+    h4 {
+        font-size: $font-size-h4;
+    }
+
+    h5 {
+        font-size: $font-size-h5;
+    }
+
+    h6 {
+        font-size: $font-size-h6;
+    }
+
+    p,
+    blockquote,
+    ul,
+    ol,
+    dl,
+    table {
+        margin: 0.8em 0;
+    }
+
+    // 加粗
+    strong {
+        font-weight: 1000;
+        position: relative;
+        color: $title-color;
+        padding: 0 3px;
+
+    }
+
+    // 斜体
+    em {
+        font-weight: inherit;
+
+    }
+
+    // 链接
+    a {
+        box-sizing: border-box;
+        color: gray;
+        position: relative;
+
+        &::before {
+            position: absolute;
+            box-sizing: border-box;
+            content: 'Go ->';
+            left: 0%;
+            width: 100%;
+            max-width: 0px;
+            color: #fff;
+            background-color: rgb(128, 128, 128, 0.8);
+            white-space: nowrap;
+            transition: 200ms ease;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        &::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background-color: #808080;
+        }
+
+        &:hover,
+        &:active {
+
+            &::before {
+                max-width: 100%;
+                padding-left: 8px;
+                border-radius: 5px;
+            }
+        }
+    }
+
+    // 分割线
+    hr {
+        position: relative;
+        width: 100%;
+        height: 1px;
+        border: none;
+        margin-top: 36px;
+        margin-bottom: 36px;
+        background: linear-gradient(to right, gray,  #f1f1f1, $text-color,  $text-color, #f1f1f1,  gray);
+        overflow: visible;
+
+    }
+
+
+    //列表
+    ol,
+    ul {
+        padding-left: $ol-padding;
+
+        li {
+            margin-bottom: $li-padding;
+            list-style: inherit;
+        }
+
+        ul,
+        ol {
+            margin-top: 3px;
+
+        }
+    }
+
+    ol {
+        counter-reset: my-counter; //计数器起始值
+    }
+
+    ol>li {
+        padding-left: $li-padding;
+        list-style: none;
+        counter-increment: my-counter; // 列表项增加计数器的值
+        position: relative;
+
+        &::before {
+            position: absolute;
+            left: -1.5em;
+            content: counter(my-counter); //使用计数器来生成数字
+            font-weight: bold;
+        }
+
+        &:nth-child(1)::before {
+
+            content: '1️⃣';
+        }
+
+        &:nth-child(2)::before {
+            content: '2️⃣';
+        }
+
+        &:nth-child(3)::before {
+            content: '3️⃣';
+        }
+
+        &:nth-child(4)::before {
+            content: '4️⃣';
+        }
+
+        &:nth-child(5)::before {
+            content: '5️⃣';
+        }
+
+        &:nth-child(6)::before {
+            content: '6️⃣';
+        }
+
+        &:nth-child(7)::before {
+            content: '7️⃣';
+        }
+
+        &:nth-child(8)::before {
+            content: '8️⃣';
+        }
+
+        &:nth-child(9)::before {
+            content: '9️⃣';
+        }
+
+        &:nth-child(10)::before {
+            content: '🔟';
+        }
+    }
+
+    ul>li {
+        list-style: none;
+        position: relative;
+
+        &::before {
+            z-index: 10;
+            position: absolute;
+            left: -1.57em;
+            content: '🔹';
+            margin-right: 12px;
+
+        }
+
+        input {
+            margin-left: 8px !important;
+        }
+    }
+
+    // 引用
+    blockquote {
+        position: relative;
+        background-color: lightgray;
+        padding: 5px 10px;
+        border-left: 0.2em solid black;
+        border-radius: 3px;
+        transition: all 800ms ease;
+
+        &:hover {
+            opacity: 0.7;
+        }
+    }
+
+    // 代码块
+    code {
+        font-family: $base-font;
+        word-break: break-word;
+        border-radius: 2px;
+        overflow-x: auto;
+        background-color: rgb(69, 69, 77, 0.8);
+        color: white;
+        font-size: 0.87em;
+        padding: 0.07em 0.4em;
+    }
+
+    pre {
+        font-family: $base-font;
+        overflow: auto;
+        position: relative;
+        line-height: 1.75;
+        border-radius: 7px;
+        overflow: hidden;
+
+        &:before {
+            z-index: 10;
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fc625d;
+            -webkit-box-shadow: 20px 0 #fdbc40, 40px 0 #35cd4b;
+            box-shadow: 20px 0 #fdbc40, 40px 0 #35cd4b;
+            content: ' ';
+        }
+
+        &::after {
+            z-index: 9;
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 40px;
+            top: 0;
+            background-color: #1a1a1a;
+        }
+
+        >code {
+            display: block;
+            font-family: $base-font;
+            word-break: break-word;
+            border-radius: 2px;
+            overflow-x: auto;
+            background-color: #171717;
+            color: #bababa;
+            font-size: 14px;
+            padding: 40px 20px 20px 20px;
+
+        }
+    }
+
+    // 删除线
+    del {
+        color: gray;
+    }
+
+    //表格
+    table {
+        margin-bottom: 1.25rem;
+        border-collapse: collapse;
+
+        th,
+        td {
+            margin: 0;
+            padding: 8px;
+            line-height: 20px;
+            vertical-align: middle;
+            border: 1px solid #ddd;
+
+        }
+
+        tr:nth-child(2n),
+        thead {
+            background-color: #fcfcfc;
+
+            th {
+                font-weight: bold;
+                vertical-align: middle;
+                color: $title-color;
+            }
+        }
+
+        tbody {
+            tr {
+                td {
+                    font-weight: normal;
+                    color: $text-color;
+                }
+
+                &:hover {
+                    background-color: lightgray;
+
+                    td {
+                        color: white;
+                    }
+                }
+            }
+
+        }
+    }
+
+    img {
+        max-width: 100%;
+        margin: 0 12px;
+    }
+
+    @media (max-width: 720px) {
+        h1 {
+            font-size: $font-size-h1 * 0.8;
+        }
+
+        h2 {
+            font-size: $font-size-h2 * 0.8;
+        }
+
+        h3 {
+            font-size: $font-size-h3 * 0.8;
+        }
+
+        h4 {
+            font-size: $font-size-h4 * 0.8;
+        }
+
+        h5 {
+            font-size: $font-size-h5 * 0.8;
+        }
+    }
+}

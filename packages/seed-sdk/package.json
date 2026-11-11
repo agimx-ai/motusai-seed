@@ -37,11 +37,19 @@
         "types": "./dist/tools/index.d.mts",
         "default": "./dist/tools/index.mjs"
       }
+    },
+    "./companion": {
+      "types": "./dist/companion/index.d.ts",
+      "import": "./dist/companion/index.js"
+    },
+    "./reader": {
+      "types": "./dist/reader/index.d.mts",
+      "import": "./dist/reader/index.mjs"
     }
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "npm run clean && tsc -p tsconfig.json && node scripts/prepare-dist.mjs && node scripts/build-styles.mjs",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/prepare-dist.mjs && node scripts/build-styles.mjs && node scripts/build-reader.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "prepack": "npm run build"
   },
@@ -53,7 +61,8 @@
     "@types/react-dom": "^19.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "highlight.js": "11.11.1"
   },
   "peerDependencies": {
     "streamdown": "^2.6.0",
@@ -92,7 +101,12 @@
     "tailwindcss": "4.3.3",
     "archiver": "^8.0.0",
     "esbuild": "^0.28.2",
-    "driver.js": "1.10.2"
+    "driver.js": "1.10.2",
+    "@bytemd/react": "1.22.0",
+    "@bytemd/plugin-gfm": "1.22.0",
+    "@bytemd/plugin-frontmatter": "1.22.0",
+    "@bytemd/plugin-highlight-ssr": "1.22.0",
+    "bytemd": "1.22.0"
   },
   "bin": {
     "seed-plugin": "dist/tools/cli.mjs"

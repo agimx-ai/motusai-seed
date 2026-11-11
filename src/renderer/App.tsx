@@ -18,6 +18,8 @@ import { useReducedMotionPreference } from './hooks/use-reduced-motion';
 import { useTheme } from './hooks/use-theme';
 import type { View } from './lib/display';
 import { historyNeighbor, initialHistory, navigationHistory, type AppPage } from './lib/navigation-history';
+import { ExperienceTipsPage } from './pages/ExperienceTipsPage';
+import { experienceTipsLocalScope } from '../shared/experience-tips';
 import { ActivityActions, ActivityPage } from './pages/ActivityPage';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -54,6 +56,8 @@ export default function App() {
   const selectedPluginId = page.view === 'plugins' ? page.pluginId ?? '' : '';
   const pluginSettingsTarget = page.view === 'plugins' ? page.settingsTarget : undefined;
   const [profileEditing, setProfileEditing] = useState(false);
+  const [experienceTipsActions, setExperienceTipsActions] = useState<HTMLDivElement | null>(null);
+  const [experienceArticle, setExperienceArticle] = useState<{ title: string; onBack: () => void }>();
   const [pluginSearchResults, setPluginSearchResults] = useState<{
     query: string;
     page: SeedCatalogPage;
@@ -170,6 +174,7 @@ export default function App() {
     if (previous) {
       for (const client of snapshot.localClients) {
         for (const pluginId of client.pluginIds) {
+          if (pluginId === experienceTipsLocalScope) continue;
           const key = `${client.id}\u0000${pluginId}`;
           if (previous.has(key)) continue;
           const plugin = snapshot.plugins.find((candidate) => candidate.id === pluginId);
@@ -367,6 +372,8 @@ export default function App() {
             onRefreshPlugins={() => void refreshPlugins(true)}
             onEditProfile={() => setProfileEditing(true)}
             onAddCredits={() => void run('open-personal-wallet', (api) => api.openPersonalWallet())}
+            experienceTipsActionsRef={setExperienceTipsActions}
+            experienceArticle={experienceArticle}
             activityActions={
               view === 'activity' ? (
                 <ActivityActions
@@ -440,6 +447,7 @@ export default function App() {
               />
             )}
             {view === 'activity' && <ActivityPage entries={snapshot.audit} appName={snapshot.appName} />}
+            {view === 'experience-tips' && <ExperienceTipsPage key={snapshot.user.id} dark={resolvedTheme === 'dark'} actionsContainer={experienceTipsActions} onArticleChange={setExperienceArticle} />}
             {view === 'plugin-settings' && (
               <PluginSettingsPage
                 catalog={snapshot.catalogPlugins}

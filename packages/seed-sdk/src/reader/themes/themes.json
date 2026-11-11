@@ -1,0 +1,130 @@
+{
+  "juejin": {
+    "file": "classic.css",
+    "highlight": "github"
+  },
+  "github": {
+    "file": "github.css",
+    "highlight": "github"
+  },
+  "smartblue": {
+    "file": "smartblue.css",
+    "highlight": "github"
+  },
+  "cyanosis": {
+    "file": "cyanosis.css",
+    "highlight": "atom-one-dark"
+  },
+  "channing-cyan": {
+    "file": "channing-cyan.css",
+    "highlight": "github"
+  },
+  "fancy": {
+    "file": "fancy.css",
+    "highlight": "github"
+  },
+  "hydrogen": {
+    "file": "hydrogen.css",
+    "highlight": "github"
+  },
+  "condensed-night-purple": {
+    "file": "condensed-night-purple.css",
+    "highlight": "github"
+  },
+  "greenwillow": {
+    "file": "greenwillow.css",
+    "highlight": "github"
+  },
+  "v-green": {
+    "file": "v-green.css",
+    "highlight": "github"
+  },
+  "vue-pro": {
+    "file": "vue-pro.css",
+    "highlight": "monokai"
+  },
+  "healer-readable": {
+    "file": "healer-readable.css",
+    "highlight": "srcery"
+  },
+  "mk-cute": {
+    "file": "mk-cute.css",
+    "highlight": "github"
+  },
+  "jzman": {
+    "file": "jzman.css",
+    "highlight": "monokai"
+  },
+  "geek-black": {
+    "file": "geek-black.css",
+    "highlight": "monokai"
+  },
+  "awesome-green": {
+    "file": "awesome-green.css",
+    "highlight": "github"
+  },
+  "qklhk-chocolate": {
+    "file": "qklhk-chocolate.css",
+    "highlight": "github"
+  },
+  "orange": {
+    "file": "orange.css",
+    "highlight": "atom-one-light"
+  },
+  "scrolls-light": {
+    "file": "scrolls-light.css",
+    "highlight": "github"
+  },
+  "simplicity-green": {
+    "file": "simplicity-green.css",
+    "highlight": "github"
+  },
+  "arknights": {
+    "file": "arknights.css",
+    "highlight": "atom-one-light"
+  },
+  "vuepress": {
+    "file": "vuepress.css",
+    "highlight": "base16/tomorrow-night"
+  },
+  "Chinese-red": {
+    "file": "Chinese-red.css",
+    "highlight": "xcode"
+  },
+  "nico": {
+    "file": "nico.css",
+    "highlight": "base16/atelier-sulphurpool-light"
+  },
+  "devui-blue": {
+    "file": "devui-blue.css",
+    "highlight": "github"
+  },
+  "serene-rose": {
+    "file": "serene-rose.css",
+    "highlight": "atom-one-dark"
+  },
+  "z-blue": {
+    "file": "z-blue.css",
+    "highlight": "androidstudio"
+  },
+  "minimalism": {
+    "file": "minimalism.css",
+    "highlight": "atom-one-dark"
+  },
+  "koi": {
+    "file": "koi.css",
+    "highlight": "base16/tomorrow-night"
+  },
+  "yu": {
+    "file": "yu.css",
+    "highlight": "atom-one-dark"
+  },
+  "lilsnake": {
+    "file": "lilsnake.css",
+    "highlight": "hybrid"
+  },
+  "keepnice": {
+    "file": "keepnice.css",
+    "highlight": "github"
+  }
+}

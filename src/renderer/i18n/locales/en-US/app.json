@@ -1,4 +1,69 @@
 {
+  "experienceTips": {
+    "articles": "Browse tips",
+    "submissions": "My submissions",
+    "unlisted": {
+      "status": "No longer displayed",
+      "date": "Stopped displaying on {{date}}",
+      "reason": "Reason: {{reason}}",
+      "delete": "Permanently delete",
+      "deleteDescription": "All versions, the cover, and article images for “{{title}}” will be permanently deleted. This cannot be undone."
+    },
+    "searchArticles": "Search tips",
+    "searchSubmissions": "Search submissions",
+    "noSearchResults": "No results found",
+    "noSearchResultsDescription": "Try another keyword or clear your search",
+    "sort": {
+      "label": "Sort tips",
+      "latest": "Latest",
+      "popular": "Popular"
+    },
+    "breadcrumb": "Experience tip details",
+    "loading": "Loading…",
+    "loadFailed": "Could not load experience tips",
+    "submissionsLoadFailed": "Could not load your submissions",
+    "articleLoadFailed": "Could not open this tip",
+    "refreshToRetry": "Click Refresh in the top right to try again",
+    "imageFailed": "An image could not be loaded.",
+    "viewCount_one": "{{count}} view",
+    "viewCount_other": "{{count}} views",
+    "readingTime": "{{count}} min read",
+    "likeCount_one": "{{count}} like",
+    "likeCount_other": "{{count}} likes",
+    "like": "Like",
+    "likeFailed": "Could not update your like. Try again",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "more": "Load more",
+    "noArticles": "No tips published yet",
+    "noArticlesDescription": "Be the first to share a Seed tip you use all the time",
+    "noSubmissions": "No submissions yet",
+    "noSubmissionsDescription": "In Obsidian, right-click a note and choose Share an experience",
+    "removal": {
+      "moreActions": "More actions for {{title}}",
+      "withdraw": {
+        "label": "Withdraw submission",
+        "description": "This version of “{{title}}” will leave the review queue. Any published version will stay visible.",
+        "success": "Submission withdrawn"
+      },
+      "remove-returned": {
+        "label": "Delete submission",
+        "description": "This returned version of “{{title}}” will be removed from My submissions.",
+        "success": "Submission deleted"
+      },
+      "delete-tip": {
+        "label": "Delete tip",
+        "description": "All versions, cover and inline images, and engagement records for “{{title}}” will be permanently deleted. The old link will stop working. If you submit the note again from Obsidian, it will get a new link when published.",
+        "success": "Tip deleted"
+      }
+    },
+    "state": {
+      "pending": "Awaiting review",
+      "returned": "Changes requested",
+      "published": "Published",
+      "superseded": "Superseded"
+    }
+  },
   "announcements": {
     "replayVideo": "Replay background video",
     "videoLabel": "Product introduction video",
@@ -40,6 +105,7 @@
     "collapseSection": "Collapse {{name}}",
     "overview": "Companion",
     "plugins": "Plugins",
+    "experience-tips": "Experience tips",
     "activity": "Activity log",
     "settings": "Settings",
     "usage": "Credit usage",
@@ -132,8 +198,10 @@
       "public": "General plugins"
     },
     "organizationName": "{{name}}",
+    "noAvailable": "No plugins available yet",
+    "noAvailableDescription": "Check back later",
     "noMatches": "No matching plugins",
-    "searchHint": "Try searching by plugin name",
+    "searchHint": "Try a different keyword or adjust your filters",
     "versionUpdate": "Update available from {{current}} to {{target}}",
     "updateNotification": "{{count}} plugin updates available",
     "updateNotificationEmpty": "No plugin updates available",
@@ -335,7 +403,7 @@
       "attachments": "Attachments"
     },
     "empty": "No activity yet",
-    "emptyDescription": "Connection, authorization, and file operations from {{appName}} will appear here."
+    "emptyDescription": "Connection, authorization, and file operations from {{appName}} will appear here"
   },
   "settings": {
     "system": "System",

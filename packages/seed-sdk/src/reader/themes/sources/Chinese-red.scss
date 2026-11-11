@@ -1,0 +1,314 @@
+$monospace-font: -apple-system,
+-apple-system-body,
+BlinkMacSystemFont,
+"Segoe UI",
+Helvetica,
+Arial,
+PingFang SC,
+"思源黑体 CN",
+"思源黑体",
+"JetBrains Mono",
+"Fira Code",
+Menlo,
+"Ubuntu Mono",
+Consolas,
+sans-serif;
+
+$baseColor: #f33b1f;        // 极光红
+$strongColor: #ee3f4d;      // 茶花红
+$darkBaseColor: #ac1f18;    // 覆盆子红
+$blockquoteColor: #f07c82;  // 香叶红
+$codeColor: #ee2746;        // 淡曙红
+$codeBgColor: #f9f1db;      // 蚌肉白
+$aColor: #1781b5;           // 釉蓝
+$bgColor: #fff9f9;
+
+
+.markdown-body {
+  word-break: break-word;
+  font-weight: 400;
+  line-height: 2;
+  font-size: 17px;
+  overflow-x: hidden;
+  color: black;
+
+
+  // 粗体
+  strong {
+    padding: 1px;
+    color: $strongColor;
+  }
+
+  // 斜体
+  em {
+    padding: 0 2px;
+    color: $baseColor;
+  }
+
+  // 标题
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    position: relative;
+    margin-top: 30px;
+    margin-bottom: 20px;
+
+    line-height: 1.5;
+    font-weight: bold;
+  }
+
+  h1 {
+    text-align: center;
+    padding-bottom: 5px;
+    font-size: 32px;
+    color: $darkBaseColor;
+
+    &::after {
+      content: '';
+      display: block;
+      margin: 4px auto 0;
+      width: 100px;
+      height: 2px;
+      border-bottom: 2px solid $baseColor;
+    }
+  }
+
+  h2 {
+    font-size: 28px;
+    border-bottom: 1px solid $baseColor;
+
+    &::before {
+      content: '# ' !important;
+      color: $baseColor;
+    }
+  }
+
+  h3 {
+    font-size: 24px;
+    padding-left: 9px;
+    border-left: 6px solid $baseColor;
+  }
+
+  h4 {
+    font-size: 20px;
+  }
+
+  // 图片
+  img {
+    max-width: 100%;
+  }
+
+  // 分割线
+  hr {
+    border-top: 1px solid #bbbbbb;
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+    margin: 16px 0;
+  }
+
+  // 行间代码
+  code {
+    font-family: $monospace-font;
+
+    word-break: break-word;
+    overflow-x: auto;
+
+    background-color: $codeBgColor;
+    color: $codeColor;
+    border-radius: 2px;
+    font-size: 16px;
+    padding: 1px 2px;
+  }
+
+  // 代码框
+  pre {
+    font-family: $monospace-font;
+    overflow: auto;
+    position: relative;
+    line-height: 1.75;
+
+    >code {
+      margin: 12px 0 !important;
+      border-radius: 3px;
+      font-size: 15px;
+
+      padding: 16px 12px;
+      word-break: normal;
+      display: block;
+      overflow-x: auto;
+      color: #333;
+      background: #f7f7f7;
+    }
+  }
+
+  // 链接
+  a {
+    text-decoration: none;
+    color: $aColor;
+    padding: 0 2px;
+    border-bottom: 1px solid $aColor;
+
+    &:hover,
+    &:active {
+      border-bottom: 2px solid $baseColor;
+      color: $darkBaseColor;
+    }
+  }
+
+  // 引用
+  blockquote {
+    color: #3d3d3d;
+    background-color: $bgColor;
+    padding: 6px 16px;
+    margin: 16px 0;
+    border-left: 3px solid $blockquoteColor;
+
+    &::after {
+      display: block;
+      content: '';
+    }
+
+    &>p {
+      margin: 6px 0;
+    }
+  }
+
+  // 有序 & 无序列表
+  ol,
+  ul {
+    padding-left: 30px;
+
+    li {
+      margin-bottom: 6px;
+
+      & .task-list-item {
+        list-style: none;
+
+        ul,
+        ol {
+          margin-top: 6px;
+        }
+      }
+    }
+
+    ul,
+    ol {
+      margin-top: 6px;
+    }
+
+  }
+
+  ol li {
+    padding-left: 6px;
+  }
+
+  ::marker {
+    color: $baseColor;
+  }
+
+  // 任务列表
+  .contains-task-list {
+    padding-left: 0;
+  }
+
+  .task-list-item {
+    list-style: none;
+
+    input[type="checkbox"] {
+      position: relative;
+
+      &::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: white;
+        border: 1px solid $blockquoteColor;
+        border-radius: 3px;
+        box-sizing: border-box;
+        z-index: 1;
+      }
+
+      &:checked {
+        &::after {
+          content: "\2713";
+          position: absolute;
+          top: -5px;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: 0;
+          height: 0;
+          color: $baseColor;
+          font-size: 16px;
+          font-weight: bold;
+          z-index: 2;
+        }
+      }
+    }
+
+  }
+
+  // 表格
+  table {
+    display: inline-block !important;
+    font-size: 14px;
+    width: auto;
+    max-width: 100%;
+    overflow: auto;
+
+    border-spacing: 0;
+    border-collapse: collapse;
+
+    thead {
+      background: $bgColor;
+      color: black;
+      text-align: left;
+      font-size: 15px;
+    }
+
+    tr:nth-child(2n) {
+      background-color: #fcfcfc;
+    }
+
+    tr:hover {
+      background-color: $bgColor;
+    }
+
+    th,
+    td {
+      padding: 12px 7px;
+      line-height: 24px;
+      border: 1px solid $codeBgColor;
+    }
+
+    td {
+      min-width: 120px;
+    }
+
+  }
+
+
+
+
+
+  @media (max-width: 720px) {
+    h1 {
+      font-size: 24px;
+    }
+
+    h2 {
+      font-size: 20px;
+    }
+
+    h3 {
+      font-size: 18px;
+    }
+  }
+}

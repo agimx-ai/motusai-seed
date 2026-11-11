@@ -1,4 +1,67 @@
 {
+  "experienceTips": {
+    "articles": "浏览技巧",
+    "submissions": "我的投稿",
+    "unlisted": {
+      "status": "已停止展示",
+      "date": "停止展示于 {{date}}",
+      "reason": "原因：{{reason}}",
+      "delete": "永久删除",
+      "deleteDescription": "「{{title}}」的所有版本、封面和正文图片将永久删除，删除后无法恢复。"
+    },
+    "searchArticles": "搜索技巧",
+    "searchSubmissions": "搜索投稿",
+    "noSearchResults": "没有找到匹配的结果",
+    "noSearchResultsDescription": "试试其他关键词，或清空搜索",
+    "sort": {
+      "label": "技巧排序",
+      "latest": "最新",
+      "popular": "热门"
+    },
+    "breadcrumb": "使用技巧详情路径",
+    "loading": "正在加载…",
+    "loadFailed": "无法加载使用技巧",
+    "submissionsLoadFailed": "无法加载投稿",
+    "articleLoadFailed": "暂时打不开这篇技巧",
+    "refreshToRetry": "点右上角的刷新按钮再试一次",
+    "imageFailed": "有图片未能加载。",
+    "viewCount": "{{count}} 次浏览",
+    "readingTime": "阅读 {{count}} 分钟",
+    "likeCount": "{{count}} 个赞",
+    "like": "点赞",
+    "likeFailed": "暂时无法更新点赞，请重试",
+    "retry": "重试",
+    "refresh": "刷新",
+    "more": "加载更多",
+    "noArticles": "暂无已发布的使用技巧",
+    "noArticlesDescription": "快来抢个沙发，分享一个你常用的 Seed 小技巧吧",
+    "noSubmissions": "还没有投稿",
+    "noSubmissionsDescription": "在 Obsidian 中右键点击笔记，选择「分享经验」即可投稿",
+    "removal": {
+      "moreActions": "「{{title}}」的更多操作",
+      "withdraw": {
+        "label": "撤回投稿",
+        "description": "「{{title}}」的这个版本将退出审核。已有公开版本继续展示。",
+        "success": "已撤回投稿"
+      },
+      "remove-returned": {
+        "label": "删除稿件",
+        "description": "「{{title}}」的这个退回版本将从「我的投稿」移除。",
+        "success": "已删除稿件"
+      },
+      "delete-tip": {
+        "label": "删除技巧",
+        "description": "「{{title}}」的所有版本、封面、图片和互动记录将永久删除，旧链接会失效。你可以在 Obsidian 重新投稿，发布后会使用新链接。",
+        "success": "已删除技巧"
+      }
+    },
+    "state": {
+      "pending": "待审核",
+      "returned": "退回修改",
+      "published": "已发布",
+      "superseded": "已更新"
+    }
+  },
   "announcements": {
     "replayVideo": "重新播放背景视频",
     "videoLabel": "产品介绍视频",
@@ -40,6 +103,7 @@
     "collapseSection": "收起{{name}}",
     "overview": "伙伴",
     "plugins": "插件",
+    "experience-tips": "使用技巧",
     "activity": "活动记录",
     "settings": "设置",
     "usage": "积分用量",
@@ -132,8 +196,10 @@
       "public": "通用插件"
     },
     "organizationName": "{{name}}",
+    "noAvailable": "暂无可用插件",
+    "noAvailableDescription": "可以稍后再来看看",
     "noMatches": "没有匹配的插件",
-    "searchHint": "试试搜索插件名称",
+    "searchHint": "试试换个关键词，或调整筛选条件",
     "versionUpdate": "可从 {{current}} 更新到 {{target}}",
     "updateNotification": "{{count}} 个插件可更新",
     "updateNotificationEmpty": "暂无插件更新",
@@ -335,7 +401,7 @@
       "attachments": "附件数量"
     },
     "empty": "还没有活动",
-    "emptyDescription": "当 {{appName}} 连接、授权或执行文件操作后，记录会出现在这里。"
+    "emptyDescription": "当 {{appName}} 连接、授权或执行文件操作后，记录会出现在这里"
   },
   "settings": {
     "system": "系统",

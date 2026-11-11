@@ -35,6 +35,19 @@ import { pluginCatalogV2Url } from './plugin-catalog-url';
 import { PluginCapabilityCatalog } from './plugin-capability-catalog';
 import { PluginEventBroker } from './plugin-event-broker';
 import { PluginCloudResourceBroker } from './plugin-cloud-resources';
+import { requestExperienceTips, type ExperienceTipCloudRequest } from './experience-tips';
+import {
+  experienceTipArticleSchema,
+  experienceTipEngagementSchema,
+  experienceTipPageSchema,
+  experienceTipWriteSchema,
+  experienceTipsLocalScope,
+  experienceTipsObsidianClient,
+  type ExperienceTipRead,
+  type ExperienceTipLike,
+  type ExperienceTipRemoval,
+  type ExperienceTipResult,
+} from '../shared/experience-tips';
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation';
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest';
 import { ConnectorManager } from './connector-manager';
@@ -428,10 +441,29 @@ export class SeedRuntime {
         ),
     ],
     [
+      'seed.experience-tips.request',
+      async (args) => {
+        const token = z.string().max(128).parse(args.token);
+        const authorizationId = await this.store.localClientAuthorizationId(experienceTipsLocalScope, token);
+        if (!authorizationId)
+          return { ok: false, status: 401, code: 'unauthorized', message: 'A valid Obsidian connection is required.' };
+        const request = experienceTipWriteSchema.parse(args.request);
+        if (request.kind === 'account') {
+          return this.user && !this.stopping
+            ? { ok: true, value: { user_id: this.user.id } }
+            : { ok: false, status: 401, code: 'experience_tip_unauthorized', message: 'Sign in to Seed.' };
+        }
+        return this.requestExperienceTip(request);
+      },
+    ],
+    [
       'seed.local-client.authorize',
       async (argumentsValue) => {
         const pluginId = String(argumentsValue.package_id || '');
         const clientId = String(argumentsValue.client_id || '');
+        const builtInExperienceTips = pluginId === experienceTipsLocalScope;
+        if (builtInExperienceTips && clientId !== experienceTipsObsidianClient)
+          throw new Error('本地客户端身份无效。');
         const installationId = String(argumentsValue.installation_id || '');
         const displayName = String(argumentsValue.display_name || '').trim();
         const deviceName = typeof argumentsValue.device_name === 'string' ? argumentsValue.device_name.trim() : '';
@@ -490,7 +522,7 @@ export class SeedRuntime {
         await this.store.auditSystem(
           authorizationBeforeSave ? 'local_client.scope.grant' : 'local_client.authorize',
           'allowed',
-          `已允许 ${displayName} 连接 ${authorizedPlugin?.name.zh_Hans || '插件'}。`,
+          `已允许 ${displayName} 连接 ${builtInExperienceTips ? '使用技巧' : authorizedPlugin?.name.zh_Hans || '插件'}。`,
           'control',
           {
             client_name: displayName,
@@ -2012,6 +2044,39 @@ export class SeedRuntime {
 
   async openWebsite() {
     await shell.openExternal(officialWebsiteUrl);
+  }
+
+  private requestExperienceTip(request: ExperienceTipCloudRequest): Promise<ExperienceTipResult> {
+    const owner = this.user?.id;
+    if (!owner || this.stopping) {
+      return Promise.resolve({
+        ok: false, status: 401, code: 'experience_tip_unauthorized', message: 'Sign in to Seed to use Experience tips.',
+      });
+    }
+    return requestExperienceTips(
+      this.seedCloudUrl,
+      (rejectedToken) => this.cloudAccessToken(rejectedToken),
+      () => !this.stopping && this.user?.id === owner,
+      request,
+    );
+  }
+
+  async readExperienceTips(request: ExperienceTipRead) {
+    const result = await this.requestExperienceTip(request);
+    if (!result.ok) throw new Error(result.message);
+    return (request.kind === 'article' ? experienceTipArticleSchema : experienceTipPageSchema).parse(result.value);
+  }
+
+  async setExperienceTipLike(input: ExperienceTipLike) {
+    const result = await this.requestExperienceTip({ kind: 'like', ...input });
+    if (!result.ok) throw new Error(result.message);
+    return experienceTipEngagementSchema.parse(result.value);
+  }
+
+  async removeExperienceTip(input: ExperienceTipRemoval) {
+    const result = await this.requestExperienceTip({ kind: 'remove', ...input });
+    if (!result.ok) throw new Error(result.message);
+    z.object({ ok: z.literal(true) }).parse(result.value);
   }
 
   async personalCreditWallet() {

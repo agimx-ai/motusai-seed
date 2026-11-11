@@ -45,6 +45,7 @@ describe('Plugin list loading states', () => {
     expect(html.match(/<article/g)).toHaveLength(6);
     expect(html).toContain('grid-cols-[minmax(0,1fr)_auto]');
     expect(html).not.toContain('没有匹配的插件');
+    expect(html).not.toContain('暂无可用插件');
   });
 
   it('allows installed data to settle independently of the catalog', () => {
@@ -54,9 +55,10 @@ describe('Plugin list loading states', () => {
     expect(html).not.toContain('没有匹配的插件');
   });
 
-  it('shows the empty message only once a successful load is complete', () => {
-    const html = render();
-    expect(html).toContain('没有匹配的插件');
+  it('shows an empty catalog when there are no search terms', () => {
+    const html = render({ query: '  ' });
+    expect(html).toContain('暂无可用插件');
+    expect(html).not.toContain('没有匹配的插件');
     expect(html).not.toContain('role="status"');
     expect(html).not.toContain('animate-pulse');
   });
@@ -67,12 +69,21 @@ describe('Plugin list loading states', () => {
     expect(html).toContain('插件加载失败');
     expect(html).toContain('Network unavailable');
     expect(html).not.toContain('没有匹配的插件');
+    expect(html).not.toContain('暂无可用插件');
     expect(html).not.toContain('role="status"');
   });
 
   it('uses a loading state while a search is pending, then allows zero matches', () => {
     expect(render({ query: 'unmatched', catalogLoading: true })).not.toContain('没有匹配的插件');
-    expect(render({ query: 'unmatched' })).toContain('没有匹配的插件');
+    const html = render({ query: 'unmatched' });
+    expect(html).toContain('没有匹配的插件');
+    expect(html).not.toContain('暂无可用插件');
+  });
+
+  it('waits for remaining pages before showing no matches', () => {
+    const html = render({ query: 'unmatched', hasMore: true });
+    expect(html).toContain('正在加载可用插件');
+    expect(html).not.toContain('没有匹配的插件');
   });
 
   it('does not duplicate initial skeletons with a pagination spinner', () => {

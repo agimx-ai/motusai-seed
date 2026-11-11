@@ -1,0 +1,258 @@
+{
+  "juejin": {
+    "file": "classic.scss",
+    "repository": "https://github.com/xitu/juejin-markdown-theme-default",
+    "revision": "6be2ebd",
+    "path": "juejin.scss",
+    "sha256": "b0808b36de63108d9e1de75720a8de8542a226f415c03c5a0e6c1a2e9dd69607",
+    "license": "classic.txt"
+  },
+  "github": {
+    "file": "github.css",
+    "repository": "https://github.com/sindresorhus/github-markdown-css",
+    "revision": "888d5a0",
+    "path": "github-markdown.css",
+    "sha256": "71fd2eb49c83de3967ab0dbf21d1bd022dd4c932ec5b5d19f275dc09b1e17c32",
+    "license": "github.txt"
+  },
+  "smartblue": {
+    "file": "smartblue.css",
+    "repository": "https://github.com/cumt-robin/juejin-markdown-theme-smart-blue",
+    "revision": "f266ca5",
+    "path": "smart-blue.css",
+    "sha256": "b8a6d2d081e5639d276899fbb9734a83e7bcf26513713f13847e8dd9cdb2d544",
+    "license": "smartblue.txt"
+  },
+  "cyanosis": {
+    "file": "cyanosis.scss",
+    "repository": "https://github.com/linxsbox/juejin-markdown-theme-cyanosis",
+    "revision": "044b052",
+    "path": "cyanosis.scss",
+    "sha256": "f7570a71be145ff0bab0de80bf4852245cbfc6ef367d2fcf01fa015bd4639ea3",
+    "license": "cyanosis.txt"
+  },
+  "channing-cyan": {
+    "file": "channing-cyan.scss",
+    "repository": "https://github.com/ChanningHan/juejin-markdown-theme-channing-cyan",
+    "revision": "c843c2f",
+    "path": "channing-cyan.scss",
+    "sha256": "f38c6321a76b1f7d6063683b3298670235be744288e6162f5faff948703511e1",
+    "license": "channing-cyan.txt"
+  },
+  "fancy": {
+    "file": "fancy.scss",
+    "repository": "https://github.com/xrr2016/juejin-markdown-theme-fancy",
+    "revision": "65aefc5",
+    "path": "fancy.scss",
+    "sha256": "8ec4b34cbd64d3f69ceea29954f9eea2569afa1b6c3c4a8bfd24871c57087157",
+    "license": "fancy.txt"
+  },
+  "hydrogen": {
+    "file": "hydrogen.scss",
+    "repository": "https://github.com/DawnLck/juejin-markdown-theme-hydrogen",
+    "revision": "b3f86fb",
+    "path": "hydrogen.scss",
+    "sha256": "f9ae838aa5b3ceca9458d97d50a24e3c445b63092856b095f4f43945f83f245e",
+    "license": "hydrogen.txt"
+  },
+  "condensed-night-purple": {
+    "file": "condensed-night-purple.scss",
+    "repository": "https://github.com/Geekhyt/condensed-night-purple",
+    "revision": "a232641",
+    "path": "condensed-night-purple.scss",
+    "sha256": "cb0248af12bcfb4f894bf4a1acc965c1cad35055c345ecf7f877ca706f0514f9",
+    "license": "condensed-night-purple.txt"
+  },
+  "greenwillow": {
+    "file": "greenwillow.scss",
+    "repository": "https://github.com/wangly19/juejin-markdown-theme-greenwillow",
+    "revision": "aca95ed",
+    "path": "greenwillow.scss",
+    "sha256": "fe24565f293804a7f12138efb144449233b68e42deaa12af556ff2b01596809c",
+    "license": "greenwillow.txt"
+  },
+  "v-green": {
+    "file": "v-green.scss",
+    "repository": "https://github.com/DawnLck/juejin-markdown-theme-v-green",
+    "revision": "015f88b",
+    "path": "v-green.scss",
+    "sha256": "63c45e796bd440452c63950065741dad00c436b615b5b0a9333231acf3e95d9c",
+    "license": "v-green.txt"
+  },
+  "vue-pro": {
+    "file": "vue-pro.scss",
+    "repository": "https://github.com/dunizb/juejin-markdown-theme-vue-pro",
+    "revision": "720e7a9",
+    "path": "vue-pro.scss",
+    "sha256": "e2b785ef9d91b0e41e0e8e10a218339f8568769efcc17d0fd0e36f7813442014",
+    "license": "vue-pro.txt"
+  },
+  "healer-readable": {
+    "file": "healer-readable.scss",
+    "repository": "https://github.com/healerLZH/juejin-markdown-theme-healer-readable",
+    "revision": "3f2ef56",
+    "path": "healer-readable.scss",
+    "sha256": "b54e0ddd877457a802a2558be3420a53936536f14e8fa8e92e6185bc3f544abf",
+    "license": "healer-readable.txt"
+  },
+  "mk-cute": {
+    "file": "mk-cute.scss",
+    "repository": "https://github.com/Jacky-Summer/juejin-markdown-theme-mk-cute",
+    "revision": "50d6414",
+    "path": "mk-cute.scss",
+    "sha256": "2ec3d7b6e765a5b20c13f791694fc3575b0de9ec48f54ca6b52c74511aa99ccc",
+    "license": "mk-cute.txt"
+  },
+  "jzman": {
+    "file": "jzman.scss",
+    "repository": "https://github.com/jzmanu/juejin-markdown-theme-jzman",
+    "revision": "b8cf058",
+    "path": "jzman.scss",
+    "sha256": "cdc601a62929377237c16327041592aac2094afd56dc8da58f42e8c3d4b9dcab",
+    "license": "jzman.txt"
+  },
+  "geek-black": {
+    "file": "geek-black.scss",
+    "repository": "https://github.com/MageeLin/juejin-markdown-theme-geek-black",
+    "revision": "888136c",
+    "path": "geek-black.scss",
+    "sha256": "976b2726b1c2c55f2779c684313f21505c6583080533eb6ea6791f10abe1bb3b",
+    "license": "geek-black.txt"
+  },
+  "awesome-green": {
+    "file": "awesome-green.scss",
+    "repository": "https://github.com/luffyZh/juejin-markdown-theme-awesome-green",
+    "revision": "f8ec354",
+    "path": "awesome-green.scss",
+    "sha256": "192b36eeac6acd51ce16d122481317a445259251176fecc5582c97d86911bab3",
+    "license": "awesome-green.txt"
+  },
+  "qklhk-chocolate": {
+    "file": "qklhk-chocolate.scss",
+    "repository": "https://github.com/qklhk/juejin-markdown-theme-qklhk",
+    "revision": "4f2a290",
+    "path": "chocolate.scss",
+    "sha256": "b1e609055068a23dc010fbddd02a0a43c4e9b9fac551ce27782d215e70de54ab",
+    "license": "qklhk-chocolate.txt"
+  },
+  "orange": {
+    "file": "orange.scss",
+    "repository": "https://github.com/RudeCrab/juejin-markdown-theme-rude-crab",
+    "revision": "2a4524b",
+    "path": "rude-crab.scss",
+    "sha256": "f7d72d96cfcd0778480debcecb2aa61e284ae3f7f24cdeba50cad189713008d2",
+    "license": "orange.txt"
+  },
+  "scrolls-light": {
+    "file": "scrolls-light.scss",
+    "repository": "https://github.com/daodaolee/juejin-markdown-theme-scrolls",
+    "revision": "cebc694",
+    "path": "scrolls.scss",
+    "sha256": "b2f67fb433da52206d4489846ce7546fd5a203a416b9f455892ed0cdac528c70",
+    "license": "scrolls-light.txt"
+  },
+  "simplicity-green": {
+    "file": "simplicity-green.scss",
+    "repository": "https://github.com/GuoJikun/juejin-markdown-theme-simplicity-green",
+    "revision": "47cb3fe",
+    "path": "simplicity-green.scss",
+    "sha256": "344705e5b904041c7e705e4ea0adc7f78c4984694ba5e8f913cddba0aa215c41",
+    "license": "simplicity-green.txt"
+  },
+  "arknights": {
+    "file": "arknights.scss",
+    "repository": "https://github.com/viewweiwu/juejin-markdown-theme-arknights",
+    "revision": "c7285a1",
+    "path": "arknights.scss",
+    "sha256": "1284a15b06ae9455020650ffdf898338bb0eb86c6403939c9a3e0734c9d8b24f",
+    "license": "arknights.txt"
+  },
+  "vuepress": {
+    "file": "vuepress.scss",
+    "repository": "https://github.com/promise96319/juejin-markdown-theme-vuepress",
+    "revision": "af6f62a",
+    "path": "vuepress.scss",
+    "sha256": "84d5f553103d19301d13cbe164a7eb15f27ce8d52865c76bc9a0619aef8ba03b",
+    "license": "vuepress.txt"
+  },
+  "Chinese-red": {
+    "file": "Chinese-red.scss",
+    "repository": "https://github.com/Mancuoj/juejin-markdown-theme-Chinese-red",
+    "revision": "6da886e",
+    "path": "Chinese-red.scss",
+    "sha256": "55ae2e7a3d5a64c3f92aee5a4175a12800f9f8d263d8f4ed6818888c999d6c79",
+    "license": "Chinese-red.txt"
+  },
+  "nico": {
+    "file": "nico.scss",
+    "repository": "https://github.com/blllld/juejin-markdown-theme-nico",
+    "revision": "8177657",
+    "path": "nico.scss",
+    "sha256": "fad20641fbb3909b5e81811f7c8a58eebb6fc088448f945a13c3d7cf6e7c3209",
+    "license": "nico.txt"
+  },
+  "devui-blue": {
+    "file": "devui-blue.scss",
+    "repository": "https://github.com/kagol/juejin-markdown-theme-devui-blue",
+    "revision": "bb59b1b",
+    "path": "devui-blue.scss",
+    "sha256": "31bf603298f6fb89126b0cc6022650dd032b321f71a11892e9279188f1e8e0da",
+    "license": "devui-blue.txt"
+  },
+  "serene-rose": {
+    "file": "serene-rose.scss",
+    "repository": "https://github.com/Krue1/juejin-markdown-theme-serene-rose",
+    "revision": "0a26041",
+    "path": "serene-rose.scss",
+    "sha256": "d32cbf9b115ea6f9d5bdc8e61b5aa66ae7a16f5403e9e24ba4b8c7b27c066dc7",
+    "license": "serene-rose.txt"
+  },
+  "z-blue": {
+    "file": "z-blue.scss",
+    "repository": "https://github.com/sheng1998/juejin-markdown-theme-z-blue",
+    "revision": "9057224",
+    "path": "z-blue.scss",
+    "sha256": "9c2cb4ae6dccf2da5ce795b818e1245d76bc72e1dc957d648d8516cda6d4e084",
+    "license": "z-blue.txt"
+  },
+  "minimalism": {
+    "file": "minimalism.scss",
+    "repository": "https://github.com/justnewbee/juejin-markdown-theme-minimalism",
+    "revision": "246f4f0",
+    "path": "minimalism.scss",
+    "sha256": "fe2b2d2bc9e6a6eda5dccd480f6047d61911d734eeae9dd8e0737fdfdb2c958d",
+    "license": "minimalism.txt"
+  },
+  "koi": {
+    "file": "koi.less",
+    "repository": "https://github.com/Henrycheheng/juejin-markdown-theme-koi",
+    "revision": "ca08db0eaaf843d697e5d2bf8b6f2b6c76289b13",
+    "path": "koi.less",
+    "sha256": "cf4a0fef69b8e1cc889875002fc03a831cca59de8cc19b57e092a5c638183f5a",
+    "license": "koi.txt"
+  },
+  "yu": {
+    "file": "yu.scss",
+    "repository": "https://github.com/jianghurong/juejin-markdown-theme-yu",
+    "revision": "1e3096f",
+    "path": "yu.scss",
+    "sha256": "37579c389b6ec37a95aa6ae97ddc6d80648e99e1ea6395b21e42534b16d25cff",
+    "license": "yu.txt"
+  },
+  "lilsnake": {
+    "file": "lilsnake.scss",
+    "repository": "https://github.com/SnakeLil/juejin-markdown-theme-lilsnake",
+    "revision": "d9dbeb8",
+    "path": "lilsnake.scss",
+    "sha256": "5358f7f906ed4c28e09e574c0b0f285a38d21c89acf260e40593540e4c5544ec",
+    "license": "lilsnake.txt"
+  },
+  "keepnice": {
+    "file": "keepnice.scss",
+    "repository": "https://github.com/yangbo5207/juejin-markdown-theme-keepNice",
+    "revision": "38645c3",
+    "path": "keepnice.scss",
+    "sha256": "23636021c7c1ed1e8f328ba0b25361396ec8049acd98da481dbe5b0d2d57b273",
+    "license": "keepnice.txt"
+  }
+}

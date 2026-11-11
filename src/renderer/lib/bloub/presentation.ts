@@ -1,5 +1,5 @@
 import type { CompanionInteraction, CompanionVisualState } from '../companion'
-import type { StateId } from './states'
+import type { StateId } from '@motus-ai/seed-sdk/companion'
 
 const visualStates: Record<CompanionVisualState, StateId> = {
   idle: 'idle', running: 'play', working: 'thinking', waiting: 'notify', review: 'wink', failed: 'exclaim',

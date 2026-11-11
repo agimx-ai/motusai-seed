@@ -13,6 +13,14 @@ import type { GlobalTaskActivityObserver } from './global-task-activity-observer
 import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace';
 import { SeedLocalMcpServer } from './local-mcp-server';
 import { seedLocalApiPort } from '../shared/local-api';
+import {
+  experienceTipsBodyLimit,
+  experienceTipsLocalPath,
+  experienceTipsLocalScope,
+  experienceTipsObsidianClient,
+  experienceTipsObsidianOrigin,
+  type ExperienceTipResult,
+} from '../shared/experience-tips';
 
 export { seedLocalApiPort } from '../shared/local-api';
 const maxBodyBytes = 1024 * 1024 * 1024;
@@ -201,6 +209,8 @@ export class SeedLocalHttpGateway {
     let origin = String(request.headers.origin || '');
     try {
       const url = new URL(request.url || '/', 'http://127.0.0.1');
+      if (url.pathname.startsWith(experienceTipsLocalPath + '/'))
+        return await this.handleExperienceTips(request, response, url, origin);
       if (url.pathname === '/mcp') {
         const host = String(request.headers.host || '');
         if (host !== `127.0.0.1:${this.listeningPort}` && host !== `localhost:${this.listeningPort}`) {
@@ -476,6 +486,63 @@ export class SeedLocalHttpGateway {
         );
       else response.end();
     }
+  }
+
+  private async handleExperienceTips(request: IncomingMessage, response: ServerResponse, url: URL, origin: string) {
+    const host = request.headers.host;
+    if ((host !== '127.0.0.1:' + this.listeningPort && host !== 'localhost:' + this.listeningPort)
+        || origin !== experienceTipsObsidianOrigin) {
+      return this.writeResponse(request, response, failure(403, 'origin_forbidden', 'This local route is for Obsidian.'), '');
+    }
+
+    const method = request.method === 'OPTIONS'
+      ? String(request.headers['access-control-request-method'] || '').toUpperCase()
+      : request.method;
+    const path = url.pathname.slice(experienceTipsLocalPath.length);
+    const submission = /^\/submissions\/([\da-f-]{36})\/([\da-f-]{36})\/submit$/i.exec(path);
+    const valid = (method === 'GET' && (path === '/status' || path === '/account' || path === '/themes'))
+      || (method === 'POST' && (path === '/clients/authorize' || path === '/prepare' || submission));
+    if (!valid) return this.writeResponse(request, response, failure(404, 'not_found', 'Route was not found.'), origin);
+
+    if (request.method === 'OPTIONS') {
+      response.statusCode = 204;
+      applyCors(response, origin);
+      response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      response.setHeader('Access-Control-Max-Age', '600');
+      response.end();
+      return;
+    }
+    if (path === '/status') return this.writeResponse(request, response, json(200, { protocol_version: 1 }), origin);
+
+    const authorization = String(request.headers.authorization || '');
+    const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    if (path === '/clients/authorize') {
+      const raw = await requestBody(request, 8_192);
+      const input = JSON.parse(raw?.toString('utf8') || '{}') as Record<string, unknown>;
+      if (!input || input.client_id !== experienceTipsObsidianClient)
+        return this.writeResponse(request, response, failure(403, 'client_forbidden', 'This local route is for Obsidian.'), origin);
+      const result = await this.runtime.invoke_host('seed.local-client.authorize', {
+        package_id: experienceTipsLocalScope,
+        client_id: experienceTipsObsidianClient,
+        installation_id: input.installation_id,
+        display_name: input.display_name,
+        device_name: input.device_name,
+        token,
+      }) as { id: string; token: string };
+      return this.writeResponse(request, response, json(201, { auth_id: result.id, token: result.token }), origin);
+    }
+
+    if (!token)
+      return this.writeResponse(request, response, failure(401, 'unauthorized', 'A valid Obsidian connection is required.'), origin);
+    const raw = method === 'POST' ? await requestBody(request, experienceTipsBodyLimit) : undefined;
+    const body: unknown = raw ? JSON.parse(raw.toString('utf8')) : undefined;
+    const operation = submission ? { kind: 'submit', tipId: submission[1], versionId: submission[2], body }
+      : path === '/prepare' ? { kind: 'prepare', body }
+      : { kind: path === '/themes' ? 'themes' : 'account' };
+    const result = await this.runtime.invoke_host('seed.experience-tips.request', { token, request: operation }) as ExperienceTipResult;
+    return this.writeResponse(request, response, result.ok ? json(200, result.value)
+      : failure(result.status, result.code, result.message), origin);
   }
 
   private async localizePluginError(packageId: string, response: Response, requestedLocale: string) {

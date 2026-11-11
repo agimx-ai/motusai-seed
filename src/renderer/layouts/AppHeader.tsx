@@ -1,13 +1,13 @@
-import { ChevronRight, Pencil, Plus, RotateCw, icons } from 'lucide-react';
+import { ChevronRight, Pencil, Plus, icons } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, type ReactNode, type Ref } from 'react';
 import type { SeedCatalogPlugin, SeedInstalledPlugin } from '../../shared/contracts';
 import { resolveSeedLocalizedText } from '../../shared/plugin-manifest';
 import { ActionButton, Tooltip } from '@motus-ai/seed-sdk/react';
 import { useSeedI18n } from '../i18n';
 import type { View } from '../lib/display';
 import type { PluginHeaderNavigation } from '../features/plugins/plugin-navigation';
-import { HeaderActionButton } from '../components/HeaderActionButton';
+import { HeaderActionButton, HeaderRefreshButton } from '../components/HeaderActionButton';
 
 type AppHeaderProps = {
   sidebarCollapsed: boolean;
@@ -21,6 +21,8 @@ type AppHeaderProps = {
   onEditProfile: () => void;
   onAddCredits: () => void;
   activityActions?: ReactNode;
+  experienceTipsActionsRef?: Ref<HTMLDivElement>;
+  experienceArticle?: { title: string; onBack: () => void };
 };
 
 export function AppHeader({
@@ -35,12 +37,16 @@ export function AppHeader({
   onEditProfile,
   onAddCredits,
   activityActions,
+  experienceTipsActionsRef,
+  experienceArticle,
 }: AppHeaderProps) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
   const navigation = pluginNavigation?.pluginId === selectedPlugin?.id ? pluginNavigation : undefined;
+  const article = view === 'experience-tips' ? experienceArticle : undefined;
+  const hasBreadcrumbRoot = view === 'plugins' || Boolean(article);
   const breadcrumbs = [
-    { id: null, label: view === 'plugin-view' ? pageTitle ?? '' : selectedPlugin ? resolveSeedLocalizedText(selectedPlugin.name, locale) : '' },
+    { id: null, label: article?.title ?? (view === 'plugin-view' ? pageTitle ?? '' : selectedPlugin ? resolveSeedLocalizedText(selectedPlugin.name, locale) : '') },
     ...(navigation?.path ?? []),
   ];
   const isWindows = window.motusWindow.platform === 'win32';
@@ -52,7 +58,9 @@ export function AppHeader({
       ? t('nav.plugins')
       : view === 'activity'
         ? t('nav.activity')
-        : view === 'usage'
+        : view === 'experience-tips'
+          ? t('nav.experience-tips')
+          : view === 'usage'
           ? t('nav.profile')
           : view === 'settings'
             ? t('nav.general')
@@ -64,14 +72,7 @@ export function AppHeader({
   );
   const refreshButton = (
     <Tooltip content={t('plugins.refresh')}>
-      <button
-        className={`grid place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground ${isWindows ? 'h-8 w-8' : 'h-9 w-9'}`}
-        disabled={refreshing}
-        onClick={onRefreshPlugins}
-        aria-label={t('plugins.refresh')}
-      >
-        <RotateCw size={18} className={refreshing ? 'seed-full-motion:animate-spin' : ''} />
-      </button>
+      <HeaderRefreshButton label={t('plugins.refresh')} refreshing={refreshing} onClick={onRefreshPlugins} />
     </Tooltip>
   );
   const profileActions = (
@@ -97,22 +98,22 @@ export function AppHeader({
     >
       {view === 'overview' ? (
         <span />
-      ) : (view === 'plugins' && selectedPlugin || view === 'plugin-view' && navigation?.path.length) ? (
+      ) : (article || view === 'plugins' && selectedPlugin || view === 'plugin-view' && navigation?.path.length) ? (
         <nav
-          className={`seed-header-breadcrumbs flex min-w-0 items-center whitespace-nowrap text-[14px] font-normal leading-none [-webkit-app-region:no-drag] ${view === 'plugins' ? 'gap-1' : 'gap-2'}`}
-          aria-label={t('plugins.breadcrumb')}
+          className={`seed-header-breadcrumbs flex min-w-0 items-center whitespace-nowrap text-[14px] font-normal leading-none [-webkit-app-region:no-drag] ${hasBreadcrumbRoot ? 'gap-1' : 'gap-2'}`}
+          aria-label={t(article ? 'experienceTips.breadcrumb' : 'plugins.breadcrumb')}
           aria-busy={navigation?.busy || undefined}
         >
-          {view === 'plugins' && <button
+          {hasBreadcrumbRoot && <button
             className="-mx-2 inline-flex h-9 shrink-0 items-center rounded-lg px-2 text-[16px] font-medium text-foreground transition"
             type="button"
-            onClick={onBackToPlugins}
+            onClick={article?.onBack ?? onBackToPlugins}
           >
-            {t('nav.plugins')}
+            {title}
           </button>}
           {breadcrumbs.map((item, index) => (
             <Fragment key={item.id === null ? 'root' : `item:${item.id}`}>
-              {(view === 'plugins' || index > 0) && <ChevronRight size={16} className="min-w-0 text-muted-foreground" aria-hidden="true" />}
+              {(hasBreadcrumbRoot || index > 0) && <ChevronRight size={16} className="min-w-0 text-muted-foreground" aria-hidden="true" />}
               {index === breadcrumbs.length - 1 ? (
                 <span className="seed-header-breadcrumb seed-header-breadcrumb--tail min-w-0 truncate text-foreground" aria-current="page" title={item.label}>{item.label}</span>
               ) : (
@@ -139,7 +140,9 @@ export function AppHeader({
       ) : (
         <h1 className="m-0 text-[16px] font-medium">{title}</h1>
       )}
-      {view === 'plugin-view' && navigation?.actions?.length ? <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">{navigation.actions.map((action) => {
+      {view === 'experience-tips' ? (
+        <div ref={experienceTipsActionsRef} className={`ms-auto shrink-0 ps-3 [-webkit-app-region:no-drag]${isWindows ? ' me-[calc(3*var(--seed-window-control-width))]' : ''}`} />
+      ) : view === 'plugin-view' && navigation?.actions?.length ? <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">{navigation.actions.map((action) => {
         const key = action.icon.replace(/(^|-)([a-z])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
         const Icon = icons[key as keyof typeof icons];
         const size = key === 'Pencil' ? 13 : 15;

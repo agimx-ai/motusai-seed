@@ -48,6 +48,20 @@ describe('product header breadcrumbs', () => {
     expect(back).toHaveBeenCalledOnce();
   });
 
+  it('uses the same two-level header to return from an experience tip', async () => {
+    window.motusWindow = { platform: 'darwin' } as any;
+    window.motusSeed = { snapshot: async () => ({ locale: 'zh-CN', languagePreference: 'zh-CN' }), subscribe: () => () => {} } as any;
+    const onBack = vi.fn();
+    render(<SeedI18nProvider><AppHeader
+      sidebarCollapsed={false} view="experience-tips" experienceArticle={{ title: '会议技巧', onBack }}
+      refreshing={false} onBackToPlugins={vi.fn()} onRefreshPlugins={vi.fn()} onEditProfile={vi.fn()} onAddCredits={vi.fn()}
+    /></SeedI18nProvider>);
+    const breadcrumb = await screen.findByRole('navigation', { name: '使用技巧详情路径' });
+    expect(breadcrumb.querySelector('[aria-current="page"]')?.textContent).toBe('会议技巧');
+    fireEvent.click(screen.getByRole('button', { name: '使用技巧' }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
   it.each(['darwin', 'win32', 'linux'])('renders arbitrary ancestors as keyboard buttons on %s', async (platform) => {
     const navigate = vi.fn(async () => true);
     const { back } = await fixture({ pluginId: 'com.example.generic', busy: false, navigate, path: [

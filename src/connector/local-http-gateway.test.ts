@@ -88,6 +88,57 @@ describe('SeedLocalHttpGateway', () => {
     expect(response.status).toBe(403)
   })
 
+  it('connects Obsidian to built-in experience tips without registering a plugin route', async () => {
+    const invoke = vi.fn(async (service: string, args: Record<string, unknown>) => {
+      if (service === 'seed.local-client.authorize') {
+        expect(args).toMatchObject({ package_id: 'seed:experience-tips', client_id: 'com.motusai.obsidian', token: 'existing-token' })
+        return { id: 'auth', token: args.token }
+      }
+      if (args.token !== 'existing-token')
+        return { ok: false, status: 401, code: 'unauthorized', message: 'Not connected.' }
+      return { ok: true, value: args.request }
+    })
+    const localApi = vi.fn()
+    gateway = new SeedLocalHttpGateway(
+      { configuration: () => null, invoke_host: invoke } as unknown as CapsRuntimeService,
+      () => ({ localApi }) as unknown as SeedPluginHost, 0,
+    )
+    await gateway.start()
+    const base = 'http://127.0.0.1:' + gateway.port() + '/v1/experience-tips'
+    const credentials = { client_id: 'com.motusai.obsidian', installation_id: 'installation-id', display_name: 'Obsidian' }
+    const post = (path: string, body: object, token = 'existing-token', from = origin) => fetch(base + path, {
+      method: 'POST',
+      headers: { Origin: from, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    expect((await fetch(base + '/status', { headers: { Origin: 'https://other.example' } })).status).toBe(403)
+    expect((await post('/clients/authorize', { ...credentials, client_id: 'com.example.other' })).status).toBe(403)
+    expect(invoke).not.toHaveBeenCalled()
+    const preflight = await fetch(base + '/prepare', { method: 'OPTIONS', headers: {
+      Origin: origin, 'Access-Control-Request-Method': 'POST',
+    } })
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers.get('Access-Control-Allow-Origin')).toBe(origin)
+    const auth = await post('/clients/authorize', credentials)
+    expect(auth.status).toBe(201)
+    await expect(auth.json()).resolves.toEqual({ auth_id: 'auth', token: 'existing-token' })
+    expect((await post('/prepare', { title: 'Example' }, 'wrong-token')).status).toBe(401)
+    const themeUrl = base + '/themes'
+    expect((await fetch(themeUrl, { headers: { Origin: origin } })).status).toBe(401)
+    const themes = await fetch(themeUrl, { headers: { Origin: origin, Authorization: 'Bearer existing-token' } })
+    expect(themes.status).toBe(200)
+    await expect(themes.json()).resolves.toEqual({ kind: 'themes' })
+    const prepared = await post('/prepare', { title: 'Example' })
+    expect(prepared.status).toBe(200)
+    await expect(prepared.json()).resolves.toEqual({ kind: 'prepare', body: { title: 'Example' } })
+    expect(invoke).toHaveBeenLastCalledWith('seed.experience-tips.request', {
+      token: 'existing-token', request: { kind: 'prepare', body: { title: 'Example' } },
+    })
+    expect((await post('/articles', {})).status).toBe(404)
+    expect(localApi).not.toHaveBeenCalled()
+  })
+
   it('can stop on account logout and restart after a later sign-in', async () => {
     const runtime = {
       configuration: () => null,

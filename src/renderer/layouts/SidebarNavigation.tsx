@@ -1,4 +1,4 @@
-import { Blocks, ChevronDown, ChevronRight, Circle, History, Sprout, icons } from 'lucide-react';
+import { Blocks, BookOpen, ChevronDown, ChevronRight, Circle, History, Sprout, icons } from 'lucide-react';
 import { ThemedIcon } from '@motus-ai/seed-sdk/react';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -146,7 +146,7 @@ export function SidebarNavigation({
       entry.badge,
       depth,
     );
-  const builtin = (id: 'overview' | 'plugins' | 'activity', icon: ReactNode) =>
+  const builtin = (id: 'overview' | 'plugins' | 'activity' | 'experience-tips', icon: ReactNode) =>
     node(
       'host:' + id,
       t('nav.' + id),
@@ -164,6 +164,7 @@ export function SidebarNavigation({
         {builtin('overview', <Sprout size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {builtin('plugins', <Blocks size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {builtin('activity', <History size={17} strokeWidth={1.8} aria-hidden="true" />)}
+        {builtin('experience-tips', <BookOpen size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {entries.filter((entry) => !entry.parent).map((entry) => pluginNode(entry, 0))}
       </ul>
     </nav>

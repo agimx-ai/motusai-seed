@@ -1,5 +1,5 @@
 import type { CompanionDiscovery } from '../../shared/companion-discoveries'
-import type { Look } from './bloub/engine'
+import type { Look } from '@motus-ai/seed-sdk/companion'
 
 export const discoveryCorners = [
   { corner: 'top-left', yaw: -38, pitch: 26 },

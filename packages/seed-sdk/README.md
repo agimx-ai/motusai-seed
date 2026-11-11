@@ -498,6 +498,15 @@ function ProgressIndicator() {
 
 `prefersReducedMotion()` 不订阅后续变化，需要时重新调用。持续播放的 React 动画使用 `useReducedMotion()`，并在偏好变化时停止或恢复自己的动画；Hook 的监听在组件卸载时自动释放。非浏览器环境中调用 `prefersReducedMotion()` 返回 `false`。
 
+### 阅读与伙伴组件
+
+| 导入入口 | 用途 |
+| --- | --- |
+| `@motus-ai/seed-sdk/reader` | Markdown 正文、文章主题和代码高亮 |
+| `@motus-ai/seed-sdk/companion` | React 伙伴组件 `Companion`，支持状态、表情、配色和减弱动态效果 |
+
+`Companion` 接收 `ink` 和 `paper` 两种颜色，默认显示空闲状态并跟随系统的动态效果偏好。应用可传入自己的 `reducedMotion` 设置。
+
 ### 通用样式
 
 可直接用于 DOM 和 React 视图。

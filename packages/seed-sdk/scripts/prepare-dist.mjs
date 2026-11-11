@@ -12,6 +12,7 @@ async function copy(directory, target) {
   }
 }
 await copy(resolve(packageRoot, 'src/react'), resolve(packageRoot, 'dist/react'));
+await copy(resolve(packageRoot, 'src/companion'), resolve(packageRoot, 'dist/companion'));
 for (const name of ['theme.css', 'components.css', 'tour.css'])
   await cp(resolve(packageRoot, 'src', name), resolve(packageRoot, 'dist', name));
 await chmod(resolve(packageRoot, 'dist/tools/cli.mjs'), 0o755);

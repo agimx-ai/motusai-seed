@@ -37,6 +37,10 @@
 }
 
 @layer base {
+  :root[data-platform='win32'] {
+    --seed-window-control-width: 46px;
+  }
+
   html,
   body,
   #root {
@@ -67,7 +71,7 @@
   .seed-window-control {
     position: relative;
     display: grid;
-    width: 46px;
+    width: var(--seed-window-control-width);
     height: 36px;
     padding: 0;
     place-items: center;
