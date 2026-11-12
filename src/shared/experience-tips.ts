@@ -89,8 +89,8 @@ const experienceTipSummarySchema = z.object({
   excerpt: z.string().optional(),
   view_count: experienceTipEngagementSchema.shape.view_count.optional(),
   like_count: experienceTipEngagementSchema.shape.like_count.optional(),
-  removal_action: experienceTipRemovalActionSchema.nullable().optional(),
   liked: experienceTipEngagementSchema.shape.liked.optional(),
+  removal_action: experienceTipRemovalActionSchema.nullable().optional(),
   unlisted: z.object({ at: z.iso.datetime(), reason: z.string() }).optional(),
   pinned: z.boolean().optional(),
 });
