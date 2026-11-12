@@ -3,9 +3,13 @@
     "articles": "浏览技巧",
     "submissions": "我的投稿",
     "pinned": "置顶",
+    "submissionDate": {
+      "submitted": "投稿于",
+      "published": "发布于",
+      "unlisted": "停止展示于"
+    },
     "unlisted": {
       "status": "已停止展示",
-      "date": "停止展示于 {{date}}",
       "reason": "原因：{{reason}}",
       "delete": "永久删除",
       "deleteDescription": "「{{title}}」的所有版本、封面和正文图片将永久删除，删除后无法恢复。"

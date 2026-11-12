@@ -3,9 +3,13 @@
     "pinned": "Pinned",
     "articles": "Browse tips",
     "submissions": "My submissions",
+    "submissionDate": {
+      "submitted": "Submitted",
+      "published": "Published",
+      "unlisted": "Stopped displaying"
+    },
     "unlisted": {
       "status": "No longer displayed",
-      "date": "Stopped displaying on {{date}}",
       "reason": "Reason: {{reason}}",
       "delete": "Permanently delete",
       "deleteDescription": "All versions, the cover, and article images for “{{title}}” will be permanently deleted. This cannot be undone."

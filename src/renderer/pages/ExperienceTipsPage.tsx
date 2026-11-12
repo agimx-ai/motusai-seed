@@ -134,6 +134,28 @@ function TipListSkeleton({ label, mine, ranked }: { label: string; mine: boolean
 
 type SubmissionRemoval = ExperienceTipRemoval & { title: string; unlisted: boolean };
 
+function SubmissionDate({ item, locale }: { item: ExperienceTipSummary; locale: string }) {
+  const { t } = useTranslation();
+  const published = item.state === 'published' && item.removal_action !== null ? item.published_at : null;
+  const date = item.unlisted?.at ?? published ?? item.submitted_at;
+  if (!date) return null;
+
+  const label = item.unlisted ? 'unlisted' : published ? 'published' : 'submitted';
+  const formatted = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(date));
+  return (
+    <small>
+      {t(`experienceTips.submissionDate.${label}`)}{' '}
+      <time dateTime={date}>{formatted}</time>
+    </small>
+  );
+}
+
 function SubmissionStatus({ item }: { item: ExperienceTipSummary }) {
   const { t } = useTranslation();
   if (item.unlisted) return <StatusBadge>{t('experienceTips.unlisted.status')}</StatusBadge>;
@@ -576,7 +598,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
                 <div className="experience-row">
                   <div className="experience-row-main">
                     <strong>{item.title}</strong>
-                    <small>{formatDate(item.submitted_at, locale)}</small>
+                    <SubmissionDate item={item} locale={locale} />
                     {item.review_notes?.length ? (
                       <blockquote className="experience-feedback border-s-2 border-border ps-3 text-muted-foreground">
                         <ol className="m-0 list-decimal space-y-1 ps-5">
@@ -585,12 +607,9 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
                       </blockquote>
                     ) : null}
                     {item.unlisted && (
-                      <>
-                        <small>{t('experienceTips.unlisted.date', { date: formatDate(item.unlisted.at, locale) })}</small>
-                        <p className="experience-feedback text-muted-foreground">
-                          {t('experienceTips.unlisted.reason', { reason: item.unlisted.reason })}
-                        </p>
-                      </>
+                      <p className="experience-feedback text-muted-foreground">
+                        {t('experienceTips.unlisted.reason', { reason: item.unlisted.reason })}
+                      </p>
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
