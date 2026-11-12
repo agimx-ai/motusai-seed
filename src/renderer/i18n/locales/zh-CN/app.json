@@ -30,6 +30,17 @@
     "articleLoadFailed": "暂时打不开这篇技巧",
     "refreshToRetry": "点右上角的刷新按钮再试一次",
     "imageFailed": "有图片未能加载。",
+    "imagePreview": {
+      "title": "图片预览",
+      "open": "预览图片",
+      "openNamed": "预览图片「{{name}}」",
+      "close": "关闭预览",
+      "fit": "适应窗口",
+      "zoom": "缩放比例",
+      "download": "下载原图",
+      "loadFailed": "无法加载图片，请刷新文章后重试。",
+      "downloadFailed": "无法下载图片，请刷新文章后重试。"
+    },
     "viewCount_one": "{{count}} 次浏览",
     "viewCount_other": "{{count}} 次浏览",
     "readingTime": "阅读 {{count}} 分钟",

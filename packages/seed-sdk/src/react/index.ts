@@ -20,6 +20,7 @@ export { ReactSettingTab } from './react-setting-tab';
 export { Flow, FlowStep } from './components/Flow';
 export { MarkdownContent, type MarkdownImage, type MarkdownLink } from './components/MarkdownContent';
 export { Collection, CollectionCard, PreviewDialog } from './components/Collection';
+export { ImagePreview, type ImagePreviewProps } from './components/ImagePreview';
 export { ActionButton } from './components/ActionButton';
 export { IconButton } from './components/IconButton';
 export { Tooltip } from './components/Tooltip';

@@ -30,6 +30,17 @@
     "articleLoadFailed": "Could not open this tip",
     "refreshToRetry": "Click Refresh in the top right to try again",
     "imageFailed": "An image could not be loaded.",
+    "imagePreview": {
+      "title": "Image preview",
+      "open": "Preview image",
+      "openNamed": "Preview {{name}}",
+      "close": "Close preview",
+      "fit": "Fit to window",
+      "zoom": "Zoom level",
+      "download": "Download original",
+      "loadFailed": "Could not load the image. Refresh the article and try again.",
+      "downloadFailed": "Could not download the image. Refresh the article and try again."
+    },
     "viewCount_one": "{{count}} view",
     "viewCount_other": "{{count}} views",
     "readingTime": "{{count}} min read",

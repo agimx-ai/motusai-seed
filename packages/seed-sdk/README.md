@@ -423,6 +423,7 @@ export default class GreetingService extends PluginService {
 | `StatusLine` | `children`、`tone`、`pending`、`actions` | 状态行 |
 | `StatusBadge` | `children`、`tone`、可选 `onClick` | 状态胶囊 |
 | `Dialog` | `open`、`title`、`closeLabel`、`onClose`、`children`、`busy` | 带焦点管理的对话框 |
+| `ImagePreview` | `src`、`alt`、`title`、`labels: { close, fit, zoom, loadFailed }`、`onClose`、`download?: { label, onClick }` | 条件挂载的图片预览，支持适应窗口、缩放和拖动，关闭后将焦点交还给触发元素。调用方提供图片地址和可选的下载操作。 |
 | `Flow` / `FlowStep` | `children`；步骤还需 `icon`、`title`，可选 `muted` | 步骤布局 |
 | `MarkdownContent` | `children: string`、`streaming`、`renderImage?: (image: MarkdownImage) => ReactNode`、`imageProtocols?: readonly string[]`、`renderLink?: (link: MarkdownLink) => ReactNode`、`linkProtocols?: readonly string[]` | 静态和流式 Markdown。长表格滚动时保留表头。资源解析由调用方提供；图片与链接的额外协议独立生效，只传给对应回调。未提供链接回调或回调返回空值时链接保持不可点击。 |
 | `Collection` / `CollectionCard` | `children`；卡片使用 `icon`、`title`、`description`、`onOpen`、`actions` | 集合与可打开的卡片 |
