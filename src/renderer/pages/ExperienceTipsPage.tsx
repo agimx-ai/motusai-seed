@@ -79,10 +79,13 @@ function TipMetadata({ item }: { item: ExperienceTipSummary }) {
       <span>{item.author}</span>
       {item.view_count !== undefined && <TipViewCount count={item.view_count} compact />}
       {item.like_count !== undefined && (
-        <span className="experience-metric">
+        <span className="experience-metric" data-liked={item.liked || undefined}>
           <ThumbsUp size={14} aria-hidden="true" />
           <span aria-hidden="true">{compact.format(item.like_count)}</span>
-          <span className="sr-only">{t('experienceTips.likeCount', { count: item.like_count })}</span>
+          <span className="sr-only">
+            {item.liked && <>{t('experienceTips.liked')}{' '}</>}
+            {t('experienceTips.likeCount', { count: item.like_count })}
+          </span>
         </span>
       )}
       {item.published_at && <time dateTime={item.published_at}>{formatDate(item.published_at, locale)}</time>}
@@ -249,13 +252,13 @@ function SubmissionActions({ item, action, onSelect }: {
   );
 }
 
-type TipCounts = Pick<ExperienceTipSummary, 'view_count' | 'like_count'>;
+type TipEngagement = Pick<ExperienceTipSummary, 'view_count' | 'like_count' | 'liked'>;
 
-function ArticlePage({ id, title, dark, onCountsChange }: {
+function ArticlePage({ id, title, dark, onEngagementChange }: {
   id: string;
   title?: string;
   dark: boolean;
-  onCountsChange: (id: string, counts: TipCounts) => void;
+  onEngagementChange: (id: string, engagement: TipEngagement) => void;
 }) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
@@ -278,14 +281,15 @@ function ArticlePage({ id, title, dark, onCountsChange }: {
         if (!('body' in value)) throw new Error('The article is unavailable.');
         if (!controller.signal.aborted) {
           setArticle(value);
-          onCountsChange(id, value);
+          const { view_count, like_count, liked } = value;
+          onEngagementChange(id, { view_count, like_count, liked });
         }
       } catch {
         if (!controller.signal.aborted) setError(true);
       }
     });
     return () => controller.abort();
-  }, [id, onCountsChange, retry]);
+  }, [id, onEngagementChange, retry]);
   const articleLoaded = Boolean(article);
   useEffect(() => { if (articleLoaded) heading.current?.focus(); }, [articleLoaded]);
 
@@ -296,7 +300,7 @@ function ArticlePage({ id, title, dark, onCountsChange }: {
     try {
       const stats = await window.motusSeed.setExperienceTipLike({ tipId: id, liked: !article.liked });
       setArticle((current) => current && { ...current, ...stats });
-      onCountsChange(id, stats);
+      onEngagementChange(id, stats);
     } catch {
       setLikeFailed(true);
     } finally {
@@ -399,9 +403,9 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
   const [composingSearch, setComposingSearch] = useState(false);
   const [articleId, setArticleId] = useState<string>();
   const [items, setItems] = useState<ExperienceTipSummary[]>([]);
-  const updateCounts = useCallback((tipId: string, { view_count, like_count }: TipCounts) => {
-    if (view_count === undefined && like_count === undefined) return;
-    setItems((current) => current.map((item) => item.tip_id === tipId ? { ...item, view_count, like_count } : item));
+  const updateEngagement = useCallback((tipId: string, engagement: TipEngagement) => {
+    if (Object.values(engagement).every((value) => value === undefined)) return;
+    setItems((current) => current.map((item) => item.tip_id === tipId ? { ...item, ...engagement } : item));
   }, []);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -570,7 +574,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
           id={articleId}
           title={items.find((item) => item.tip_id === articleId)?.title}
           dark={dark}
-          onCountsChange={updateCounts}
+          onEngagementChange={updateEngagement}
         />
       )}
       <div hidden={Boolean(articleId)} className={showListState ? 'flex flex-1 flex-col' : undefined}>

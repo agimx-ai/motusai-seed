@@ -89,6 +89,7 @@ const experienceTipSummarySchema = z.object({
   view_count: experienceTipEngagementSchema.shape.view_count.optional(),
   like_count: experienceTipEngagementSchema.shape.like_count.optional(),
   removal_action: experienceTipRemovalActionSchema.nullable().optional(),
+  liked: experienceTipEngagementSchema.shape.liked.optional(),
   unlisted: z.object({ at: z.iso.datetime(), reason: z.string() }).optional(),
   pinned: z.boolean().optional(),
 });
@@ -99,7 +100,6 @@ export const experienceTipPageSchema = z.object({
 });
 
 export const experienceTipArticleSchema = experienceTipSummarySchema.extend({
-  liked: z.boolean().optional(),
   theme: z.string().optional(),
   body: z.string(),
   images: z.array(z.object({

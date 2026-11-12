@@ -221,11 +221,12 @@ button.experience-row:focus-visible {
   cursor: pointer;
 }
 
-.experience-like:is(:hover, [aria-pressed="true"]) {
+.experience-like:hover,
+.experience-metric:is([aria-pressed="true"], [data-liked="true"]) {
   color: var(--foreground);
 }
 
-.experience-like[aria-pressed="true"] svg {
+.experience-metric:is([aria-pressed="true"], [data-liked="true"]) svg {
   fill: currentColor;
 }
 
