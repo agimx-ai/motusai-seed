@@ -16,11 +16,6 @@
     Microsoft YaHei,
     Arial,
     sans-serif;
-  background-image:
-    linear-gradient(90deg, rgba(159, 219, 252, 0.15) 3%, rgba(0, 0, 0, 0) 3%),
-    linear-gradient(360deg, rgba(159, 219, 252, 0.15) 3%, rgba(0, 0, 0, 0) 3%);
-  background-size: 20px 20px;
-  background-position: center center;
   /* 图片描述文字 */
   /* 分隔线 */
   /* 删除线 */

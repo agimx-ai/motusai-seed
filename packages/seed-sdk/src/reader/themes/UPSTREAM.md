@@ -29,6 +29,7 @@ npm exec --yes --package=less@4.2.2 -- lessc sources/koi.less styles/koi.css
 
 ## 阅读适配
 
+- 移除正文容器的方格渐变及其平铺尺寸和定位。
 - 移除清新蓝和舒心阅读标题伪元素中的平台图片及对应悬停规则。
 - 移除主题自动添加的 `Tips`、`READ MORE +`、`FROM`、`CITATION`、`Go ->` 和“按虚线剪开”等说明文字。
 - 锦鲤使用作者提交 `ca08db0eaaf843d697e5d2bf8b6f2b6c76289b13` 的 `koi.less`，修复集合原先指向失效 CSS 的来源；将 `.markdown-body` 下的 `html`、`body`、`#write` 和 `content #write` 根选择器映射到 `.markdown-body`。

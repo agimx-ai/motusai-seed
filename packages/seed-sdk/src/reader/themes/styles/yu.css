@@ -6,11 +6,6 @@
   font-size: 15px;
   overflow-x: hidden;
   color: #5f6368;
-  background-image:
-    linear-gradient(90deg, rgba(240, 191, 213, 0.1) 3%, rgba(0, 0, 0, 0) 3%),
-    linear-gradient(360deg, rgba(240, 191, 213, 0.1) 3%, rgba(0, 0, 0, 0) 3%);
-  background-size: 20px 20px;
-  background-position: center center;
   letter-spacing: 1px;
   word-spacing: 1px;
   /**** 块标签 ****/

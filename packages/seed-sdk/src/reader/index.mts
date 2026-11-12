@@ -29,9 +29,6 @@ export function articleStyles(theme: Theme, dark: boolean): string {
 // Embedded readers inherit host tokens across the shadow boundary.
 const embeddedSurfaceStyles = `
   :host { color: var(--foreground, CanvasText); }
-  @layer reader-surface {
-    .markdown-body { background-image: none !important; }
-  }
 `;
 
 const embeddedDarkStyles = `
