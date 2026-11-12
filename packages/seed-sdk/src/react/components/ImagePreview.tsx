@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, X } from 'lucide-react';
 import { usePluginStyleScope } from '../style-scope';
@@ -22,6 +22,7 @@ export function ImagePreview({ src, alt, title, labels, onClose, download }: Ima
   const scope = usePluginStyleScope();
   const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
+  const toolbar = useRef<HTMLElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const pan = useRef<{ id: number; x: number; y: number } | null>(null);
   const [bounds, setBounds] = useState({ width: 0, height: 0 });
@@ -46,6 +47,10 @@ export function ImagePreview({ src, alt, title, labels, onClose, download }: Ima
   const options = zoom !== null && !zoomLevels.includes(percentage)
     ? [...zoomLevels, percentage].sort((a, b) => a - b)
     : zoomLevels;
+  const imageSize = natural.width && natural.height ? {
+    '--seed-image-preview-image-width': `${natural.width}px`,
+    '--seed-image-preview-image-ratio': natural.width / natural.height,
+  } as CSSProperties : undefined;
 
   useLayoutEffect(() => {
     const element = dialog.current!;
@@ -60,9 +65,16 @@ export function ImagePreview({ src, alt, title, labels, onClose, download }: Ima
   }, []);
 
   useLayoutEffect(() => {
+    const frame = dialog.current!;
+    const header = toolbar.current!;
     const element = viewport.current!;
-    const measure = () => setBounds({ width: element.clientWidth, height: element.clientHeight });
+    const measure = () => {
+      frame.style.setProperty('--seed-image-preview-toolbar-height', `${header.getBoundingClientRect().height}px`);
+      const { width, height } = element.getBoundingClientRect();
+      setBounds((current) => current.width === width && current.height === height ? current : { width, height });
+    };
     const observer = new ResizeObserver(measure);
+    observer.observe(header);
     observer.observe(element);
     measure();
     return () => observer.disconnect();
@@ -90,12 +102,13 @@ export function ImagePreview({ src, alt, title, labels, onClose, download }: Ima
     <dialog
       ref={dialog}
       className="seed-dialog seed-image-preview"
+      style={imageSize}
       data-plugin-view-portal={scope}
       aria-labelledby={titleId}
       onCancel={(event) => { event.preventDefault(); onClose(); }}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <header className="seed-image-preview-toolbar">
+      <header ref={toolbar} className="seed-image-preview-toolbar">
         <h2 id={titleId}>{title}</h2>
         <div className="seed-image-preview-controls">
           <select

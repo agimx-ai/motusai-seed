@@ -1,10 +1,18 @@
 .seed-image-preview {
+  --seed-image-preview-max-width: min(85dvw, 1120px);
+  --seed-image-preview-max-height: calc(100dvh - 104px);
+  --seed-image-preview-fit-width: min(
+    var(--seed-image-preview-image-width, 160px),
+    calc(var(--seed-image-preview-max-width) - 2px),
+    calc((var(--seed-image-preview-max-height) - var(--seed-image-preview-toolbar-height, 48px) - 2px) * var(--seed-image-preview-image-ratio, 1))
+  );
   position: fixed;
   inset: 0;
-  width: 85%;
-  height: calc(100% - 104px);
-  max-width: 1120px;
-  max-height: none;
+  box-sizing: border-box;
+  width: max(min(20rem, var(--seed-image-preview-max-width)), calc(var(--seed-image-preview-fit-width) + 2px));
+  height: max-content;
+  max-width: var(--seed-image-preview-max-width);
+  max-height: var(--seed-image-preview-max-height);
   margin: auto;
   padding: 0;
   overflow: hidden;
@@ -59,7 +67,8 @@
 
 .seed-image-preview-viewport {
   display: grid;
-  flex: 1;
+  flex: 0 1 auto;
+  height: calc(var(--seed-image-preview-fit-width) / var(--seed-image-preview-image-ratio, 1));
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   min-height: 0;
