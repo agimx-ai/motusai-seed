@@ -16,5 +16,5 @@ export function prepareDiscoveries(items: CompanionDiscovery[]) {
 export type PreparedDiscovery = ReturnType<typeof prepareDiscoveries>[number]
 export type DiscoveryPhase = 'look' | 'visible' | 'front' | 'wink' | 'rest' | 'leaving' | 'gap'
 export const discoveryFrontLook: Look = { yaw: 0, pitch: 0, mix: 1, spin: 0, wander: 0 }
-export const discoveryTiming: Record<DiscoveryPhase, number> = { look: 320, visible: 3_000, front: 400, wink: 700, rest: 1_800, leaving: 160, gap: 500 }
+export const discoveryTiming: Record<DiscoveryPhase, number> = { look: 320, visible: 1_500, front: 400, wink: 700, rest: 1_800, leaving: 160, gap: 500 }
 export const discoveryIdleDelay = 650

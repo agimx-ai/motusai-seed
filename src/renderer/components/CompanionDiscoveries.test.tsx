@@ -185,7 +185,7 @@ describe('companion discovery rotation', () => {
     const view = render(page())
     advance(discoveryIdleDelay)
     advance(discoveryTiming.look)
-    advance(2_000)
+    advance(500)
     const bubble = visibleBubble(view.container)!
     fireEvent.mouseEnter(bubble)
     advance(20_000)
@@ -201,7 +201,7 @@ describe('companion discovery rotation', () => {
     expect(visibleBubble(view.container)).toBe(bubble)
     hidden.mockReturnValue(false)
     act(() => document.dispatchEvent(new Event('visibilitychange')))
-    advance(discoveryTiming.visible - 2_000 - 1)
+    advance(discoveryTiming.visible - 500 - 1)
     expect(visibleBubble(view.container)).toBe(bubble)
     advance(1)
     expect(view.getAllByRole('link')).toHaveLength(1)
