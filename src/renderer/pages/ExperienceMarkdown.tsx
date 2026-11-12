@@ -97,6 +97,7 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
             :where(.markdown-body .contains-task-list) { padding-inline-start: 0; }
             :where(.markdown-body table) { border-collapse: collapse; }
             ${embeddedArticleStyles(theme, dark)}
+            .markdown-body { max-inline-size: none; margin-inline: 0; padding-inline: 0; }
           `}</style>
           <div onErrorCapture={onImageError}>
             {body}
