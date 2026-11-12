@@ -5,6 +5,7 @@ export type SegmentedControlOption<Value extends string> = {
   value: Value;
   label: string;
   icon?: ReactNode;
+  trailing?: ReactNode;
   disabled?: boolean;
 };
 
@@ -82,6 +83,12 @@ export function SegmentedControl<Value extends string>({
               </span>
             )}
             <span>{option.label}</span>
+            {option.trailing && (
+              <>
+                {' '}
+                {option.trailing}
+              </>
+            )}
           </button>
         );
       })}

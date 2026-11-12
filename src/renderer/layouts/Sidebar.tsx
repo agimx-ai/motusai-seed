@@ -11,6 +11,7 @@ import { CreditUsageButton } from '../components/CreditUsageButton';
 import { Tooltip } from '@motus-ai/seed-sdk/react';
 import { cx, isSettingsView, type View } from '../lib/display';
 import { SettingsNavigation } from './SettingsNavigation';
+import { notificationCountColors } from '../components/NavigationCount';
 
 const accountMenuSurfaceClass =
   'seed-account-menu absolute bottom-[50px] left-3 right-3 origin-bottom overflow-hidden rounded-[12px] border p-1';
@@ -23,6 +24,7 @@ type SidebarProps = {
   snapshot: SeedSnapshot;
   loggingOut: boolean;
   pluginUpdateCount: number;
+  experienceTipCount?: number;
   onNavigate: (view: Exclude<View, 'plugin-view'>) => void;
   onOpenPlugin: (entry: PluginSidebarEntry) => void;
   onShowPluginUpdates: () => void;
@@ -41,6 +43,7 @@ export function Sidebar({
   snapshot,
   loggingOut,
   pluginUpdateCount,
+  experienceTipCount,
   onNavigate,
   onOpenPlugin,
   onShowPluginUpdates,
@@ -183,7 +186,7 @@ export function Sidebar({
                 <Bell size={14} strokeWidth={1.8} />
                 {pluginUpdateCount > 0 && (
                   <span
-                    className="absolute -right-0.5 -top-0.5 grid h-[10px] min-w-[10px] place-items-center rounded-full bg-info px-[2px] text-[7px] font-semibold leading-none text-white"
+                    className={`absolute -right-0.5 -top-0.5 grid h-[10px] min-w-[10px] place-items-center rounded-full px-[2px] text-[7px] font-semibold leading-none ${notificationCountColors}`}
                     aria-hidden="true"
                   >
                     {pluginUpdateCount > 9 ? '9+' : pluginUpdateCount}
@@ -201,7 +204,13 @@ export function Sidebar({
           <SettingsNavigation view={view} onNavigate={navigate} />
         ) : (
           <>
-            <SidebarNavigation view={view} selectedKey={selectedNavigationKey} onNavigate={navigate} onOpenPlugin={onOpenPlugin} />
+            <SidebarNavigation
+              view={view}
+              selectedKey={selectedNavigationKey}
+              experienceTipCount={experienceTipCount}
+              onNavigate={navigate}
+              onOpenPlugin={onOpenPlugin}
+            />
             <div className="relative -mx-4 mt-auto border-t border-border">
               {showLowCredits && (
                 <div className={accountMenuSurfaceClass}>

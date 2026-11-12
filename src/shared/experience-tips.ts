@@ -26,6 +26,12 @@ export type ExperienceTipSort = z.infer<typeof experienceTipSortSchema>;
 const experienceTipCursorSchema = z.string().min(1).max(96);
 export const experienceTipSearchLimit = 160;
 const experienceTipSearchSchema = z.string().trim().max(experienceTipSearchLimit).optional();
+export const experienceTipActivitySeenSchema = z.object({
+  articlesSince: z.iso.datetime().optional(),
+  submissionsSince: z.iso.datetime().optional(),
+});
+export type ExperienceTipActivitySeen = z.infer<typeof experienceTipActivitySeenSchema>;
+export type ExperienceTipActivityTab = 'articles' | 'my-submissions';
 
 export const experienceTipReadSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -36,8 +42,16 @@ export const experienceTipReadSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('my-submissions'), before: z.uuid().optional(), query: experienceTipSearchSchema }),
   z.object({ kind: z.literal('article'), tipId: z.uuid() }),
+  experienceTipActivitySeenSchema.extend({ kind: z.literal('activity-counts') }),
 ]);
 export type ExperienceTipRead = z.infer<typeof experienceTipReadSchema>;
+
+export const experienceTipCountsSchema = z.object({
+  articles: z.number().int().nonnegative(),
+  my_submissions: z.number().int().nonnegative(),
+  as_of: z.iso.datetime(),
+});
+export type ExperienceTipCounts = z.infer<typeof experienceTipCountsSchema>;
 
 export const experienceTipLikeSchema = z.object({ tipId: z.uuid(), liked: z.boolean() }).strict();
 export type ExperienceTipLike = z.infer<typeof experienceTipLikeSchema>;

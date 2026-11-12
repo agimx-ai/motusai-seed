@@ -1,4 +1,4 @@
-import type { ExperienceTipArticle, ExperienceTipEngagement, ExperienceTipLike, ExperienceTipPage, ExperienceTipRead, ExperienceTipRemoval, ExperienceTipSource } from './experience-tips';
+import type { ExperienceTipArticle, ExperienceTipCounts, ExperienceTipEngagement, ExperienceTipLike, ExperienceTipPage, ExperienceTipRead, ExperienceTipRemoval, ExperienceTipSource } from './experience-tips';
 import type { SeedBillingReceipt, SeedNavigationTarget } from '@motus-ai/seed-sdk';
 import type { SeedConsumedCapability, SeedPluginLabel } from './plugin-manifest';
 import type { SeedLocalizedText } from './plugin-manifest';
@@ -380,7 +380,7 @@ export type SeedApi = {
   listOrphanedPluginData(): Promise<string[]>;
   resetOrphanedPluginData(pluginIds: string[]): Promise<PluginDataResetResult>;
   snapshot(): Promise<SeedSnapshot>;
-  readExperienceTips(input: ExperienceTipRead): Promise<ExperienceTipPage | ExperienceTipArticle>;
+  readExperienceTips(input: ExperienceTipRead): Promise<ExperienceTipPage | ExperienceTipArticle | ExperienceTipCounts>;
   downloadExperienceTipImage(url: string): Promise<void>;
   setExperienceTipLike(input: ExperienceTipLike): Promise<ExperienceTipEngagement>;
   removeExperienceTip(input: ExperienceTipRemoval): Promise<void>;

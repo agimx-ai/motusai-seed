@@ -14,6 +14,7 @@ import { clampSidebarWidth, defaultSidebarWidth, SidebarResizeHandle } from './c
 import { Toaster } from '@motus-ai/seed-sdk/react';
 import { WindowChrome } from './components/WindowChrome';
 import { useSeed } from './hooks/use-seed';
+import { useExperienceTipCounts } from './hooks/use-experience-tip-counts';
 import { useReducedMotionPreference } from './hooks/use-reduced-motion';
 import { useTheme } from './hooks/use-theme';
 import type { View } from './lib/display';
@@ -45,6 +46,8 @@ export default function App() {
   const { locale } = useSeedI18n();
   const { snapshot, busy, run, logUploadProgress, cancelLogUpload, pluginInstallProgress, cancelPluginInstall } =
     useSeed();
+  const { counts: experienceTipCounts, refreshCounts: refreshExperienceTipCounts, markSeen: markExperienceTipActivitySeen } =
+    useExperienceTipCounts(snapshot?.user?.id);
   const themePreference = snapshot?.themePreference ?? 'system';
   const presentationThemePreference = !snapshot?.user ? 'system' : themePreference;
   const { resolvedTheme } = useTheme(presentationThemePreference);
@@ -350,6 +353,7 @@ export default function App() {
           snapshot={snapshot}
           loggingOut={busy === 'logout'}
           pluginUpdateCount={pluginUpdateCount}
+          experienceTipCount={experienceTipCounts ? experienceTipCounts.articles + experienceTipCounts.my_submissions : undefined}
           onNavigate={navigate}
           onOpenPlugin={(entry) => pluginSidebar.open(entry.key)}
           onShowPluginUpdates={() => dispatchHistory({ type: 'open', page: { view: 'plugins', query: '' } })}
@@ -447,7 +451,17 @@ export default function App() {
               />
             )}
             {view === 'activity' && <ActivityPage entries={snapshot.audit} appName={snapshot.appName} />}
-            {view === 'experience-tips' && <ExperienceTipsPage key={snapshot.user.id} dark={resolvedTheme === 'dark'} actionsContainer={experienceTipsActions} onArticleChange={setExperienceArticle} />}
+            {view === 'experience-tips' && (
+              <ExperienceTipsPage
+                key={snapshot.user.id}
+                dark={resolvedTheme === 'dark'}
+                actionsContainer={experienceTipsActions}
+                counts={experienceTipCounts}
+                onRefreshCounts={refreshExperienceTipCounts}
+                onViewActivity={markExperienceTipActivitySeen}
+                onArticleChange={setExperienceArticle}
+              />
+            )}
             {view === 'plugin-settings' && (
               <PluginSettingsPage
                 catalog={snapshot.catalogPlugins}

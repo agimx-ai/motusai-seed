@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import { useTranslation } from 'react-i18next';
 import { cx, type View } from '../lib/display';
 import { pluginSidebar, type PluginSidebarEntry } from '../features/plugins/plugin-sidebar';
+import { NavigationCount } from '../components/NavigationCount';
 
 export function SidebarEntryIcon({ name, sources }: { name?: string; sources?: PluginSidebarEntry['iconSources'] }) {
   if (sources) return <ThemedIcon iconDataUrl={sources.light} iconDarkDataUrl={sources.dark} className="h-[17px] w-[17px]" />;
@@ -39,15 +40,17 @@ function SidebarNavigationLabel({ title }: { title: string }) {
 export function SidebarNavigation({
   view,
   selectedKey,
+  experienceTipCount,
   onNavigate,
   onOpenPlugin,
 }: {
   view: View;
   selectedKey?: string;
+  experienceTipCount?: number;
   onNavigate(view: Exclude<View, 'plugin-view'>): void;
   onOpenPlugin(entry: PluginSidebarEntry): void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const entries = useSyncExternalStore(pluginSidebar.subscribe, pluginSidebar.snapshot);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => {
@@ -75,7 +78,7 @@ export function SidebarNavigation({
     active: boolean,
     children: readonly PluginSidebarEntry[],
     open?: () => void,
-    badge?: number,
+    badge?: { count: number; max?: number; notification?: boolean },
     depth = 0,
   ): ReactNode => {
     const expanded = !collapsed.has(key);
@@ -95,16 +98,17 @@ export function SidebarNavigation({
             style={depth ? { paddingInlineStart: 12 + depth * 12 } : undefined}
             onClick={open ?? (() => toggle(key))}
             aria-current={active ? 'page' : undefined}
-            aria-label={badge ? `${title}, ${badge}` : undefined}
+            aria-label={badge ? `${title}, ${badge.count}` : undefined}
             {...(!open ? { 'aria-expanded': expanded } : {})}
           >
             {icon}
             <SidebarNavigationLabel title={title} />
-            {!!badge && (
-              <span className="shrink-0 rounded-full bg-muted px-1.5 text-[11px] tabular-nums">
-                {' '}
-                {badge > 99 ? '99+' : badge}
-              </span>
+            {badge && (
+              <NavigationCount notification={badge.notification}>
+                {badge.max !== undefined && badge.count > badge.max
+                  ? `${badge.max}+`
+                  : new Intl.NumberFormat(i18n.language).format(badge.count)}
+              </NavigationCount>
             )}
             {!open && children.length > 0 && (expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)}
           </button>
@@ -143,10 +147,10 @@ export function SidebarNavigation({
             onOpenPlugin(entry);
           }
         : undefined,
-      entry.badge,
+      entry.badge ? { count: entry.badge, max: 99 } : undefined,
       depth,
     );
-  const builtin = (id: 'overview' | 'plugins' | 'activity' | 'experience-tips', icon: ReactNode) =>
+  const builtin = (id: 'overview' | 'plugins' | 'activity' | 'experience-tips', icon: ReactNode, count?: number) =>
     node(
       'host:' + id,
       t('nav.' + id),
@@ -154,6 +158,7 @@ export function SidebarNavigation({
       view === id,
       entries.filter((entry) => entry.parent && 'host' in entry.parent && entry.parent.host === id),
       () => onNavigate(id),
+      count ? { count, notification: true } : undefined,
     );
   return (
     <nav
@@ -164,7 +169,7 @@ export function SidebarNavigation({
         {builtin('overview', <Sprout size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {builtin('plugins', <Blocks size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {builtin('activity', <History size={17} strokeWidth={1.8} aria-hidden="true" />)}
-        {builtin('experience-tips', <BookOpen size={17} strokeWidth={1.8} aria-hidden="true" />)}
+        {builtin('experience-tips', <BookOpen size={17} strokeWidth={1.8} aria-hidden="true" />, experienceTipCount)}
         {entries.filter((entry) => !entry.parent).map((entry) => pluginNode(entry, 0))}
       </ul>
     </nav>

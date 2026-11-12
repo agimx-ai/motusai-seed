@@ -17,6 +17,13 @@ export async function requestExperienceTips(
     case 'article':
       path = '/articles/' + request.tipId;
       break;
+    case 'activity-counts': {
+      const params = new URLSearchParams();
+      if (request.articlesSince) params.set('articles_since', request.articlesSince);
+      if (request.submissionsSince) params.set('submissions_since', request.submissionsSince);
+      path = '/activity-counts' + (params.size ? '?' + params.toString() : '');
+      break;
+    }
     case 'like':
       path = '/articles/' + request.tipId + '/like';
       break;

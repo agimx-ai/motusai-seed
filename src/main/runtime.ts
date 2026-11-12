@@ -38,6 +38,7 @@ import { PluginCloudResourceBroker } from './plugin-cloud-resources';
 import { requestExperienceTips, type ExperienceTipCloudRequest } from './experience-tips';
 import {
   experienceTipArticleSchema,
+  experienceTipCountsSchema,
   experienceTipEngagementSchema,
   experienceTipPageSchema,
   experienceTipWriteSchema,
@@ -2092,6 +2093,7 @@ export class SeedRuntime {
   async readExperienceTips(request: ExperienceTipRead) {
     const result = await this.requestExperienceTip(request);
     if (!result.ok) throw new Error(result.message);
+    if (request.kind === 'activity-counts') return experienceTipCountsSchema.parse(result.value);
     return (request.kind === 'article' ? experienceTipArticleSchema : experienceTipPageSchema).parse(result.value);
   }
 

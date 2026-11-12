@@ -4,7 +4,8 @@ import { Clock, Eye, MoreHorizontal, Pencil, Pin, ThumbsUp, Trash2, Undo2 } from
 import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { experienceTipSearchLimit, type ExperienceTipArticle, type ExperienceTipRead, type ExperienceTipRemoval, type ExperienceTipSort, type ExperienceTipSummary } from '../../shared/experience-tips';
+import { experienceTipSearchLimit, type ExperienceTipActivityTab, type ExperienceTipArticle, type ExperienceTipCounts, type ExperienceTipRead, type ExperienceTipRemoval, type ExperienceTipSort, type ExperienceTipSummary } from '../../shared/experience-tips';
+import { NavigationCount } from '../components/NavigationCount';
 import { ExperienceMarkdown } from './ExperienceMarkdown';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { HeaderActionButton, HeaderRefreshButton } from '../components/HeaderActionButton';
@@ -381,14 +382,17 @@ function ArticlePage({ id, title, dark, onCountsChange }: {
   );
 }
 
-export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: {
+export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, counts, onRefreshCounts, onViewActivity }: {
   actionsContainer: HTMLDivElement | null;
   dark: boolean;
+  counts?: ExperienceTipCounts;
+  onRefreshCounts: () => void;
+  onViewActivity: (tab: ExperienceTipActivityTab) => void;
   onArticleChange: (article: { onBack: () => void } | undefined) => void;
 }) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
-  const [kind, setKind] = useState<'articles' | 'my-submissions'>('articles');
+  const [kind, setKind] = useState<ExperienceTipActivityTab>('articles');
   const [sort, setSort] = useState<ExperienceTipSort>('latest');
   const [searchInput, setSearchInput] = useState('');
   const [query, setQuery] = useState('');
@@ -407,6 +411,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
   const [removalError, setRemovalError] = useState('');
   const active = useRef<AbortController | null>(null);
   const loadedPages = useRef(1);
+  const viewedActivity = useRef<ExperienceTipActivityTab>(undefined);
   const openButton = useRef<HTMLButtonElement | null>(null);
   const section = useRef<HTMLElement>(null);
   const mine = kind === 'my-submissions';
@@ -416,6 +421,21 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
   const listErrorTitle = t(mine ? 'experienceTips.submissionsLoadFailed' : 'experienceTips.loadFailed');
   const refreshLabel = t(error ? 'experienceTips.retry' : 'experienceTips.refresh');
   const searchLabel = t(mine ? 'experienceTips.searchSubmissions' : 'experienceTips.searchArticles');
+  const tabCount = (count?: number) => !count ? undefined : (
+    <NavigationCount notification>{new Intl.NumberFormat(locale).format(count)}</NavigationCount>
+  );
+
+  useEffect(() => {
+    if (articleId || query) {
+      viewedActivity.current = undefined;
+      return;
+    }
+    if (!counts || loading || error) return;
+    const unread = kind === 'articles' ? counts.articles : counts.my_submissions;
+    if (viewedActivity.current === kind && !unread) return;
+    viewedActivity.current = kind;
+    onViewActivity(kind);
+  }, [articleId, query, kind, counts, loading, error, onViewActivity]);
 
   useLayoutEffect(() => {
     if (!articleId) return;
@@ -519,6 +539,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
       const { tipId, versionId, action } = removal;
       const request = { tipId, versionId, action };
       await window.motusSeed.removeExperienceTip(request);
+      onRefreshCounts();
       if (!section.current) return;
       setItems((current) => current.filter((item) => request.action === 'delete-tip'
         ? item.tip_id !== request.tipId
@@ -537,7 +558,10 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
   return (
     <section ref={section} tabIndex={-1} className={`mx-auto flex min-h-full max-w-[54rem] flex-col text-foreground ${articleId ? 'pt-4' : ''} ${showListState ? '' : 'pb-8'}`} aria-label={t('nav.experience-tips')}>
       {actionsContainer && !articleId && createPortal(
-        <HeaderRefreshButton label={refreshLabel} refreshing={loading} onClick={() => void load(null)} />,
+        <HeaderRefreshButton label={refreshLabel} refreshing={loading} onClick={() => {
+          onRefreshCounts();
+          void load(null);
+        }} />,
         actionsContainer,
       )}
       {articleId && (
@@ -571,8 +595,8 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
               label={t('nav.experience-tips')}
               value={kind}
               options={[
-                { value: 'articles', label: t('experienceTips.articles') },
-                { value: 'my-submissions', label: t('experienceTips.submissions') },
+                { value: 'articles', label: t('experienceTips.articles'), trailing: tabCount(counts?.articles) },
+                { value: 'my-submissions', label: t('experienceTips.submissions'), trailing: tabCount(counts?.my_submissions) },
               ]}
               onValueChange={selectList}
             />
