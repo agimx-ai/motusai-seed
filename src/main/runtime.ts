@@ -1012,6 +1012,7 @@ export class SeedRuntime {
     if (storedCloudSession && Date.parse(storedCloudSession.refreshExpiresAt) > Date.now()) {
       this.user = storedCloudSession.user;
       this.authStatus = { status: 'signed_in' };
+      this.watchCloudAccountEvents();
     } else if (storedCloudSession) {
       await this.store.clearCloudSession();
     }
@@ -1048,6 +1049,13 @@ export class SeedRuntime {
 
   private emit(event: SeedEvent) {
     this.window()?.webContents.send('seed:event', event);
+  }
+
+  private watchCloudAccountEvents() {
+    this.cloudResources.watchAccountEvents((type) => {
+      if (this.user && (type === null || type === 'experience.review.changed'))
+        this.emit({ type: 'experience.review.changed' });
+    });
   }
 
   private async handleWorkerEvent(event: WorkerEvent) {
@@ -1406,6 +1414,7 @@ export class SeedRuntime {
       const credential = await exchangeCloudAuthorizationCode(distribution, code, authorization.verifier);
       await this.store.setCloudSession(credential);
       this.user = credential.user;
+      this.watchCloudAccountEvents();
       void this.announcements.refresh();
       this.authStatus = { status: 'signed_in' };
       try {
@@ -1900,6 +1909,7 @@ export class SeedRuntime {
       if (cloudSessionWasRejected(error) && this.store.cloudSession()?.refreshToken === session.refreshToken) {
         await this.store.clearCloudSession();
         this.user = undefined;
+        this.cloudResources.reset();
         this.announcements.clear();
         this.authStatus = { status: 'signed_out' };
         this.entitlementExpiresAt = 0;

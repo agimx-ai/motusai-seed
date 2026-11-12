@@ -353,6 +353,7 @@ export type PluginUpdateResult = {
 export type SeedEvent =
   | { type: 'snapshot.changed'; snapshot: SeedSnapshot }
   | { type: 'experience.articles.changed' }
+  | { type: 'experience.review.changed' }
   | { type: 'logs.upload.progress'; progress: TerminalLogUploadProgress | null }
   | { type: 'plugin.install.progress'; pluginId: string; progress: PluginInstallProgress }
   | { type: 'plugin.install.progress'; pluginId: string; operationId: string; progress: null };

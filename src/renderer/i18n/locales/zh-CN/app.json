@@ -62,6 +62,8 @@
     },
     "state": {
       "pending": "待审核",
+      "reviewing": "审核中",
+      "awaitingManualReview": "待人工审核",
       "returned": "退回修改",
       "published": "已发布",
       "superseded": "已更新"

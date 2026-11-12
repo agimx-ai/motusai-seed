@@ -137,9 +137,15 @@ type SubmissionRemoval = ExperienceTipRemoval & { title: string; unlisted: boole
 function SubmissionStatus({ item }: { item: ExperienceTipSummary }) {
   const { t } = useTranslation();
   if (item.unlisted) return <StatusBadge>{t('experienceTips.unlisted.status')}</StatusBadge>;
+  if (item.state === 'pending') {
+    const state = item.ai_review_status === 'running' ? 'reviewing'
+      : item.ai_review_status === 'failed' || item.ai_review_status === 'needs_review' ? 'awaitingManualReview'
+      : 'pending';
+    return <StatusBadge tone="info">{t(`experienceTips.state.${state}`)}</StatusBadge>;
+  }
 
   const state = item.state === 'published' && item.removal_action === null ? 'superseded' : item.state;
-  const tone = state === 'pending' ? 'info' : state === 'returned' ? 'warning' : state === 'published' ? 'success' : 'neutral';
+  const tone = state === 'returned' ? 'warning' : state === 'published' ? 'success' : 'neutral';
   return <StatusBadge tone={tone}>{t(`experienceTips.state.${state}`)}</StatusBadge>;
 }
 
@@ -378,6 +384,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
   const [removing, setRemoving] = useState(false);
   const [removalError, setRemovalError] = useState('');
   const active = useRef<AbortController | null>(null);
+  const loadedPages = useRef(1);
   const openButton = useRef<HTMLButtonElement | null>(null);
   const section = useRef<HTMLElement>(null);
   const mine = kind === 'my-submissions';
@@ -402,25 +409,34 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
     return () => onArticleChange(undefined);
   }, [articleId, onArticleChange]);
 
-  async function load(before: string | null) {
+  async function load(before: string | null, pages = 1) {
     active.current?.abort();
     const controller = new AbortController();
     active.current = controller;
     setLoading(true);
     setError(false);
     try {
-      const filters = { ...(before ? { before } : {}), ...(query ? { query } : {}) };
-      const page = await readExperienceTips(
-        kind === 'articles' ? { kind, sort, ...filters } : { kind, ...filters },
-        controller.signal,
-        !items.length,
-      );
-      if (!('items' in page)) throw new Error('The list is unavailable.');
-      if (controller.signal.aborted) return;
+      const refreshed: ExperienceTipSummary[] = [];
+      let nextCursor = before;
+      let fetchedPages = 0;
+      do {
+        const filters = { ...(nextCursor ? { before: nextCursor } : {}), ...(query ? { query } : {}) };
+        const page = await readExperienceTips(
+          kind === 'articles' ? { kind, sort, ...filters } : { kind, ...filters },
+          controller.signal,
+          !items.length,
+        );
+        if (controller.signal.aborted) return;
+        if (!('items' in page)) throw new Error('The list is unavailable.');
+        refreshed.push(...page.items);
+        nextCursor = page.next_cursor;
+        fetchedPages++;
+      } while (nextCursor && fetchedPages < pages);
       setItems((current) => before
-        ? [...current, ...page.items.filter((item) => !current.some(({ id }) => id === item.id))]
-        : page.items);
-      setCursor(ranked ? null : page.next_cursor);
+        ? [...current, ...refreshed.filter((item) => !current.some(({ id }) => id === item.id))]
+        : refreshed);
+      loadedPages.current = before ? loadedPages.current + fetchedPages : fetchedPages;
+      setCursor(ranked ? null : nextCursor);
     } catch {
       if (!controller.signal.aborted) setError(true);
     } finally {
@@ -428,12 +444,13 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
     }
   }
 
-  const refreshArticles = useEffectEvent(() => {
-    if (!mine) void load(null);
+  const refreshList = useEffectEvent((eventType: 'experience.articles.changed' | 'experience.review.changed') => {
+    if (mine === (eventType === 'experience.review.changed')) void load(null, mine ? loadedPages.current : 1);
   });
 
   useEffect(() => window.motusSeed.subscribe((event) => {
-    if (event.type === 'experience.articles.changed') refreshArticles();
+    if (event.type === 'experience.articles.changed' || event.type === 'experience.review.changed')
+      refreshList(event.type);
   }), []);
 
   useEffect(() => {
@@ -453,6 +470,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
 
   function resetList() {
     active.current?.abort();
+    loadedPages.current = 1;
     setItems([]);
     setCursor(null);
     setError(false);
@@ -486,7 +504,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark }: 
       setRemoval(undefined);
       toast.success(t(`experienceTips.removal.${request.action}.success`));
       requestAnimationFrame(() => section.current?.focus({ preventScroll: true }));
-      void load(null);
+      void load(null, loadedPages.current);
     } catch (reason) {
       setRemovalError(userFacingErrorMessage(reason));
     } finally {

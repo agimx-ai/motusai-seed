@@ -272,4 +272,32 @@ describe('authenticated plugin-scoped Cloud resources', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(sockets).toHaveLength(2);
   });
+
+  it('shares one socket for account events and plugin watches and reconciles after reconnect', async () => {
+    vi.useFakeTimers();
+    const { broker, call, sockets } = fixture();
+    const onEvent = vi.fn();
+    broker.watchAccountEvents(onEvent);
+    const { id } = (await call('a', { operation: 'watch', resource: 'inventory' })) as { id: string };
+    expect(sockets).toHaveLength(1);
+    const socket = sockets[0]!;
+    socket.open();
+    expect(onEvent).toHaveBeenCalledExactlyOnceWith(null);
+    socket.emit('message', JSON.stringify({ ver: 2, type: 'experience.review.changed' }));
+    socket.emit('message', JSON.stringify({ ver: 1, type: 'plugin-resource.inventory.changed' }));
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    socket.emit('message', JSON.stringify({ ver: 1, type: 'experience.review.changed' }));
+    expect(onEvent).toHaveBeenLastCalledWith('experience.review.changed');
+    await call('a', { operation: 'unwatch', id });
+    expect(socket.close).not.toHaveBeenCalled();
+    socket.terminate();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sockets).toHaveLength(2);
+    sockets[1]!.open();
+    expect(onEvent.mock.calls).toEqual([[null], ['experience.review.changed'], [null]]);
+    broker.reset();
+    expect(sockets[1]!.close).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sockets).toHaveLength(2);
+  });
 });

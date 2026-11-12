@@ -66,6 +66,7 @@ const experienceTipSummarySchema = z.object({
   title: z.string(),
   author: z.string(),
   state: z.enum(['pending', 'returned', 'published']),
+  ai_review_status: z.enum(['queued', 'running', 'failed', 'needs_review']).nullish(),
   review_notes: z.array(z.string()).optional(),
   submitted_at: z.iso.datetime().nullable(),
   published_at: z.iso.datetime().nullable(),

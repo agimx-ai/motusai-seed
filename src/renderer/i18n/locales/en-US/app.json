@@ -62,6 +62,8 @@
     },
     "state": {
       "pending": "Awaiting review",
+      "reviewing": "Under review",
+      "awaitingManualReview": "Awaiting manual review",
       "returned": "Changes requested",
       "published": "Published",
       "superseded": "Superseded"

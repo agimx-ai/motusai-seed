@@ -80,6 +80,7 @@ async function boundedJson(response: Response) {
 export class PluginCloudResourceBroker {
   private readonly requests = new Map<string, { plugin: SeedPluginRuntimeDefinition; controller: AbortController }>();
   private readonly watches = new Map<string, Watch>();
+  private accountEvents?: (type: string | null) => void;
   private epoch = 0;
   private connecting = false;
   private socket?: WebSocket;
@@ -227,7 +228,7 @@ export class PluginCloudResourceBroker {
     this.watches.delete(id);
     if (error) watch.pending?.reject(error);
     else watch.pending?.resolve({ done: true });
-    if (!this.watches.size) this.disconnect();
+    if (!this.watches.size && !this.accountEvents) this.disconnect();
   }
   private changed(resource?: string, reset = false) {
     for (const [id, watch] of this.watches) {
@@ -264,8 +265,14 @@ export class PluginCloudResourceBroker {
     if (socket?.readyState === WebSocket.CONNECTING) socket.terminate();
     else socket?.close();
   }
+  watchAccountEvents(listener: (type: string | null) => void) {
+    this.accountEvents = listener;
+    if (this.socket?.readyState === WebSocket.OPEN) listener(null);
+    this.connect();
+  }
+
   private schedule() {
-    if (!this.watches.size || this.reconnect) return;
+    if ((!this.watches.size && !this.accountEvents) || this.reconnect) return;
     this.reconnect = setTimeout(
       () => {
         this.reconnect = undefined;
@@ -276,13 +283,13 @@ export class PluginCloudResourceBroker {
     this.reconnect.unref();
   }
   private connect() {
-    if (!this.watches.size || this.socket || this.connecting || this.reconnect) return;
+    if ((!this.watches.size && !this.accountEvents) || this.socket || this.connecting || this.reconnect) return;
     this.connecting = true;
     const connection = ++this.connection;
     void this.options
       .session(this.rejectedToken)
       .then((session) => {
-        if (connection !== this.connection || !this.watches.size) return;
+        if (connection !== this.connection) return;
         this.rejectedToken = undefined;
         const url = new URL('/api/v1/ws', session.baseUrl);
         url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -312,15 +319,16 @@ export class PluginCloudResourceBroker {
           }, 10_000);
           this.stable.unref();
           this.changed(undefined, true);
+          this.accountEvents?.(null);
         });
         socket.on('message', (raw) => {
           if (this.socket !== socket) return;
           try {
             const event = JSON.parse(raw.toString());
-            const match =
-              typeof event.type === 'string' &&
-              /^plugin-resource\.([a-z][a-z0-9-]{0,63})\.changed$/.exec(event.type);
-            if (event.ver === 1 && match) this.changed(match[1]);
+            if (event.ver !== 1 || typeof event.type !== 'string') return;
+            const match = /^plugin-resource\.([a-z][a-z0-9-]{0,63})\.changed$/.exec(event.type);
+            if (match) this.changed(match[1]);
+            else this.accountEvents?.(event.type);
           } catch {
             /* Invalid hints never substitute for authoritative resource reads. */
           }
@@ -363,6 +371,7 @@ export class PluginCloudResourceBroker {
   }
   reset() {
     this.epoch++;
+    this.accountEvents = undefined;
     for (const request of this.requests.values()) request.controller.abort();
     this.requests.clear();
     for (const id of [...this.watches.keys()])
