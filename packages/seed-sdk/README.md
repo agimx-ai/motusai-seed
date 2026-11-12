@@ -505,7 +505,79 @@ function ProgressIndicator() {
 | `@motus-ai/seed-sdk/reader` | Markdown 正文、文章主题和代码高亮 |
 | `@motus-ai/seed-sdk/companion` | React 伙伴组件 `Companion`，支持状态、表情、配色和减弱动态效果 |
 
-`Companion` 接收 `ink` 和 `paper` 两种颜色，默认显示空闲状态并跟随系统的动态效果偏好。应用可传入自己的 `reducedMotion` 设置。
+#### 文章阅读
+
+从 `@motus-ai/seed-sdk/reader` 导入以下接口。
+
+| 接口 | 说明 |
+| --- | --- |
+| `MarkdownRenderer` | React 组件，接收 `markdown: string` 和 `plugins: BytemdPlugin[]` |
+| `markdownPlugins(plugin, dark)` | 创建包含 GFM、frontmatter、代码高亮和调用方插件的渲染插件列表 |
+| `articleStyles(theme, dark)` | 返回文章主题和代码高亮 CSS，适用于独立阅读页面 |
+| `embeddedArticleStyles(theme, dark)` | 返回适用于嵌入页面的 CSS，深色模式跟随宿主颜色变量，适合放入 Shadow DOM |
+| `markdownThemeIds` / `defaultMarkdownTheme` | 可用主题 ID 列表 / 默认主题 ID |
+| `isTheme(value)` / `Theme` | 检查主题 ID / 主题类型 |
+| `markdownSurface(dark)` | 返回深色或浅色阅读背景与前景颜色 `{ paper, ink }` |
+| `restrictedMarkdownMedia(images)` | 创建媒体限制插件，将图片标识映射到允许的 URL，移除其他图片及链接地址 |
+| `remarkRehype` | Markdown 转 HTML 时使用的选项，关闭原始 HTML |
+
+两个样式函数接收主题 ID 和深色模式布尔值，返回 CSS 字符串。无效主题 ID 会抛出错误。嵌入页面时可通过 Shadow DOM 隔离文章主题：
+
+```tsx
+import { useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  defaultMarkdownTheme,
+  embeddedArticleStyles,
+  MarkdownRenderer,
+  markdownPlugins,
+  restrictedMarkdownMedia,
+} from '@motus-ai/seed-sdk/reader';
+
+function Article({ markdown, dark }: { markdown: string; dark: boolean }) {
+  const [root, setRoot] = useState<ShadowRoot>();
+  const attachRoot = useCallback((host: HTMLDivElement | null) => {
+    if (host) setRoot(host.shadowRoot ?? host.attachShadow({ mode: 'open' }));
+  }, []);
+  const images = new Map<string, string>();
+  const plugins = markdownPlugins(restrictedMarkdownMedia(images), dark);
+
+  return <div ref={attachRoot}>
+    {root && createPortal(<>
+      <style>{embeddedArticleStyles(defaultMarkdownTheme, dark)}</style>
+      <MarkdownRenderer markdown={markdown} plugins={plugins} />
+    </>, root)}
+  </div>;
+}
+```
+
+示例的图片映射为空，因此不显示图片。需要显示图片时，将 Markdown 中的图片地址映射到允许加载的 URL，例如 `new Map([['image:cover', coverUrl]])`。
+
+#### 伙伴组件
+
+从 `@motus-ai/seed-sdk/companion` 导入 `Companion`。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `ink` / `paper` | `string` | 是 | 伙伴的前景色和背景色，使用十六进制颜色 |
+| `state` | `StateId` | 否 | 动画状态，默认为 `idle` |
+| `expression` | `ExpressionId` | 否 | 面部表情 |
+| `look` | `Look \| null` | 否 | 视线参数，包含 `yaw`、`pitch`、`mix`、`spin` 和 `wander` |
+| `immediateLookReset` | `boolean` | 否 | 清除视线时立即恢复，默认为 `false` |
+| `reducedMotion` | `boolean` | 否 | 减少动态效果，省略时跟随系统偏好 |
+| `className` | `string` | 否 | 应用于 SVG 的样式类，可用于设置尺寸 |
+
+```tsx
+import { Companion } from '@motus-ai/seed-sdk/companion';
+import { useReducedMotion } from '@motus-ai/seed-sdk/react';
+
+function Assistant() {
+  const reducedMotion = useReducedMotion();
+  return <Companion className="size-20" state="thinking" ink="#222222" paper="#ffffff" reducedMotion={reducedMotion} />;
+}
+```
+
+SDK 同时导出 `CompanionProps`、`StateId`、`ExpressionId`、`Look`、`BotEngine` 和 `BotFrame`，供自定义状态和动画使用。
 
 ### 通用样式
 
