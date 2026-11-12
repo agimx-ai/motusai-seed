@@ -43,6 +43,24 @@ it('shows unread activity, clears each tab independently, and keeps checkpoints 
     },
     { ...submissionDates, id: '2', tip_id: 'b', title: 'Published tip', state: 'published' },
     { ...submissionDates, id: '3', tip_id: 'c', title: 'Pending tip', state: 'pending' },
+    {
+      ...submissionDates,
+      id: '4',
+      tip_id: 'b',
+      title: 'Older submission',
+      state: 'returned',
+      is_latest: false,
+      review_notes: ['Earlier review feedback'],
+    },
+    {
+      ...submissionDates,
+      id: '5',
+      tip_id: 'd',
+      title: 'Latest returned submission',
+      state: 'returned',
+      is_latest: true,
+      review_notes: ['Current review feedback'],
+    },
   ];
   const readExperienceTips = vi.fn(async (request: ExperienceTipRead) => {
     if (request.kind === 'my-submissions') return { items: submissions, next_cursor: null };
@@ -100,6 +118,12 @@ it('shows unread activity, clears each tab independently, and keeps checkpoints 
     expect(row.querySelector('small')?.textContent).toContain(label);
     if (title === 'Stopped tip') expect(within(row).getByText('Reason: Example feedback')).toBeTruthy();
   }
+  const disclosure = screen.getByText('Review feedback').closest('details')!;
+  expect(disclosure.open).toBe(false);
+  expect(screen.getByText('Current review feedback').closest('details')).toBeNull();
+  fireEvent.click(within(disclosure).getByText('Review feedback'));
+  expect(disclosure.open).toBe(true);
+  expect(within(disclosure).getByText('Earlier review feedback')).toBeTruthy();
 
   rerender(<Fixture userId="author" />);
   now = time(5);

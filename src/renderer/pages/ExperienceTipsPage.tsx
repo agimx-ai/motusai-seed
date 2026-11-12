@@ -1,6 +1,6 @@
 import { toast } from '@motus-ai/seed-sdk';
 import { ActionButton, SegmentedControl, StatusBadge } from '@motus-ai/seed-sdk/react';
-import { Clock, Eye, MoreHorizontal, Pencil, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
+import { ChevronRight, Clock, Eye, MoreHorizontal, Pencil, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -173,6 +173,29 @@ function SubmissionStatus({ item }: { item: ExperienceTipSummary }) {
   const state = item.state === 'published' && item.removal_action === null ? 'superseded' : item.state;
   const tone = state === 'returned' ? 'warning' : state === 'published' ? 'success' : 'neutral';
   return <StatusBadge tone={tone}>{t(`experienceTips.state.${state}`)}</StatusBadge>;
+}
+
+function SubmissionReviewNotes({ notes, latest }: { notes?: readonly string[]; latest: boolean }) {
+  const { t } = useTranslation();
+  if (!notes?.length) return null;
+
+  const feedback = (
+    <blockquote className="experience-feedback border-s-2 border-border ps-3 text-muted-foreground">
+      <ol className="m-0 list-decimal space-y-1 ps-5">
+        {notes.map((note, index) => <li key={index}>{note}</li>)}
+      </ol>
+    </blockquote>
+  );
+
+  return latest ? feedback : (
+    <details className="group">
+      <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+        <ChevronRight size={13} className="shrink-0 group-open:rotate-90" aria-hidden="true" />
+        {t('experienceTips.reviewNotes')}
+      </summary>
+      {feedback}
+    </details>
+  );
 }
 
 function SubmissionActions({ item, action, onSelect }: {
@@ -419,6 +442,12 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
   const openButton = useRef<HTMLButtonElement | null>(null);
   const section = useRef<HTMLElement>(null);
   const mine = kind === 'my-submissions';
+  const firstSubmissionByTip = new Map<string, string>();
+  if (mine) {
+    for (const item of items) {
+      if (!firstSubmissionByTip.has(item.tip_id)) firstSubmissionByTip.set(item.tip_id, item.id);
+    }
+  }
   const ranked = !mine && sort === 'popular';
   const List = ranked ? 'ol' : 'ul';
   const showListState = !articleId && !items.length && !loading;
@@ -619,7 +648,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
             </div>
           )}
         </div>
-        {items.length > 0 && <List className="experience-list" aria-busy={loading}>
+        {items.length > 0 && <List className={mine ? 'experience-list seed-selectable-text' : 'experience-list'} aria-busy={loading}>
           {items.map((item, index) => (
             <li key={item.id}>
               {mine ? (
@@ -627,13 +656,10 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
                   <div className="experience-row-main">
                     <strong>{item.title}</strong>
                     <SubmissionDate item={item} locale={locale} />
-                    {item.review_notes?.length ? (
-                      <blockquote className="experience-feedback border-s-2 border-border ps-3 text-muted-foreground">
-                        <ol className="m-0 list-decimal space-y-1 ps-5">
-                          {item.review_notes.map((note, index) => <li key={index}>{note}</li>)}
-                        </ol>
-                      </blockquote>
-                    ) : null}
+                    <SubmissionReviewNotes
+                      notes={item.review_notes}
+                      latest={item.is_latest ?? (firstSubmissionByTip.get(item.tip_id) === item.id)}
+                    />
                     {item.unlisted && (
                       <p className="experience-feedback text-muted-foreground">
                         {t('experienceTips.unlisted.reason', { reason: item.unlisted.reason })}
