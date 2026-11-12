@@ -135,6 +135,12 @@ describe('SeedLocalHttpGateway', () => {
     expect(invoke).toHaveBeenLastCalledWith('seed.experience-tips.request', {
       token: 'existing-token', request: { kind: 'prepare', body: { title: 'Example' } },
     })
+    const context = { tip_id: '11111111-1111-4111-8111-111111111111', ticket: '22222222-2222-4222-8222-222222222222' }
+    expect((await post('/edit-context', context, 'wrong-token')).status).toBe(401)
+    expect((await post('/edit-context', context, 'existing-token', 'https://other.example')).status).toBe(403)
+    const editContext = await post('/edit-context', context)
+    expect(editContext.status).toBe(200)
+    await expect(editContext.json()).resolves.toEqual({ kind: 'edit-context', body: context })
     expect((await post('/articles', {})).status).toBe(404)
     expect(localApi).not.toHaveBeenCalled()
   })

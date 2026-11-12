@@ -40,6 +40,8 @@
     "noArticlesDescription": "快来抢个沙发，分享一个你常用的 Seed 小技巧吧",
     "noSubmissions": "还没有投稿",
     "noSubmissionsDescription": "在 Obsidian 中右键点击笔记，选择「分享经验」即可投稿",
+    "editSource": "前往编辑",
+    "openSourceFailed": "无法打开 Obsidian，请确认已安装 Obsidian 后重试。",
     "removal": {
       "moreActions": "「{{title}}」的更多操作",
       "withdraw": {

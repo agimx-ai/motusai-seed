@@ -1,7 +1,7 @@
 import type { ExperienceTipLike, ExperienceTipRead, ExperienceTipRemoval, ExperienceTipResult, ExperienceTipWrite } from '../shared/experience-tips';
 
 export type ExperienceTipCloudRequest = ExperienceTipRead
-  | Exclude<ExperienceTipWrite, { kind: 'account' }>
+  | Exclude<ExperienceTipWrite, { kind: 'account' | 'edit-context' }>
   | ({ kind: 'like' } & ExperienceTipLike)
   | ({ kind: 'remove' } & ExperienceTipRemoval);
 

@@ -1,6 +1,6 @@
 import { toast } from '@motus-ai/seed-sdk';
 import { ActionButton, SegmentedControl, StatusBadge } from '@motus-ai/seed-sdk/react';
-import { Clock, Eye, MoreHorizontal, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
+import { Clock, Eye, MoreHorizontal, Pencil, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -153,6 +153,11 @@ function SubmissionActions({ item, action, onSelect }: {
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const Icon = action === 'withdraw' ? Undo2 : Trash2;
+  const edit = item.state === 'returned' && !item.unlisted;
+  const closeMenu = () => {
+    menu.current?.hidePopover();
+    trigger.current?.focus();
+  };
   return (
     <>
       <HeaderActionButton
@@ -173,14 +178,37 @@ function SubmissionActions({ item, action, onSelect }: {
         onToggle={(event) => {
           if (event.currentTarget.matches(':popover-open')) event.currentTarget.querySelector('button')?.focus();
         }}
+        onKeyDown={(event) => {
+          if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const items = Array.from(event.currentTarget.querySelectorAll('button'));
+          const index = items.indexOf(event.target as HTMLButtonElement);
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+            : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+          items[next]?.focus();
+        }}
       >
+        {edit && (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-start text-[12px] text-foreground hover:bg-muted"
+            onClick={() => {
+              closeMenu();
+              void window.motusSeed.openExperienceTipSource({ tipId: item.tip_id, reviewNotes: item.review_notes ?? [] })
+                .catch(() => toast.error(t('experienceTips.openSourceFailed')));
+            }}
+          >
+            <Pencil size={14} aria-hidden="true" />
+            {t('experienceTips.editSource')}
+          </button>
+        )}
         <button
           type="button"
           role="menuitem"
           className="flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-start text-[12px] text-danger hover:bg-danger-soft"
           onClick={() => {
-            menu.current?.hidePopover();
-            trigger.current?.focus();
+            closeMenu();
             onSelect({ tipId: item.tip_id, versionId: item.id, title: item.title, action, unlisted: Boolean(item.unlisted) });
           }}
         >

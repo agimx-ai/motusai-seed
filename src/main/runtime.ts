@@ -47,6 +47,7 @@ import {
   type ExperienceTipLike,
   type ExperienceTipRemoval,
   type ExperienceTipResult,
+  type ExperienceTipSource,
 } from '../shared/experience-tips';
 import { pluginAuditRecordSchema, seedCatalogResponseSchema, serverUrlSchema } from '../shared/validation';
 import { resolveSeedLocalizedText } from '../shared/plugin-manifest';
@@ -195,6 +196,7 @@ export class SeedRuntime {
     }
   >();
   private stopping = false;
+  private readonly experienceEditContexts = new Map<string, ExperienceTipSource & { userId: string; expiresAt: number }>();
   private pluginReloadWork: Promise<void> = Promise.resolve();
   private pluginServicesReady: Promise<void> = Promise.resolve();
   private developmentPlugins?: DevelopmentPluginSource;
@@ -452,6 +454,16 @@ export class SeedRuntime {
           return this.user && !this.stopping
             ? { ok: true, value: { user_id: this.user.id } }
             : { ok: false, status: 401, code: 'experience_tip_unauthorized', message: 'Sign in to Seed.' };
+        }
+        if (request.kind === 'edit-context') {
+          const { ticket, tip_id } = request.body;
+          const context = this.experienceEditContexts.get(ticket);
+          if (!context || context.tipId !== tip_id || context.userId !== this.user?.id
+            || context.expiresAt <= Date.now() || this.stopping) {
+            return { ok: false, status: 404, code: 'edit_context_unavailable', message: 'Open the draft again from My submissions.' };
+          }
+          this.experienceEditContexts.delete(ticket);
+          return { ok: true, value: { user_id: context.userId, review_notes: context.reviewNotes } };
         }
         return this.requestExperienceTip(request);
       },
@@ -1464,6 +1476,7 @@ export class SeedRuntime {
   }
 
   async logout() {
+    this.experienceEditContexts.clear();
     this.cloudResources.reset();
     const pluginUpdatesStopped = this.pluginUpdates.stop();
     this.pluginBrowserAuthorization.cancelAll();
@@ -2082,6 +2095,29 @@ export class SeedRuntime {
     const result = await this.requestExperienceTip({ kind: 'remove', ...input });
     if (!result.ok) throw new Error(result.message);
     z.object({ ok: z.literal(true) }).parse(result.value);
+  }
+
+  async openExperienceTipSource(input: ExperienceTipSource) {
+    if (!this.user || this.stopping) throw new Error('Experience tip source is unavailable.');
+    const now = Date.now();
+    for (const [ticket, context] of this.experienceEditContexts) {
+      if (context.expiresAt <= now || context.userId !== this.user.id) this.experienceEditContexts.delete(ticket);
+    }
+    if (this.experienceEditContexts.size >= 32) {
+      const oldest = this.experienceEditContexts.keys().next();
+      if (!oldest.done) this.experienceEditContexts.delete(oldest.value);
+    }
+    const ticket = randomUUID();
+    this.experienceEditContexts.set(ticket, { ...input, userId: this.user.id, expiresAt: now + 120_000 });
+    const url = new URL('obsidian://motusai-edit-experience');
+    url.searchParams.set('tip', input.tipId);
+    url.searchParams.set('ticket', ticket);
+    try {
+      await shell.openExternal(url.href);
+    } catch (error) {
+      this.experienceEditContexts.delete(ticket);
+      throw error;
+    }
   }
 
   async personalCreditWallet() {

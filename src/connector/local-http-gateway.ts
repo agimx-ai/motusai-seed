@@ -501,7 +501,7 @@ export class SeedLocalHttpGateway {
     const path = url.pathname.slice(experienceTipsLocalPath.length);
     const submission = /^\/submissions\/([\da-f-]{36})\/([\da-f-]{36})\/submit$/i.exec(path);
     const valid = (method === 'GET' && (path === '/status' || path === '/account' || path === '/themes'))
-      || (method === 'POST' && (path === '/clients/authorize' || path === '/prepare' || submission));
+      || (method === 'POST' && (path === '/clients/authorize' || path === '/prepare' || path === '/edit-context' || submission));
     if (!valid) return this.writeResponse(request, response, failure(404, 'not_found', 'Route was not found.'), origin);
 
     if (request.method === 'OPTIONS') {
@@ -535,10 +535,11 @@ export class SeedLocalHttpGateway {
 
     if (!token)
       return this.writeResponse(request, response, failure(401, 'unauthorized', 'A valid Obsidian connection is required.'), origin);
-    const raw = method === 'POST' ? await requestBody(request, experienceTipsBodyLimit) : undefined;
+    const raw = method === 'POST' ? await requestBody(request, path === '/edit-context' ? 1_024 : experienceTipsBodyLimit) : undefined;
     const body: unknown = raw ? JSON.parse(raw.toString('utf8')) : undefined;
     const operation = submission ? { kind: 'submit', tipId: submission[1], versionId: submission[2], body }
       : path === '/prepare' ? { kind: 'prepare', body }
+      : path === '/edit-context' ? { kind: 'edit-context', body }
       : { kind: path === '/themes' ? 'themes' : 'account' };
     const result = await this.runtime.invoke_host('seed.experience-tips.request', { token, request: operation }) as ExperienceTipResult;
     return this.writeResponse(request, response, result.ok ? json(200, result.value)

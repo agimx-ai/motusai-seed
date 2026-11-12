@@ -6,8 +6,15 @@ export const experienceTipsObsidianClient = 'com.motusai.obsidian';
 export const experienceTipsObsidianOrigin = 'app://obsidian.md';
 export const experienceTipsBodyLimit = 1_048_576;
 
+export const experienceTipSourceSchema = z.strictObject({
+  tipId: z.uuid(),
+  reviewNotes: z.array(z.string().max(2048)).max(32),
+});
+export type ExperienceTipSource = z.infer<typeof experienceTipSourceSchema>;
+
 export const experienceTipWriteSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('account') }),
+  z.object({ kind: z.literal('edit-context'), body: z.strictObject({ tip_id: z.uuid(), ticket: z.uuid() }) }),
   z.object({ kind: z.literal('themes') }),
   z.object({ kind: z.literal('prepare'), body: z.record(z.string(), z.json()) }),
   z.object({ kind: z.literal('submit'), tipId: z.uuid(), versionId: z.uuid(), body: z.object({ user_id: z.uuid() }).strict() }),

@@ -7,7 +7,7 @@ import {
   pluginIdSchema,
   terminalLogUploadRangeSchema,
 } from '../shared/validation';
-import { experienceTipLikeSchema, experienceTipReadSchema, experienceTipRemovalSchema } from '../shared/experience-tips';
+import { experienceTipLikeSchema, experienceTipReadSchema, experienceTipRemovalSchema, experienceTipSourceSchema } from '../shared/experience-tips';
 import { ipcChannels } from '../shared/contracts';
 import type { SeedRuntime } from './runtime';
 
@@ -49,6 +49,7 @@ export function registerIpc(runtime: SeedRuntime) {
   handle(ipcChannels.readExperienceTips, (_event, input) => runtime.readExperienceTips(experienceTipReadSchema.parse(input)));
   handle(ipcChannels.setExperienceTipLike, (_event, input) => runtime.setExperienceTipLike(experienceTipLikeSchema.parse(input)));
   handle(ipcChannels.removeExperienceTip, (_event, input) => runtime.removeExperienceTip(experienceTipRemovalSchema.parse(input)));
+  handle(ipcChannels.openExperienceTipSource, (_event, input) => runtime.openExperienceTipSource(experienceTipSourceSchema.parse(input)));
   handle(ipcChannels.personalCreditWallet, () => runtime.personalCreditWallet());
   handle(ipcChannels.personalCreditGrants, (_event, cursor) =>
     runtime.personalCreditGrants(z.string().regex(/^\d+$/).optional().parse(cursor)),

@@ -40,6 +40,8 @@
     "noArticlesDescription": "Be the first to share a Seed tip you use all the time",
     "noSubmissions": "No submissions yet",
     "noSubmissionsDescription": "In Obsidian, right-click a note and choose Share an experience",
+    "editSource": "Edit in Obsidian",
+    "openSourceFailed": "Couldn't open Obsidian. Make sure it's installed and try again.",
     "removal": {
       "moreActions": "More actions for {{title}}",
       "withdraw": {

@@ -1,4 +1,4 @@
-import type { ExperienceTipArticle, ExperienceTipEngagement, ExperienceTipLike, ExperienceTipPage, ExperienceTipRead, ExperienceTipRemoval } from './experience-tips';
+import type { ExperienceTipArticle, ExperienceTipEngagement, ExperienceTipLike, ExperienceTipPage, ExperienceTipRead, ExperienceTipRemoval, ExperienceTipSource } from './experience-tips';
 import type { SeedBillingReceipt, SeedNavigationTarget } from '@motus-ai/seed-sdk';
 import type { SeedConsumedCapability, SeedPluginLabel } from './plugin-manifest';
 import type { SeedLocalizedText } from './plugin-manifest';
@@ -382,6 +382,7 @@ export type SeedApi = {
   readExperienceTips(input: ExperienceTipRead): Promise<ExperienceTipPage | ExperienceTipArticle>;
   setExperienceTipLike(input: ExperienceTipLike): Promise<ExperienceTipEngagement>;
   removeExperienceTip(input: ExperienceTipRemoval): Promise<void>;
+  openExperienceTipSource(input: ExperienceTipSource): Promise<void>;
   personalCreditWallet(): Promise<{ available: number; total?: number }>;
   personalCreditGrants(cursor?: string): Promise<PersonalCreditGrantPage>;
   signIn(): Promise<void>;
@@ -443,6 +444,7 @@ export const ipcChannels = {
   readExperienceTips: 'seed:experience-tips:read',
   setExperienceTipLike: 'seed:experience-tips:like',
   removeExperienceTip: 'seed:experience-tips:remove',
+  openExperienceTipSource: 'seed:experience-tips:open-source',
   personalCreditWallet: 'seed:credits:personal-wallet',
   personalCreditGrants: 'seed:credits:personal-grants',
   signIn: 'seed:account:sign-in',
