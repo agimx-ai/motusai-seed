@@ -88,6 +88,7 @@ const experienceTipSummarySchema = z.object({
   cover_url: z.url({ protocol: /^https?$/ }).optional(),
   excerpt: z.string().optional(),
   view_count: experienceTipEngagementSchema.shape.view_count.optional(),
+  recent_reader_count: z.number().int().nonnegative().optional(),
   like_count: experienceTipEngagementSchema.shape.like_count.optional(),
   liked: experienceTipEngagementSchema.shape.liked.optional(),
   removal_action: experienceTipRemovalActionSchema.nullable().optional(),

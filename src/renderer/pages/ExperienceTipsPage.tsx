@@ -70,14 +70,19 @@ function TipViewCount({ count, compact = false }: { count: number; compact?: boo
   );
 }
 
-function TipMetadata({ item }: { item: ExperienceTipSummary }) {
+function TipMetadata({ item, ranked }: { item: ExperienceTipSummary; ranked: boolean }) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
   const compact = new Intl.NumberFormat(locale, { notation: 'compact' });
   return (
     <small className="experience-meta">
       <span>{item.author}</span>
-      {item.view_count !== undefined && <TipViewCount count={item.view_count} compact />}
+      {ranked && item.recent_reader_count !== undefined && (
+        <span className="experience-metric">
+          {t('experienceTips.recentReaderCount', { count: item.recent_reader_count })}
+        </span>
+      )}
+      {!ranked && item.view_count !== undefined && <TipViewCount count={item.view_count} compact />}
       {item.like_count !== undefined && (
         <span className="experience-metric" data-liked={item.liked || undefined}>
           <ThumbsUp size={14} aria-hidden="true" />
@@ -697,7 +702,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
                       <strong className="truncate">{item.title}</strong>
                     </div>
                     <span className="experience-row-excerpt truncate text-[13px] text-muted-foreground">{item.excerpt}</span>
-                    <TipMetadata item={item} />
+                    <TipMetadata item={item} ranked={ranked} />
                   </div>
                   <TipCover key={item.cover_url} url={item.cover_url} />
                 </button>

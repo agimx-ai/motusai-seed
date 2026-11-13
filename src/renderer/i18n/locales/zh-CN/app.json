@@ -44,6 +44,7 @@
     },
     "viewCount_one": "{{count}} 次浏览",
     "viewCount_other": "{{count}} 次浏览",
+    "recentReaderCount": "近 7 天 {{count, number}} 人阅读",
     "readingTime": "阅读 {{count}} 分钟",
     "likeCount_one": "{{count}} 个赞",
     "likeCount_other": "{{count}} 个赞",

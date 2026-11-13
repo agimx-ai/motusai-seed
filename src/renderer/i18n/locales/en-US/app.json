@@ -44,6 +44,8 @@
     },
     "viewCount_one": "{{count}} view",
     "viewCount_other": "{{count}} views",
+    "recentReaderCount_one": "{{count, number}} reader in the last 7 days",
+    "recentReaderCount_other": "{{count, number}} readers in the last 7 days",
     "readingTime": "{{count}} min read",
     "likeCount_one": "{{count}} like",
     "likeCount_other": "{{count}} likes",
