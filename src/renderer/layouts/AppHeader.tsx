@@ -88,9 +88,11 @@ export function AppHeader({
       ? refreshButton
       : view === 'activity'
         ? activityActions
-        : view === 'usage'
-          ? profileActions
-          : null;
+        : view === 'experience-tips' && !article
+          ? <div ref={experienceTipsActionsRef} className={`shrink-0 [-webkit-app-region:no-drag]${isWindows ? '' : ' ms-auto ps-3'}`} />
+          : view === 'usage'
+            ? profileActions
+            : null;
 
   return (
     <header
@@ -150,9 +152,7 @@ export function AppHeader({
       ) : (
         <h1 className="m-0 text-[16px] font-medium">{title}</h1>
       )}
-      {view === 'experience-tips' ? (
-        <div ref={experienceTipsActionsRef} className={`ms-auto shrink-0 ps-3 [-webkit-app-region:no-drag]${isWindows ? ' me-[calc(3*var(--seed-window-control-width))]' : ''}`} />
-      ) : view === 'plugin-view' && navigation?.actions?.length ? <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">{navigation.actions.map((action) => {
+      {view === 'plugin-view' && navigation?.actions?.length ? <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">{navigation.actions.map((action) => {
         const key = action.icon.replace(/(^|-)([a-z])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
         const Icon = icons[key as keyof typeof icons];
         const size = key === 'Pencil' ? 13 : 15;
