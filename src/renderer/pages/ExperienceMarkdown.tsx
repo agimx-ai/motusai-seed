@@ -34,6 +34,13 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
     return markdownPlugins({
       ...restrictedMarkdownMedia(images),
       viewerEffect: ({ markdownBody }) => {
+        const tableScrollers = Array.from(markdownBody.querySelectorAll('table'), (table) => {
+          const scroller = table.ownerDocument.createElement('div');
+          scroller.className = 'experience-table-scroll';
+          table.before(scroller);
+          scroller.append(table);
+          return scroller;
+        });
         let words = 0;
         const text = markdownBody.innerText ?? markdownBody.textContent ?? '';
         for (const line of text.split('\n')) {
@@ -67,6 +74,7 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
         markdownBody.addEventListener('click', open);
         markdownBody.addEventListener('keydown', open);
         return () => {
+          for (const scroller of tableScrollers) scroller.replaceWith(...scroller.childNodes);
           markdownBody.removeEventListener('click', open);
           markdownBody.removeEventListener('keydown', open);
           for (const image of previewable) {
@@ -97,7 +105,8 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
             :where(.markdown-body .contains-task-list) { padding-inline-start: 0; }
             :where(.markdown-body table) { border-collapse: collapse; }
             ${embeddedArticleStyles(theme, dark)}
-            .markdown-body { max-inline-size: none; margin-inline: 0; padding-inline: 0; }
+            .markdown-body { max-inline-size: 100%; margin-inline: 0; padding-inline: 0; overflow-wrap: anywhere; }
+            .markdown-body pre, .experience-table-scroll { overflow-x: auto; }
           `}</style>
           <div onErrorCapture={onImageError}>
             {body}

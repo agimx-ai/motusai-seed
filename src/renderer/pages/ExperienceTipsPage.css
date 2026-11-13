@@ -184,6 +184,7 @@ button.experience-row:focus-visible {
 }
 
 .experience-article {
+  width: 100%;
   max-width: 46rem;
   margin: 1.4rem auto;
   padding-inline: 1rem;
