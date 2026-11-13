@@ -1,3 +1,5 @@
+import { fetchMcpClients } from './mcp-clients';
+import type { McpClientEntry } from '../shared/mcp-clients';
 import { join } from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { app, BrowserWindow, clipboard, nativeTheme, powerSaveBlocker, shell, session } from 'electron';
@@ -209,6 +211,8 @@ export class SeedRuntime {
   private readonly distributionEvents: SeedDistributionEvents;
   private readonly announcements: AnnouncementInbox;
   private readonly companionDiscoveries: CompanionDiscoveryFeed;
+  private mcpClients: (McpClientEntry | string)[] | undefined;
+  private mcpClientsRequest = 0;
   private readonly logUploader = new CloudDiagnosticUploader();
   private readonly creditBilling = new CreditBillingClient(this.seedCloudUrl, (rejectedToken) =>
     this.cloudAccessToken(rejectedToken),
@@ -1028,6 +1032,7 @@ export class SeedRuntime {
     this.updater.start();
     void this.currentDistribution().catch(() => undefined);
     void this.companionDiscoveries.refresh();
+    void this.refreshMcpClients();
     this.startupStatus = 'ready';
     await this.publishSnapshot();
     void this.refreshStartupCloudState(storedCloudSession).catch(() => undefined);
@@ -1300,6 +1305,7 @@ export class SeedRuntime {
       ...(this.user ? { user: this.user } : {}),
       announcements: this.user ? this.announcements.snapshot() : [],
       companionDiscoveries: this.companionDiscoveries.snapshot(),
+      mcpClients: this.mcpClients,
       plugins: this.installedPlugins
         .filter((plugin) => this.pluginIsAuthorized(plugin.id))
         .map((plugin) => {
@@ -2002,8 +2008,22 @@ export class SeedRuntime {
     }
   }
 
+  private async refreshMcpClients() {
+    const request = ++this.mcpClientsRequest;
+    try {
+      const clients = await fetchMcpClients((await this.currentDistribution()).events_url);
+      if (request !== this.mcpClientsRequest) return;
+      this.mcpClients = clients;
+      await this.publishSnapshot();
+    } catch { /* Keep the last successful list or bundled default. */ }
+  }
+
   private async handleDistributionEvent(event: SeedDistributionEvent) {
     if (event.dist_id !== buildConfig.distributionId) return;
+    if (event.type === 'client.mcp-clients.changed') {
+      await this.refreshMcpClients();
+      return;
+    }
     if (event.type === 'client.discoveries.changed') {
       await this.companionDiscoveries.refresh();
       return;
@@ -2044,6 +2064,7 @@ export class SeedRuntime {
     if (this.user) this.emit({ type: 'experience.articles.changed' });
     await this.currentDistribution(true);
     await this.companionDiscoveries.refresh();
+    await this.refreshMcpClients();
     if (this.user)
       await Promise.all([this.refreshPluginCatalog().catch(() => undefined), this.announcements.refresh()]);
     await this.updater.check().catch(() => false);

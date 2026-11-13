@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Check, Copy, RotateCcw } from 'lucide-react'
+import { Check, Copy, RotateCcw, Monitor } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ActionButton } from '@motus-ai/seed-sdk/react'
 import type { SeedSnapshot } from '../../shared/contracts'
@@ -13,17 +13,47 @@ import vscodeIcon from '../assets/vscode.svg'
 
 const emptyDiscoveries: NonNullable<SeedSnapshot['companionDiscoveries']> = []
 
-const clients = [
+const iconFiles = import.meta.glob<string>('../../../node_modules/@lobehub/icons-static-svg/icons/*.svg', {
+  eager: true, query: '?url&no-inline', import: 'default',
+})
+const libraryIcons = new Map(Object.entries(iconFiles).map(([path, url]) => [path.split('/').pop()!.slice(0, -4), url]))
+libraryIcons.set('vscode', vscodeIcon)
+
+type ClientMark = {
+  id: string
+  name: string
+  icon?: string
+  iconSize: string
+  gradient?: string
+}
+
+const bundledClients: (ClientMark & { iconId: string })[] = [
   // Match the visible marks rather than their SVG canvas dimensions.
-  { name: 'Claude Code', icon: claudeIcon, iconSize: 'size-5.5' },
-  { name: 'Codex', icon: codexIcon, iconSize: 'size-5', gradient: 'linear-gradient(#B1A7FF, #7A9DFF 50%, #3941FF)' },
-  { name: 'DeepSeek Harness (DSH)', icon: dshIcon, iconSize: 'size-5.5' },
-  { name: 'WorkBuddy', icon: workbuddyIcon, iconSize: 'size-4.5' },
-  { name: 'VS Code', icon: vscodeIcon, iconSize: 'size-5' },
+  { id: 'claude-code', iconId: 'claudecode-color', name: 'Claude Code', icon: claudeIcon, iconSize: 'size-5.5' },
+  { id: 'codex', iconId: 'codex', name: 'Codex', icon: codexIcon, iconSize: 'size-5', gradient: 'linear-gradient(#B1A7FF, #7A9DFF 50%, #3941FF)' },
+  { id: 'deepseek', iconId: 'deepseek-color', name: 'DeepSeek Harness (DSH)', icon: dshIcon, iconSize: 'size-5.5' },
+  { id: 'workbuddy', iconId: 'workbuddy-color', name: 'WorkBuddy', icon: workbuddyIcon, iconSize: 'size-4.5' },
+  { id: 'vscode', iconId: 'vscode', name: 'VS Code', icon: vscodeIcon, iconSize: 'size-5' },
 ]
+
+function ClientIcon({ client, name }: { client: ClientMark; name: string }) {
+  const [failed, setFailed] = useState(false)
+  if (!client.icon || failed) return <Monitor className={client.iconSize} aria-label={name} role="img" />
+  return <img src={client.icon} alt={name} className={`${client.iconSize} object-contain`} onError={() => setFailed(true)} />
+}
 
 export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
   const { t } = useTranslation()
+  const clients = snapshot.mcpClients?.map<ClientMark>((entry) => {
+    if (typeof entry === 'string') {
+      return bundledClients.find(({ id }) => id === entry) ?? { id: entry, name: entry, icon: '', iconSize: 'size-5' }
+    }
+    const bundled = bundledClients.find(({ id, iconId }) => id === entry.id && iconId === entry.icon_id)
+    const name = entry.id === 'vscode' && entry.name === 'VS Code' ? t('overview.mcp.vscode') : entry.name
+    return bundled
+      ? { ...bundled, name }
+      : { id: entry.id, name, icon: libraryIcons.get(entry.icon_id) ?? entry.uploadedIconUrl, iconSize: 'size-5' }
+  }) ?? bundledClients
   const { state, copyKey, count } = companionPresentation(snapshot)
   const statusText = t(`overview.mascot.${copyKey}`, { count })
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -73,7 +103,7 @@ export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
         </ActionButton>
       </div>
       <ul aria-label={t('overview.mcp.clients')} className="m-0 flex list-none flex-wrap justify-center gap-4 p-0">
-        {clients.map((client, index) => <li key={client.name} className="seed-mcp-client"
+        {clients.map((client, index) => <li key={client.id} title={client.name} className="seed-mcp-client"
           style={{ '--seed-client-delay': `${Math.floor(Math.abs(index - (clients.length - 1) / 2)) * 110}ms` } as CSSProperties}>
           <span className="seed-mcp-client-mark grid size-9 place-items-center rounded-full border border-plugin-icon-border bg-card">
             <span className="seed-mcp-client-icon grid size-7 place-items-center">
@@ -85,7 +115,7 @@ export function OverviewPage({ snapshot }: { snapshot: SeedSnapshot }) {
                   maskRepeat: 'no-repeat',
                   maskSize: 'contain',
                 }} />
-                : <img src={client.icon} alt={client.name === 'VS Code' ? t('overview.mcp.vscode') : client.name} className={`${client.iconSize} object-contain`} />}
+                : <ClientIcon key={client.icon} client={client} name={client.name === 'VS Code' ? t('overview.mcp.vscode') : client.name} />}
             </span>
           </span>
         </li>)}

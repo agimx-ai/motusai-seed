@@ -56,6 +56,7 @@ const seedDistributionEventBaseSchema = z.object({
 export const seedDistributionEventSchema = z.discriminatedUnion('type', [
   seedDistributionEventBaseSchema.extend({ type: z.literal('announcement.changed') }),
   seedDistributionEventBaseSchema.extend({ type: z.literal('client.discoveries.changed') }),
+  seedDistributionEventBaseSchema.extend({ type: z.literal('client.mcp-clients.changed') }),
   seedDistributionEventBaseSchema.extend({ type: z.literal('plugin.catalog.changed') }),
   seedDistributionEventBaseSchema.extend({ type: z.literal('experience.articles.changed') }),
   seedDistributionEventBaseSchema.extend({
