@@ -111,6 +111,7 @@ class PluginDomHost {
           reloadService: () => peer.call('runtime.reload'),
           files: {
             pick: (options) => peer.call('files.pick', options ?? {}),
+            pickDirectory: (options, signal) => peer.call('files.pickDirectory', options ?? {}, signal, 120_000),
             path: (file) => window.motusWindow.getPathForFile(file),
           },
           clipboard: {

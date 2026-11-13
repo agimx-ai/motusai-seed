@@ -21,5 +21,7 @@ export function createPluginResources(baseUrl: string, declared: readonly string
 
 export type PluginFilePicker = {
   pick(options?: { extensions?: string[]; multiple?: boolean }): Promise<string[]>;
+  /** Opens the system folder picker. Canceling returns null. */
+  pickDirectory?(options?: { defaultPath?: string }, signal?: AbortSignal): Promise<string | null>;
   path(file: File): string;
 };

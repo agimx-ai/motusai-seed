@@ -210,4 +210,40 @@ describe('trusted DOM plugin service/resource broker', () => {
     finish({ canceled: false, filePaths: ['/late.pdf'] });
     expect(await pending).toBe('stopped');
   });
+
+  it('opens the native picker at the requested directory and returns an empty folder path or null on cancel', async () => {
+    const { root, owner, client } = await fixture();
+    const selected = await mkdtemp(join(root, '空文件夹 '));
+    state.pick.mockResolvedValueOnce({ canceled: false, filePaths: [selected] });
+    await expect(client.call('files.pickDirectory', { defaultPath: root })).resolves.toBe(selected);
+    expect(state.pick).toHaveBeenCalledExactlyOnceWith(owner, { properties: ['openDirectory'], defaultPath: root });
+    state.pick.mockResolvedValueOnce({ canceled: true, filePaths: [] });
+    await expect(client.call('files.pickDirectory')).resolves.toBeNull();
+    expect(state.pick).toHaveBeenLastCalledWith(owner, { properties: ['openDirectory'] });
+  });
+
+  it('rejects invalid starting directories without opening a dialog', async () => {
+    const { root, client } = await fixture();
+    for (const defaultPath of ['relative', root + '\0', join(root, 'missing'), join(root, 'main.js')]) {
+      await expect(client.call('files.pickDirectory', { defaultPath })).rejects.toThrow();
+    }
+    expect(state.pick).not.toHaveBeenCalled();
+  });
+
+  it('rejects overlapping picks and discards directory results after hiding and reopening the view', async () => {
+    const { root, host, owner, token, client } = await fixture();
+    let finish!: (value: unknown) => void;
+    state.pick.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    const pending = client.call('files.pickDirectory');
+    const rejected = expect(pending).rejects.toThrow('hidden');
+    await vi.waitFor(() => expect(state.pick).toHaveBeenCalledOnce());
+    await expect(client.call('files.pick')).rejects.toThrow('mounted');
+    host.unmount();
+    await expect(client.call('files.pickDirectory')).rejects.toThrow('mounted');
+    host.mount(owner, token);
+    finish({ canceled: false, filePaths: [root] });
+    await rejected;
+    state.pick.mockResolvedValueOnce({ canceled: true, filePaths: [] });
+    await expect(client.call('files.pickDirectory')).resolves.toBeNull();
+  });
 });

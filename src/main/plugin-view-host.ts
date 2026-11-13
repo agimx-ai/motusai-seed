@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, realpath } from 'node:fs/promises';
-import { extname, relative, resolve, sep } from 'node:path';
-import { dialog, type BrowserWindow, type Session } from 'electron';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import { extname, isAbsolute, parse, relative, resolve, sep } from 'node:path';
+import { dialog, type BrowserWindow, type OpenDialogOptions, type Session } from 'electron';
 import { z } from 'zod';
 import { PluginRpcPeer, type PluginDataSnapshot, type RpcMessage } from '@motus-ai/seed-sdk';
 import { ipcChannels, type SeedPluginRuntimeDefinition } from '../shared/contracts';
@@ -15,6 +15,34 @@ export type PluginViewServices = {
 };
 
 const resources = new WeakMap<Session, Map<string, SeedPluginViewHost>>();
+const filePickerSchema = z.strictObject({
+  extensions: z.array(z.string().regex(/^[a-zA-Z0-9]{1,16}$/)).min(1).max(16).optional(),
+  multiple: z.boolean().optional(),
+});
+const directoryPickerSchema = z.strictObject({ defaultPath: z.string().min(1).max(4096).optional() });
+
+function filePickerOptions(args: Record<string, unknown>): OpenDialogOptions {
+  const { extensions, multiple } = filePickerSchema.parse(args);
+  return {
+    properties: multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+    ...(extensions ? { filters: [{ name: extensions.join(', '), extensions }] } : {}),
+  };
+}
+
+async function directoryPickerOptions(args: Record<string, unknown>): Promise<OpenDialogOptions> {
+  const { defaultPath } = directoryPickerSchema.parse(args);
+  if (defaultPath === undefined) return { properties: ['openDirectory'] };
+  if (
+    !isAbsolute(defaultPath) ||
+    defaultPath.includes('\0') ||
+    (process.platform === 'win32' && /^[\\/]$/.test(parse(defaultPath).root))
+  )
+    throw new Error('Folder selection requires an absolute starting path.');
+  const entry = await stat(defaultPath).catch(() => null);
+  if (!entry?.isDirectory()) throw new Error('The starting directory is unavailable.');
+  return { properties: ['openDirectory'], defaultPath };
+}
+
 const contentTypes: Record<string, string> = {
   '.js': 'text/javascript',
   '.mjs': 'text/javascript',
@@ -77,6 +105,7 @@ export class SeedPluginViewHost {
   private owner?: BrowserWindow;
   private token?: string;
   private mounted = false;
+  private visibilityRevision = 0;
   private stopped = false;
   private selectingFiles = false;
   private releaseResources?: () => void;
@@ -131,31 +160,24 @@ export class SeedPluginViewHost {
               throw new Error('Invalid data revision.');
             return await this.services.saveData(id, args.data, Number(args.revision), assertCurrent);
           }
-          if (method === 'files.pick') {
-            const options = z
-              .object({
-                extensions: z
-                  .array(z.string().regex(/^[a-zA-Z0-9]{1,16}$/))
-                  .min(1)
-                  .max(16)
-                  .optional(),
-                multiple: z.boolean().optional(),
-              })
-              .strict()
-              .parse(args);
+          if (method === 'files.pick' || method === 'files.pickDirectory') {
             if (!this.mounted || this.selectingFiles)
               throw new Error('File selection requires a mounted plugin surface.');
+            const visibilityRevision = this.visibilityRevision;
+            const assertVisible = () => {
+              assertCurrent();
+              if (!this.mounted || this.visibilityRevision !== visibilityRevision)
+                throw new Error('Plugin surface was hidden during file selection.');
+            };
             this.selectingFiles = true;
             try {
-              const result = await dialog.showOpenDialog(owner, {
-                properties: options.multiple ? ['openFile', 'multiSelections'] : ['openFile'],
-                ...(options.extensions
-                  ? { filters: [{ name: options.extensions.join(', '), extensions: options.extensions }] }
-                  : {}),
-              });
-              assertCurrent();
-              if (!this.mounted) throw new Error('Plugin surface was hidden during file selection.');
-              return result.canceled ? [] : result.filePaths;
+              const directory = method === 'files.pickDirectory';
+              const options = directory ? await directoryPickerOptions(args) : filePickerOptions(args);
+              assertVisible();
+              const result = await dialog.showOpenDialog(owner, options);
+              assertVisible();
+              const paths = result.canceled ? [] : result.filePaths;
+              return directory ? (paths[0] ?? null) : paths;
             } finally {
               this.selectingFiles = false;
             }
@@ -200,6 +222,7 @@ export class SeedPluginViewHost {
 
   unmount(): void {
     this.mounted = false;
+    this.visibilityRevision++;
   }
 
   owns(owner: BrowserWindow, token: string): boolean {

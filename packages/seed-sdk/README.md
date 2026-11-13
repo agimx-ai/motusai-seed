@@ -145,6 +145,7 @@ await buildPlugin({
 | `reloadService?.()` | `Promise<void>` | 重新加载插件后端 |
 | `resources?.url(path)` | `string` | 包内资源 URL |
 | `files?.pick(options?)` | `Promise<string[]>` | 选择文件，取消返回 `[]` |
+| `files?.pickDirectory?.(options?, signal?)` | `Promise<string \| null>` | 打开系统目录选择器。可传 `{ defaultPath }` 指定现有的绝对起始目录。确认后返回所选目录的绝对路径，取消返回 `null`。 |
 | `files?.path(file)` | `string` | 获取 `File` 的本地路径 |
 | `clipboard?.writeText(text)` | `Promise<void>` | 写入剪贴板 |
 | `navigation?.create(options)` | `PluginNavigationHandle` | 为当前显示页面创建头部多级面包屑和返回句柄 |
