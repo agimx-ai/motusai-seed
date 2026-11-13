@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { createMcpHandler, McpServer } from '@modelcontextprotocol/server'
-import { z } from 'zod'
+import { createMcpHandler, fromJsonSchema, McpServer } from '@modelcontextprotocol/server'
 import type { SeedPluginHost } from './plugin-host'
 
 /** Streamable HTTP projection of tools explicitly declared by active plugins. */
@@ -11,7 +10,7 @@ export class SeedLocalMcpServer {
       server.registerTool(tool.name, {
         title: tool.method.display_name?.en_US || tool.name,
         description: tool.method.description?.en_US || tool.method.description?.zh_Hans || tool.name,
-        inputSchema: z.fromJSONSchema(tool.method.inputSchema as Parameters<typeof z.fromJSONSchema>[0]),
+        inputSchema: fromJsonSchema<Record<string, unknown>>(tool.method.inputSchema!),
         annotations: {
           readOnlyHint: tool.method.risk === 'read',
           destructiveHint: tool.method.risk === 'control',
@@ -20,7 +19,7 @@ export class SeedLocalMcpServer {
         try {
           const result = await this.pluginHost().invoke(tool.capability.id, tool.method.name, {
             request_id: randomUUID(), provider_plugin_id: tool.plugin.package_id,
-            arguments: args as Record<string, unknown>, signal: context.mcpReq.signal,
+            arguments: args, signal: context.mcpReq.signal,
           })
           return { content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result ?? null) }] }
         } catch (error) {

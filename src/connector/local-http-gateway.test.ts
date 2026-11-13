@@ -43,13 +43,22 @@ describe('SeedLocalHttpGateway', () => {
   it.each(['auto', 'legacy'] as const)('exposes explicitly registered tools over Streamable HTTP (%s negotiation)', async (mode) => {
     const invoke = vi.fn(async () => ({ answer: 42 }))
     let available = true
+    const inputSchema = {
+      type: 'object',
+      properties: { value: { type: 'number' }, name: { type: 'string' } },
+      additionalProperties: false,
+      oneOf: [
+        { required: ['value'], not: { required: ['name'] } },
+        { required: ['name'], not: { required: ['value'] } },
+      ],
+    }
     const runtime = { configuration: () => null, invoke_host: vi.fn() } as unknown as CapsRuntimeService
     const host = {
       localApi: () => undefined,
       mcpTools: () => available ? [{ name: 'read_probe', plugin: { package_id: 'com.example.probe' },
         capability: { id: 'probe' }, method: { name: 'read_probe', risk: 'read',
           description: { en_US: 'Read probe', zh_Hans: '读取探针' },
-          inputSchema: { type: 'object', properties: { value: { type: 'number' } }, required: ['value'] },
+          inputSchema,
         } }] : [],
       invoke,
     } as unknown as SeedPluginHost
@@ -60,7 +69,7 @@ describe('SeedLocalHttpGateway', () => {
     try {
       await client.connect(new StreamableHTTPClientTransport(url))
       expect(client.getProtocolEra()).toBe(mode === 'auto' ? 'modern' : 'legacy')
-      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(['read_probe'])
+      expect((await client.listTools()).tools).toMatchObject([{ name: 'read_probe', inputSchema }])
       expect(await client.callTool({ name: 'read_probe', arguments: { value: 3 } })).toMatchObject({
         content: [{ type: 'text', text: '{"answer":42}' }],
       })
@@ -69,6 +78,9 @@ describe('SeedLocalHttpGateway', () => {
       }))
       expect(await client.callTool({ name: 'read_probe', arguments: { value: 'bad' } }))
         .toMatchObject({ isError: true })
+      for (const args of [{}, { value: 3, name: 'example' }]) {
+        expect(await client.callTool({ name: 'read_probe', arguments: args })).toMatchObject({ isError: true })
+      }
       expect(invoke).toHaveBeenCalledTimes(1)
       available = false
       expect((await client.listTools()).tools).toEqual([])
