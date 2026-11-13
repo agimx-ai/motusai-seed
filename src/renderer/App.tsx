@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@motus-ai/seed-sdk';
 import type { SeedCatalogPage } from '../shared/contracts';
@@ -61,6 +61,9 @@ export default function App() {
   const [profileEditing, setProfileEditing] = useState(false);
   const [experienceTipsActions, setExperienceTipsActions] = useState<HTMLDivElement | null>(null);
   const [experienceArticle, setExperienceArticle] = useState<{ onBack: () => void }>();
+  const navigateToTip = useCallback((tipId?: string) => {
+    dispatchHistory(tipId ? { type: 'open', page: { view: 'experience-tips', tipId } } : { type: 'back-to-tips' });
+  }, []);
   const [pluginSearchResults, setPluginSearchResults] = useState<{
     query: string;
     page: SeedCatalogPage;
@@ -133,12 +136,15 @@ export default function App() {
   useEffect(() => {
     const request = snapshot?.navigationRequest;
     if (!request || request.id === handledNavigationId.current) return;
+    if (request.destination === 'experience-tips' && !snapshot?.user) return;
     handledNavigationId.current = request.id;
     if (request.destination === 'plugins') {
       dispatchHistory({ type: 'open', page: { view: 'plugins', pluginId: request.pluginId || undefined, query: request.query || '' } });
       if (!request.pluginId) window.setTimeout(() => pluginSearchRef.current?.focus(), 0);
+    } else {
+      navigateToTip(request.tipId);
     }
-  }, [snapshot?.navigationRequest]);
+  }, [navigateToTip, snapshot?.navigationRequest, snapshot?.user]);
 
   useEffect(() => {
     const query = pluginQuery.trim();
@@ -460,6 +466,8 @@ export default function App() {
                 onRefreshCounts={refreshExperienceTipCounts}
                 onViewActivity={markExperienceTipActivitySeen}
                 onArticleChange={setExperienceArticle}
+                articleId={page.view === 'experience-tips' ? page.tipId : undefined}
+                onArticleNavigate={navigateToTip}
               />
             )}
             {view === 'plugin-settings' && (

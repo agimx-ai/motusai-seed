@@ -25,6 +25,10 @@
       "popular": "Popular"
     },
     "backToList": "Back to Experience tips",
+    "share": "Share",
+    "shareCopied": "Link copied",
+    "shareUnavailable": "This tip can’t be shared right now.",
+    "shareCopyFailed": "Could not copy the link. Please try again.",
     "loading": "Loading…",
     "loadFailed": "Could not load experience tips",
     "submissionsLoadFailed": "Could not load your submissions",

@@ -4,7 +4,8 @@ import type { View } from './display';
 export type AppPage = (
   | { view: 'plugin-view'; pluginRoute: PluginSidebarRoute }
   | { view: 'plugins'; pluginId?: string; settingsTarget?: PluginSettingsTarget }
-  | { view: Exclude<View, 'plugin-view' | 'plugins'> }
+  | { view: 'experience-tips'; tipId?: string }
+  | { view: Exclude<View, 'plugin-view' | 'plugins' | 'experience-tips'> }
 ) & { query?: string };
 
 type History = { pages: AppPage[]; index: number };
@@ -13,6 +14,7 @@ export const initialHistory: History = { pages: [{ view: 'overview' }], index: 0
 
 type HistoryAction =
   | { type: 'open'; page: AppPage }
+  | { type: 'back-to-tips' }
   | { type: 'step'; direction: -1 | 1; available: (page: AppPage) => boolean }
   | { type: 'search'; query: string }
   | { type: 'remove'; matches: (page: AppPage) => boolean }
@@ -31,6 +33,9 @@ function samePage(current: AppPage, next: AppPage) {
   if (current.view !== next.view || (current.query ?? '') !== (next.query ?? '')) return false;
   if (current.view === 'plugins' && next.view === 'plugins') {
     return current.pluginId === next.pluginId && current.settingsTarget === next.settingsTarget;
+  }
+  if (current.view === 'experience-tips' && next.view === 'experience-tips') {
+    return current.tipId === next.tipId;
   }
   if (current.view === 'plugin-view' && next.view === 'plugin-view') {
     return current.pluginRoute.key === next.pluginRoute.key && current.pluginRoute.view === next.pluginRoute.view
@@ -52,6 +57,11 @@ export function navigationHistory(history: History, action: HistoryAction): Hist
     case 'step': {
       const next = historyNeighbor(history, action.direction, action.available);
       return next === index ? history : { pages, index: next };
+    }
+    case 'back-to-tips': {
+      const previous = pages[index - 1];
+      if (previous?.view === 'experience-tips' && !previous.tipId) return { pages, index: index - 1 };
+      return navigationHistory(history, { type: 'open', page: { view: 'experience-tips' } });
     }
     case 'search':
       if (current.view !== 'plugins' || current.query === action.query) return history;

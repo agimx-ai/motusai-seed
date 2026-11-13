@@ -1,10 +1,10 @@
-import {
-  seedDeepLinkScheme,
-  type SeedNavigationTarget,
-} from '@motus-ai/seed-sdk'
+import { seedDeepLinkScheme } from '@motus-ai/seed-sdk'
+import { z } from 'zod'
+import type { SeedAppNavigationTarget } from '../shared/contracts'
 
-type SeedDeepLinkParser = (url: URL) => SeedNavigationTarget | null
+type SeedDeepLinkParser = (url: URL) => SeedAppNavigationTarget | null
 
+const tipIdSchema = z.uuid()
 const routes = new Map<string, SeedDeepLinkParser>([
   ['/plugins', (url) => {
     const pluginId = url.searchParams.get('pluginId')?.trim()
@@ -16,9 +16,14 @@ const routes = new Map<string, SeedDeepLinkParser>([
       ...(query ? { query } : {}),
     }
   }],
+  ['/experience-tips', (url) => {
+    if (url.searchParams.size !== 1) return null
+    const tipId = tipIdSchema.safeParse(url.searchParams.get('tipId'))
+    return tipId.success ? { destination: 'experience-tips', tipId: tipId.data } : null
+  }],
 ])
 
-export function parseSeedDeepLink(value: string): SeedNavigationTarget | null {
+export function parseSeedDeepLink(value: string): SeedAppNavigationTarget | null {
   try {
     const url = new URL(value)
     if (

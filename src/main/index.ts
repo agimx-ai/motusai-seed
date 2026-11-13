@@ -2,10 +2,10 @@ import { pluginHostContentSecurityPolicy } from './plugin-host-policy'
 import { registerPluginViewProtocol } from './plugin-view-host'
 import { join, resolve } from 'node:path'
 import { release } from 'node:os'
-import { seedDeepLinkScheme, type SeedNavigationTarget } from '@motus-ai/seed-sdk'
+import { seedDeepLinkScheme } from '@motus-ai/seed-sdk'
 import { app, BrowserWindow, Menu, Tray, crashReporter, ipcMain, nativeImage, nativeTheme, powerMonitor, protocol, session, shell, systemPreferences } from 'electron'
 import { buildConfig } from '../shared/build-config.generated'
-import { ipcChannels, type SeedLanguagePreference } from '../shared/contracts'
+import { ipcChannels, type SeedAppNavigationTarget, type SeedLanguagePreference } from '../shared/contracts'
 import { registerIpc } from './ipc'
 import { nativeMenuLabel, nativeMenuMessages } from './i18n/native-menu'
 import { textContextMenu } from './text-context-menu'
@@ -67,7 +67,7 @@ function showMainWindow() {
   mainWindow.focus()
 }
 
-function handleNavigationRequest(request: SeedNavigationTarget) {
+function handleNavigationRequest(request: SeedAppNavigationTarget) {
   showMainWindow()
   if (runtime) void runtime.requestNavigation(request)
   else pendingNavigation = request
@@ -277,7 +277,7 @@ app.whenReady().then(async () => {
     runtime.handleOAuthCallback(callback)
   }
   if (pendingNavigation) {
-    const request: SeedNavigationTarget = pendingNavigation
+    const request = pendingNavigation
     pendingNavigation = null
     await runtime.requestNavigation(request)
   }

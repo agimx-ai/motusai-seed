@@ -11,6 +11,7 @@ import type {
   LocalClientAuthorization,
   MascotState,
   PluginInstallProgress,
+  SeedAppNavigationTarget,
   SeedCatalogPage,
   SeedCatalogPlugin,
   SeedDistribution,
@@ -1349,7 +1350,7 @@ export class SeedRuntime {
     this.emit({ type: 'snapshot.changed', snapshot: this.snapshot() });
   }
 
-  async requestNavigation(request: Omit<NonNullable<SeedSnapshot['navigationRequest']>, 'id'>) {
+  async requestNavigation(request: SeedAppNavigationTarget) {
     this.navigationRequest = { id: randomUUID(), ...request };
     await this.publishSnapshot();
   }

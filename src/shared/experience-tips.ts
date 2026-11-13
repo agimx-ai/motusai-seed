@@ -102,6 +102,7 @@ export const experienceTipPageSchema = z.object({
 });
 
 export const experienceTipArticleSchema = experienceTipSummarySchema.extend({
+  share_url: z.url({ protocol: /^https?$/ }).optional(),
   theme: z.string().optional(),
   body: z.string(),
   images: z.array(z.object({

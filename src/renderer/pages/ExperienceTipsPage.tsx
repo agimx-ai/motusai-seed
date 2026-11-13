@@ -1,6 +1,6 @@
 import { prefersReducedMotion, toast } from '@motus-ai/seed-sdk';
 import { ActionButton, SegmentedControl, StatusBadge } from '@motus-ai/seed-sdk/react';
-import { ChevronRight, Clock, Eye, MoreHorizontal, Pencil, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
+import { ChevronRight, Clock, Eye, MoreHorizontal, Pencil, Pin, Share2, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -321,7 +321,21 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
     return () => controller.abort();
   }, [id, onEngagementChange, retry]);
   const articleLoaded = Boolean(article);
+  const shareUrl = article?.share_url;
   useEffect(() => { if (articleLoaded) heading.current?.focus(); }, [articleLoaded]);
+
+  async function shareTip() {
+    if (!shareUrl) {
+      toast.info(t('experienceTips.shareUnavailable'));
+      return;
+    }
+    try {
+      await window.motusWindow.copyText(shareUrl);
+      toast.success(t('experienceTips.shareCopied'));
+    } catch {
+      toast.error(t('experienceTips.shareCopyFailed'));
+    }
+  }
 
   async function toggleLike() {
     if (liking || article?.liked === undefined) return;
@@ -355,7 +369,7 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
               {article.liked !== undefined && (
                 <button
                   type="button"
-                  className="experience-metric experience-like"
+                  className="experience-metric experience-article-action experience-like"
                   aria-pressed={article.liked}
                   aria-disabled={liking || undefined}
                   onClick={() => void toggleLike()}
@@ -382,6 +396,13 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
                   <Clock size={14} aria-hidden="true" />
                   {t('experienceTips.readingTime', { count: readingMinutes })}
                 </span>
+              )}
+              {!error && (
+                <button type="button" className="experience-metric experience-article-action"
+                  onClick={() => void shareTip()}>
+                  <Share2 size={14} aria-hidden="true" />
+                  {t('experienceTips.share')}
+                </button>
               )}
             </div>
             {likeFailed && <p className="experience-message" role="alert">{t('experienceTips.likeFailed')}</p>}
@@ -424,13 +445,15 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
   );
 }
 
-export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, counts, onRefreshCounts, onViewActivity }: {
+export function ExperienceTipsPage({ actionsContainer, onArticleChange, articleId, onArticleNavigate, dark, counts, onRefreshCounts, onViewActivity }: {
   actionsContainer: HTMLDivElement | null;
   dark: boolean;
   counts?: ExperienceTipCounts;
   onRefreshCounts: () => void;
   onViewActivity: (tab: ExperienceTipActivityTab) => void;
   onArticleChange: (article: { onBack: () => void } | undefined) => void;
+  articleId?: string | undefined;
+  onArticleNavigate: (tipId?: string) => void;
 }) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
@@ -439,7 +462,6 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
   const [searchInput, setSearchInput] = useState('');
   const [query, setQuery] = useState('');
   const [composingSearch, setComposingSearch] = useState(false);
-  const [articleId, setArticleId] = useState<string>();
   const [items, setItems] = useState<ExperienceTipSummary[]>([]);
   const updateEngagement = useCallback((tipId: string, engagement: TipEngagement) => {
     if (Object.values(engagement).every((value) => value === undefined)) return;
@@ -489,7 +511,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
     if (!articleId) return;
     onArticleChange({
       onBack: () => {
-        setArticleId(undefined);
+        onArticleNavigate();
         requestAnimationFrame(() => {
           if (openButton.current?.isConnected) openButton.current.focus();
           else section.current?.focus({ preventScroll: true });
@@ -497,7 +519,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
       },
     });
     return () => onArticleChange(undefined);
-  }, [articleId, onArticleChange]);
+  }, [articleId, onArticleChange, onArticleNavigate]);
 
   async function load(before: string | null, pages = 1) {
     active.current?.abort();
@@ -694,7 +716,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, dark, co
               ) : (
                 <button type="button" className="experience-row experience-article-row" onClick={(event) => {
                   openButton.current = event.currentTarget;
-                  setArticleId(item.tip_id);
+                  onArticleNavigate(item.tip_id);
                 }}>
                   {ranked && (
                     <span className="experience-rank font-bold" data-place={index < 3 ? index + 1 : undefined}>

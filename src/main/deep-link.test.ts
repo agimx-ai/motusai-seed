@@ -36,4 +36,12 @@ describe('Seed deep links', () => {
     expect(seedDeepLinkFromArguments(['MotusAI Seed', '--flag', 'motusai-seed://open/plugins?query=agent-harness']))
       .toEqual({ destination: 'plugins', query: 'agent-harness' })
   })
+
+  it('opens a published tip by its stable ID', () => {
+    const tipId = '87b6db0c-2bfa-4154-a720-82541de45770'
+    const link = `motusai-seed://open/experience-tips?tipId=${tipId}`
+    expect(seedDeepLinkFromArguments(['MotusAI Seed', link])).toEqual({ destination: 'experience-tips', tipId })
+    expect(parseSeedDeepLink(link + '&tipId=' + tipId)).toBeNull()
+    expect(parseSeedDeepLink('motusai-seed://open/experience-tips?tipId=invalid')).toBeNull()
+  })
 })

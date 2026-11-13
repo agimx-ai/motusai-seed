@@ -211,7 +211,7 @@ button.experience-row:focus-visible {
   font-size: var(--text-sm);
 }
 
-.experience-like {
+.experience-article-action {
   min-inline-size: 1.5rem;
   min-block-size: 1.5rem;
   padding: 0;
@@ -223,7 +223,7 @@ button.experience-row:focus-visible {
   cursor: pointer;
 }
 
-.experience-like:hover,
+.experience-article-action:hover,
 .experience-metric:is([aria-pressed="true"], [data-liked="true"]) {
   color: var(--foreground);
 }
@@ -232,7 +232,7 @@ button.experience-row:focus-visible {
   fill: currentColor;
 }
 
-.experience-like:focus-visible {
+.experience-article-action:focus-visible {
   outline: 2px solid var(--color-border-focus, var(--foreground));
   outline-offset: 2px;
 }

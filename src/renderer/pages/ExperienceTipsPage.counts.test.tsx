@@ -91,7 +91,7 @@ it('shows unread activity, clears each tab independently, and keeps checkpoints 
         />
         {showPage && (
           <ExperienceTipsPage key={userId} dark={false} actionsContainer={null} counts={counts}
-            onRefreshCounts={refreshCounts} onViewActivity={markSeen} onArticleChange={vi.fn()} />
+            onRefreshCounts={refreshCounts} onViewActivity={markSeen} onArticleChange={vi.fn()} onArticleNavigate={vi.fn()} />
         )}
       </SeedI18nProvider>
     );

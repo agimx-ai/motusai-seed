@@ -5,6 +5,7 @@ import type { SeedLocalizedText } from './plugin-manifest';
 import type { DiagnosticTraceContext } from './diagnostic-trace';
 
 export type AuthStatus = 'signed_out' | 'authorizing' | 'signed_in' | 'error';
+export type SeedAppNavigationTarget = SeedNavigationTarget | { destination: 'experience-tips'; tipId: string };
 export type MascotState = 'idle' | 'running' | 'working' | 'waiting' | 'review' | 'failed';
 
 export type SeedDistribution = {
@@ -217,7 +218,7 @@ export type SeedSnapshot = {
   pluginUpdates?: { running: boolean; result?: PluginUpdateResult };
   catalogNextCursor?: string;
   localClients: LocalClientAuthorization[];
-  navigationRequest?: SeedNavigationTarget & { id: string };
+  navigationRequest?: SeedAppNavigationTarget & { id: string };
   audit: AuditEntry[];
   launchAtLogin: boolean;
   preventSystemSleep: boolean;
