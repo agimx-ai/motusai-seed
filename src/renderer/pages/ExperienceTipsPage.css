@@ -237,8 +237,35 @@ button.experience-row:focus-visible {
   outline-offset: 2px;
 }
 
-.experience-like[aria-disabled="true"] {
-  cursor: wait;
+.experience-like-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.experience-like-spark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.experience-like-spark > span {
+  position: absolute;
+  inline-size: 1.5px;
+  block-size: 4px;
+  border-radius: 1px;
+  background: currentColor;
+  animation: experience-like-spark 320ms ease-out both;
+}
+
+:root[data-reduced-motion='true'] .experience-like-spark {
+  visibility: hidden;
+}
+
+@keyframes experience-like-spark {
+  from { transform: translateY(-7px); opacity: 0.9; }
+  to { transform: translateY(-16px) scaleY(0.35); opacity: 0; }
 }
 
 .experience-article-byline time {

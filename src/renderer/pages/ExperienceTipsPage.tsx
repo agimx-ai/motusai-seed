@@ -1,4 +1,4 @@
-import { toast } from '@motus-ai/seed-sdk';
+import { prefersReducedMotion, toast } from '@motus-ai/seed-sdk';
 import { ActionButton, SegmentedControl, StatusBadge } from '@motus-ai/seed-sdk/react';
 import { ChevronRight, Clock, Eye, MoreHorizontal, Pencil, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
@@ -17,6 +17,7 @@ import { userFacingErrorMessage } from '../lib/errors';
 import './ExperienceTipsPage.css';
 
 const minimumSkeletonDurationMs = 250;
+const likeSparkAngles = [0, 45, 90, 135, 180, 225, 270, 315];
 
 async function readExperienceTips(request: ExperienceTipRead, signal: AbortSignal, showSkeleton: boolean) {
   if (!showSkeleton) return window.motusSeed.readExperienceTips(request);
@@ -297,6 +298,7 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
   const [retry, setRetry] = useState(0);
   const [liking, setLiking] = useState(false);
   const [likeFailed, setLikeFailed] = useState(false);
+  const [showLikeSpark, setShowLikeSpark] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -329,6 +331,7 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
       const stats = await window.motusSeed.setExperienceTipLike({ tipId: id, liked: !article.liked });
       setArticle((current) => current && { ...current, ...stats });
       onEngagementChange(id, stats);
+      setShowLikeSpark(!article.liked && stats.liked && !prefersReducedMotion());
     } catch {
       setLikeFailed(true);
     } finally {
@@ -357,7 +360,14 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
                   aria-disabled={liking || undefined}
                   onClick={() => void toggleLike()}
                 >
-                  <ThumbsUp size={14} aria-hidden="true" />
+                  <span className="experience-like-icon" aria-hidden="true">
+                    <ThumbsUp size={14} />
+                    {showLikeSpark && (
+                      <span className="experience-like-spark" onAnimationEnd={() => setShowLikeSpark(false)}>
+                        {likeSparkAngles.map((angle) => <span key={angle} style={{ rotate: `${angle}deg` }} />)}
+                      </span>
+                    )}
+                  </span>
                   <span className="sr-only">{t('experienceTips.like')}</span>
                   {article.like_count !== undefined && (
                     <>
