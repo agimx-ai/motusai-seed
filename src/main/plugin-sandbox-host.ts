@@ -72,6 +72,7 @@ export function requiredPermissions(service: string, argumentsValue: Record<stri
   }
   if (
     service === 'seed.cloud.relay' ||
+    service === 'seed.cloud.control' ||
     service === 'seed.cloud.models' ||
     ['seed.cloud.relay.stream.start', 'seed.cloud.relay.stream.next', 'seed.cloud.relay.stream.close'].includes(service)
   )

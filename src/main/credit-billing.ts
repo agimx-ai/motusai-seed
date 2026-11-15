@@ -69,6 +69,7 @@ function creditRequestError(response: Response, body: Record<string, unknown> | 
           : `积分服务请求失败（${response.status}）。`,
     ),
     {
+      status: response.status,
       code: tooLarge
         ? 'credit_relay_request_too_large'
         : typeof body?.code === 'string'
@@ -225,6 +226,31 @@ export class CreditBillingClient {
     outcome: 'started' | 'succeeded' | 'failed' | 'cancelled';
   }) {
     return this.request('/local-relay', invocationSchema, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async relayControl(input: {
+    plugin_id: string;
+    plugin_version: string;
+    capability_id: string;
+    method: string;
+    payload: Record<string, unknown>;
+  }) {
+    try {
+      return await this.request(
+        '/relay/control',
+        relaySchema,
+        { method: 'POST', body: serializeRelayRequest(input) },
+        135_000,
+      );
+    } catch (error) {
+      if ((error as { status?: number; code?: string })?.status === 404 &&
+          (error as { code?: string }).code === 'credit_service_error') {
+        throw Object.assign(new Error('Cloud does not support relay control requests.'), {
+          code: 'credit_relay_control_unsupported',
+        });
+      }
+      throw error;
+    }
   }
 
   async relay(input: {

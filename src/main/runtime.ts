@@ -284,6 +284,11 @@ export class SeedRuntime {
       async (argumentsValue) =>
         await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.cloud.relay', argumentsValue),
     ],
+    [
+      'seed.cloud.control',
+      async (argumentsValue) =>
+        await this.invokePluginBroker(String(argumentsValue.package_id || ''), 'seed.cloud.control', argumentsValue),
+    ],
     ...(
       ['seed.cloud.relay.stream.start', 'seed.cloud.relay.stream.next', 'seed.cloud.relay.stream.close'] as const
     ).map(
@@ -2878,6 +2883,7 @@ export class SeedRuntime {
     }
     if (
       service === 'seed.cloud.relay' ||
+      service === 'seed.cloud.control' ||
       service === 'seed.cloud.models' ||
       ['seed.cloud.relay.stream.start', 'seed.cloud.relay.stream.next', 'seed.cloud.relay.stream.close'].includes(
         service,
@@ -2906,6 +2912,7 @@ export class SeedRuntime {
         .object({
           capability_id: z.string().regex(/^[a-z][a-z0-9._-]*$/),
           method: z.string().regex(/^[a-z][a-z0-9._-]*$/),
+          ...(service === 'seed.cloud.control' ? { payload: z.record(z.string(), z.unknown()) } : {}),
           ...(service === 'seed.cloud.relay' || service === 'seed.cloud.relay.stream.start'
             ? {
                 call_id: z.string().uuid().optional(),
@@ -2941,6 +2948,14 @@ export class SeedRuntime {
         model_id?: string;
         payload: Record<string, unknown>;
       };
+      if (service === 'seed.cloud.control')
+        return this.creditBilling.relayControl({
+          plugin_id: packageId,
+          plugin_version: plugin.version,
+          capability_id: input.capability_id,
+          method: input.method,
+          payload,
+        });
       const body = JSON.stringify(payload);
       const relay =
         service === 'seed.cloud.relay.stream.start'

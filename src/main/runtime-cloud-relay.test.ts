@@ -62,6 +62,23 @@ function relayRuntime(creditBilling: Record<string, unknown>, permissions = ['cl
 }
 
 describe('Runtime Cloud relay', () => {
+  it('passes control messages without preparing an invoice and uses the installed plugin identity', async () => {
+    const prepare = vi.fn();
+    const relayControl = vi.fn(async () => ({ payload: 'fixture' }));
+    const runtime = relayRuntime({ prepare, relayControl });
+    const call = (capability: string) => Reflect.get(runtime, 'invokePluginBroker').call(
+      runtime, 'com.example.plugin', 'seed.cloud.control',
+      { plugin_version: 'caller-value', capability_id: capability, method: 'complete', payload: { example: true } },
+    );
+    await expect(call('hosted_models')).resolves.toEqual({ payload: 'fixture' });
+    expect(relayControl).toHaveBeenCalledExactlyOnceWith({
+      plugin_id: 'com.example.plugin', plugin_version: '1.0.0',
+      capability_id: 'hosted_models', method: 'complete', payload: { example: true },
+    });
+    await expect(call('undeclared')).rejects.toMatchObject({ code: 'broker_permission_denied' });
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
   it.each(['seed.cloud.relay', 'seed.cloud.relay.stream.start'])(
     'uses explicit billing identity without interpreting the %s payload',
     async (service) => {
