@@ -105,7 +105,7 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
             :where(.markdown-body .contains-task-list) { padding-inline-start: 0; }
             :where(.markdown-body table) { border-collapse: collapse; }
             ${embeddedArticleStyles(theme, dark)}
-            .markdown-body { max-inline-size: 100%; margin-inline: 0; padding-inline: 0; overflow-wrap: anywhere; }
+            .markdown-body { max-inline-size: 100%; margin-inline: 0; padding-inline: 0; padding-block-end: 0; overflow-wrap: anywhere; }
             .markdown-body pre, .experience-table-scroll { overflow-x: auto; }
           `}</style>
           <div onErrorCapture={onImageError}>

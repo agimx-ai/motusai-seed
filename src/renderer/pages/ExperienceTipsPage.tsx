@@ -652,7 +652,7 @@ export function ExperienceTipsPage({ actionsContainer, onArticleChange, articleI
   }
 
   return (
-    <section ref={section} tabIndex={-1} className={`mx-auto flex min-h-full max-w-[54rem] flex-col text-foreground ${articleId ? 'pt-4' : ''} ${showListState ? '' : 'pb-8'}`} aria-label={t('nav.experience-tips')}>
+    <section ref={section} tabIndex={-1} className={`mx-auto flex min-h-full max-w-[54rem] flex-col text-foreground ${articleId ? 'pt-4 pb-6' : showListState ? '' : 'pb-8'}`} aria-label={t('nav.experience-tips')}>
       {actionsContainer && !articleId && createPortal(
         <HeaderRefreshButton label={refreshLabel} refreshing={loading} onClick={() => {
           onRefreshCounts();

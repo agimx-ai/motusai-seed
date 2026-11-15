@@ -186,7 +186,7 @@ button.experience-row:focus-visible {
 .experience-article {
   width: 100%;
   max-width: 46rem;
-  margin: 1.4rem auto;
+  margin: 1.4rem auto 0;
   padding-inline: 1rem;
   overflow-wrap: anywhere;
 }
@@ -203,7 +203,7 @@ button.experience-row:focus-visible {
 }
 
 .experience-article-body {
-  padding-block: 1rem;
+  padding-block-start: 1rem;
 }
 
 .experience-article-byline {
