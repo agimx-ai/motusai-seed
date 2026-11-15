@@ -110,6 +110,7 @@
     "retryImage": "背景加载失败，点击重试"
   },
   "common": {
+    "appName": "MotusAI 小黑",
     "enabled": "已启用",
     "installed": "已安装",
     "officialVerified": "此插件由 {{appName}} 官方认证",

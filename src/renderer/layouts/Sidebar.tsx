@@ -145,7 +145,8 @@ export function Sidebar({
     setAccountMenuOpen(false);
     onNavigate(nextView);
   };
-  const displayName = snapshot.user ? snapshot.user.displayName : snapshot.appName;
+  const appName = t('common.appName');
+  const displayName = snapshot.user ? snapshot.user.displayName : appName;
   const avatar = snapshot.user?.avatarDataUrl;
 
   return (
@@ -161,7 +162,7 @@ export function Sidebar({
       <div className="flex h-full min-h-0 shrink-0 flex-col px-4 pb-0" style={{ width }}>
         <div className="mb-4 flex min-h-6 items-center gap-1 px-1">
           <div className="min-w-0 flex-1 truncate font-display text-[16px] font-semibold leading-6 tracking-[-.015em]">
-            {snapshot.appName}
+            {appName}
           </div>
           <div className="-mr-3 flex shrink-0 items-center gap-1">
             <Tooltip

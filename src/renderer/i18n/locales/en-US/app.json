@@ -110,6 +110,7 @@
     "retryImage": "Background could not load. Retry"
   },
   "common": {
+    "appName": "MotusAI Seed",
     "enabled": "Enabled",
     "installed": "Installed",
     "officialVerified": "Officially verified by {{appName}}",
