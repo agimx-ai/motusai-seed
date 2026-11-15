@@ -2788,6 +2788,7 @@ export class SeedRuntime {
   private async releasePluginWork(packageId: string, failed = false) {
     this.cloudResources.closePlugin(packageId);
     this.pluginEvents.closePlugin(packageId);
+    await this.audioService.releasePlugin(packageId);
     this.systemNotifications.clear(packageId);
     for (const calls of [this.sandboxCalls, this.capabilityCalls])
       for (const [key, call] of calls) if (key.startsWith(packageId + ':')) call.abort();
@@ -3193,13 +3194,15 @@ export class SeedRuntime {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId);
       if (!plugin?.permissions.includes('device.audio.capture'))
         throw Object.assign(new Error('插件未声明音频采集权限。'), { code: 'broker_permission_denied' });
-      return await this.audioService.invoke(
+      const result = await this.audioService.invoke(
         argumentsValue,
         packageId,
         plugin.runtime_kind === 'native-host' && typeof argumentsValue.activity_task_id === 'string'
           ? argumentsValue.activity_task_id
           : undefined,
       );
+      if (String(argumentsValue.operation).startsWith('stream.')) assertActive?.();
+      return result;
     }
     throw new Error(`Seed 不支持 Broker 服务：${service}`);
   }

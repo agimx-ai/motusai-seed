@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
+import { randomUUID } from 'node:crypto'
+import { createAudioClient, type AudioStreamChunk, type AudioStreamFormat } from '../../packages/seed-sdk/src/audio'
 
 const { ipcMain } = vi.hoisted(() => ({
   ipcMain: {
@@ -18,6 +20,7 @@ vi.mock('electron', () => ({
 
 import { AudioService } from './audio-service'
 import { LatestAudioRecording } from './latest-audio-recording'
+import type { SystemAudioRecorderFactory } from './system-audio-capture'
 
 type AudioServiceInternals = {
   window: { webContents: { send: ReturnType<typeof vi.fn> }; isDestroyed(): boolean }
@@ -77,6 +80,144 @@ describe('AudioService segmented capture', () => {
     const service = new AudioService()
     await expect(service.invoke({ operation: 'capture.start', source: 'screen' }, 'plugin-a')).rejects.toMatchObject({ code: 'audio_source_invalid' })
     expect(service.snapshot()).toMatchObject({ state: 'idle', source: 'microphone' })
+    await service.destroy()
+  })
+
+  const liveFormat: AudioStreamFormat = {
+    encoding: 'pcm_f32le', sample_rate: 44_100, channels: 2, bits_per_sample: 32, layout: 'planar',
+  }
+
+  function microphoneStream(factory?: SystemAudioRecorderFactory) {
+    const service = new AudioService(undefined, undefined, factory)
+    const internal = service as unknown as AudioServiceInternals & {
+      ensureMicrophonePermission(): Promise<void>
+      ensureWindow(): Promise<unknown>
+      handleCaptureEvent(event: { sender: unknown }, value: Record<string, unknown>): void
+      handleChunk(event: { sender: unknown }, sessionId: string, pcm: ArrayBuffer, format: AudioStreamFormat): void
+    }
+    let tail: ArrayBuffer | undefined
+    const webContents = { send: vi.fn((_channel, command: { type: string; session_id: string }) => {
+      const type = { start: 'started', pause: 'paused', resume: 'resumed', stop: 'stopped' }[command.type]
+      if (command.type === 'stop' && tail) push(tail)
+      if (type) internal.handleCaptureEvent({ sender: webContents }, { session_id: command.session_id, type })
+    }) }
+    internal.window = Object.assign({ webContents, isDestroyed: () => false }, { destroy: vi.fn() })
+    vi.spyOn(internal, 'ensureMicrophonePermission').mockResolvedValue()
+    vi.spyOn(internal, 'ensureWindow').mockResolvedValue(internal.window)
+    function push(buffer: ArrayBuffer) {
+      internal.handleChunk({ sender: webContents }, internal.sessionId, buffer, liveFormat)
+    }
+    return { service, internal, push, tail: (buffer: ArrayBuffer) => { tail = buffer } }
+  }
+
+  it('delivers byte-identical live audio through the SDK, handles pause, and drains the stop tail', async () => {
+    const { service, internal, push, tail } = microphoneStream()
+    const owner = new AbortController()
+    const report = vi.fn()
+    const broker = vi.fn((_service, args) => service.invoke(args, 'plugin-a'))
+    const client = createAudioClient(broker, owner.signal, report)
+    const chunks: AudioStreamChunk[] = []
+    const live = await client.subscribe({}, (chunk) => { chunks.push(chunk) })
+    expect(broker.mock.calls.map(([, args]) => args.operation)).toEqual(['stream.subscribe', 'stream.next'])
+    const a = new Float32Array([0.25, -0.5, 1.1, 0.75]).buffer
+    const b = new Float32Array([-0.8, 0.7]).buffer
+    const c = new Float32Array([0.6, 0.1]).buffer
+    push(a)
+    await vi.waitFor(() => expect(chunks).toHaveLength(1))
+    await live.pause()
+    push(b)
+    await live.resume()
+    push(b)
+    tail(c)
+    await live.stop()
+    await live.closed
+    expect(chunks.map(({ data, sample_offset, sequence, frames, format }) =>
+      ({ data: [...data], sample_offset, sequence, frames, format }))).toEqual([
+      { data: [...new Uint8Array(a)], sample_offset: 0, sequence: 0, frames: 2, format: liveFormat },
+      { data: [...new Uint8Array(b)], sample_offset: 2, sequence: 1, frames: 1, format: liveFormat },
+      { data: [...new Uint8Array(c)], sample_offset: 3, sequence: 2, frames: 1, format: liveFormat },
+    ])
+    expect(internal.pcmBytes).toBe(0)
+    expect(report).not.toHaveBeenCalled()
+    await service.destroy()
+  })
+
+  it('can deliver beyond the legacy PCM limit and releases a waiting read on plugin unload', async () => {
+    const { service, internal, push } = microphoneStream()
+    const session_id = randomUUID()
+    const invoke = (operation: string, owner = 'plugin-a') => service.invoke({ operation: 'stream.' + operation, session_id }, owner)
+    await invoke('subscribe')
+    await expect(invoke('next', 'plugin-b')).rejects.toMatchObject({ code: 'audio_session_forbidden' })
+    const data = new ArrayBuffer(64 * 1024)
+    for (let sequence = 0; sequence < 170; sequence++) {
+      const delivery = invoke('next')
+      push(data)
+      expect(await delivery).toMatchObject({ done: false, chunks: [{ sequence, sample_offset: data.byteLength / 8 * sequence }] })
+    }
+    expect(internal.pcmBytes).toBe(0)
+    const pending = invoke('next')
+    await service.releasePlugin('plugin-a')
+    await expect(pending).resolves.toEqual({ done: true, chunks: [] })
+    await expect(invoke('next')).rejects.toMatchObject({ code: 'audio_stream_closed' })
+    expect(service.snapshot().state).toBe('idle')
+    await service.destroy()
+  })
+
+  it('ends a slow subscriber with an explicit overflow', async () => {
+    const { service, push } = microphoneStream()
+    const session_id = randomUUID()
+    await service.invoke({ operation: 'stream.subscribe', session_id }, 'plugin-a')
+    for (let index = 0; index < 33; index++) push(new ArrayBuffer(64 * 1024))
+    await expect(service.invoke({ operation: 'stream.next', session_id }, 'plugin-a'))
+      .rejects.toMatchObject({ code: 'audio_stream_overflow' })
+    await service.destroy()
+  })
+
+  it('delivers microphone and system sources independently in a single subscription', async () => {
+    setPlatform('darwin')
+    const systemFormat = { sampleRate: 48_000, channelsPerFrame: 1, bitsPerChannel: 16, encoding: 'pcm_s16le', isFloat: false }
+    const recorder = Object.assign(new EventEmitter(), {
+      start: async () => { recorder.emit('metadata', systemFormat) },
+      stop: async () => undefined,
+    })
+    const factory = vi.fn(async () => recorder)
+    const { service, push } = microphoneStream(factory)
+    const chunks: AudioStreamChunk[] = []
+    const audio = createAudioClient(
+      (_service, args) => service.invoke(args, 'plugin-a'), new AbortController().signal, vi.fn(),
+    )
+    const stream = await audio.subscribe({ source: 'mixed' }, (chunk) => { chunks.push(chunk) })
+    expect(factory).toHaveBeenCalledExactlyOnceWith(true)
+    push(Float32Array.of(0.25, -0.5).buffer)
+    recorder.emit('data', { data: Buffer.from([1, 2, 3, 4]) })
+    push(Float32Array.of(0.5, -0.25).buffer)
+    await stream.stop()
+    await stream.closed
+    expect(chunks).toMatchObject([
+      { source: 'microphone', sequence: 0, sample_offset: 0, format: { sample_rate: 44_100, channels: 2 } },
+      { source: 'system', sequence: 1, sample_offset: 0, frames: 2, format: { sample_rate: 48_000, channels: 1 }, data: Uint8Array.of(1, 2, 3, 4) },
+      { source: 'microphone', sequence: 2, sample_offset: 1, format: { sample_rate: 44_100, channels: 2 } },
+    ])
+    await service.destroy()
+  })
+
+  it('cancels an SDK subscription during device permission and discards late startup', async () => {
+    const { service, internal } = microphoneStream()
+    let allow!: () => void
+    const permission = vi.mocked(internal.ensureMicrophonePermission)
+    permission.mockImplementation(() => new Promise<void>((resolve) => { allow = resolve }))
+    const signal = new AbortController()
+    const audio = createAudioClient((_service, args) => service.invoke(args, 'plugin-a'), signal.signal, vi.fn())
+    const listener = vi.fn()
+    const subscribed = audio.subscribe({}, listener)
+    const failed = expect(subscribed).rejects.toThrow()
+    await vi.waitFor(() => expect(permission).toHaveBeenCalledOnce())
+    signal.abort()
+    await vi.waitFor(() => expect(service.snapshot().state).toBe('idle'))
+    allow()
+    await failed
+    expect(listener).not.toHaveBeenCalled()
+    expect(internal.window.webContents.send).not.toHaveBeenCalledWith('seed-audio:command', expect.objectContaining({ type: 'start' }))
     await service.destroy()
   })
 

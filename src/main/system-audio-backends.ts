@@ -12,13 +12,18 @@ export class MacSystemAudioRecorder extends EventEmitter implements SystemAudioR
   private child: ChildProcessWithoutNullStreams | null = null
   private stderr = ''
   private pcm: Buffer = Buffer.alloc(0)
-  private hasMetadata = false
+  private bytesPerFrame = 0
   private stopTask: Promise<void> | null = null
 
-  constructor(private readonly binaryPath: string, private readonly launch: typeof spawn = spawn) { super() }
+  constructor(
+    private readonly binaryPath: string,
+    private readonly launch: typeof spawn = spawn,
+    private readonly nativeFormat = false,
+  ) { super() }
 
   async start() {
-    const child = this.launch(this.binaryPath, ['--sample-rate', '16000', '--chunk-duration', '0.02'], { shell: false, stdio: 'pipe' }) as ChildProcessWithoutNullStreams
+    const options = this.nativeFormat ? [] : ['--sample-rate', '16000']
+    const child = this.launch(this.binaryPath, [...options, '--chunk-duration', '0.02'], { shell: false, stdio: 'pipe' }) as ChildProcessWithoutNullStreams
     this.child = child
     child.stdout.on('data', (data: Buffer) => {
       if (this.stopTask) return
@@ -54,7 +59,8 @@ export class MacSystemAudioRecorder extends EventEmitter implements SystemAudioR
     if (!message || typeof message !== 'object') return
     const data = message.data && typeof message.data === 'object' ? message.data : {}
     if (message.message_type === 'metadata') {
-      this.hasMetadata = true
+      const frameSize = Number(data.channels_per_frame) * Number(data.bits_per_channel) / 8
+      this.bytesPerFrame = Number.isSafeInteger(frameSize) && frameSize >= 1 && frameSize <= 32_000 ? frameSize : 0
       this.emit('metadata', {
         sampleRate: data.sample_rate, channelsPerFrame: data.channels_per_frame,
         bitsPerChannel: data.bits_per_channel, isFloat: data.is_float, encoding: data.encoding,
@@ -66,9 +72,10 @@ export class MacSystemAudioRecorder extends EventEmitter implements SystemAudioR
   }
 
   private flushPcm() {
-    if (!this.hasMetadata) return
-    while (this.pcm.length >= 2) {
-      const length = Math.min(this.pcm.length - this.pcm.length % 2, 32_000)
+    if (!this.bytesPerFrame) return
+    while (this.pcm.length >= this.bytesPerFrame) {
+      const limit = Math.min(this.pcm.length, 32_000)
+      const length = limit - limit % this.bytesPerFrame
       const data = this.pcm.subarray(0, length)
       this.pcm = this.pcm.subarray(length)
       this.emit('data', { data })
@@ -97,9 +104,12 @@ export interface WasapiRecorder {
 export class WindowsSystemAudioRecorder extends EventEmitter implements SystemAudioRecorder {
   private timer: ReturnType<typeof setInterval> | null = null
   private active = false
-  constructor(private readonly native: WasapiRecorder) { super() }
+  constructor(private readonly native: WasapiRecorder, private readonly nativeFormat = false) { super() }
   async start() {
-    this.native.startSystemAudio({ sampleRate: 16_000, chunkDurationMs: 20, stereo: false, emitSilence: true, mute: false })
+    // The native "stereo" flag disables downmixing and preserves the device's channel count.
+    this.native.startSystemAudio(this.nativeFormat
+      ? { stereo: true, emitSilence: false, chunkDurationMs: 20, mute: false }
+      : { sampleRate: 16_000, chunkDurationMs: 20, stereo: false, emitSilence: true, mute: false })
     this.active = true
     this.timer = setInterval(() => this.poll(), 10)
   }
@@ -123,15 +133,15 @@ export class WindowsSystemAudioRecorder extends EventEmitter implements SystemAu
   }
 }
 
-export function createSystemAudioRecorder(): SystemAudioRecorder {
+export function createSystemAudioRecorder(nativeFormat = false): SystemAudioRecorder {
   if (process.platform === 'darwin') {
     const binary = app.isPackaged ? join(process.resourcesPath, 'audio', 'audiotee')
       : join(dirname(load.resolve('audiotee')), '..', 'bin', 'audiotee')
-    return new MacSystemAudioRecorder(binary)
+    return new MacSystemAudioRecorder(binary, spawn, nativeFormat)
   }
   if (process.platform === 'win32' && ['x64', 'arm64'].includes(process.arch)) {
     const binding = load(`@native-audio-node/win32-${process.arch}`) as { AudioRecorderNative: new () => WasapiRecorder }
-    return new WindowsSystemAudioRecorder(new binding.AudioRecorderNative())
+    return new WindowsSystemAudioRecorder(new binding.AudioRecorderNative(), nativeFormat)
   }
   throw Object.assign(new Error('当前平台不支持系统音频采集。'), { code: 'audio_source_unsupported' })
 }

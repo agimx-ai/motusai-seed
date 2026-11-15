@@ -8,7 +8,7 @@ export function parseAudioCaptureSource(value: unknown): AudioCaptureSource {
 }
 
 export type AudioCaptureCommand =
-  | { type: 'start'; session_id: string }
+  | { type: 'start'; session_id: string; native_format?: true }
   | { type: 'pause'; session_id: string }
   | { type: 'resume'; session_id: string }
   | { type: 'stop'; session_id: string }

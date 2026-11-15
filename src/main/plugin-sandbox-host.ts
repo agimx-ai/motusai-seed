@@ -109,6 +109,12 @@ export function requiredPermissions(service: string, argumentsValue: Record<stri
         'capture.read',
         'capture.ack',
         'capture.discard',
+        'stream.subscribe',
+        'stream.next',
+        'stream.pause',
+        'stream.resume',
+        'stream.stop',
+        'stream.unsubscribe',
       ].includes(operation)
     ) {
       return ['device.audio.capture'];

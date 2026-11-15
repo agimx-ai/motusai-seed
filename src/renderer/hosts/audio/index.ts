@@ -1,11 +1,12 @@
 import type { AudioCaptureCommand } from '../../../shared/audio-capture'
+import type { AudioStreamFormat } from '@motus-ai/seed-sdk'
 
 declare global {
   interface Window {
     seedAudioCapture: {
       ready(): void
       emit(event: Record<string, unknown>): void
-      chunk(sessionId: string, pcm: ArrayBuffer): void
+      chunk(sessionId: string, pcm: ArrayBuffer, format?: AudioStreamFormat): void
       subscribe(listener: (command: AudioCaptureCommand) => void): () => void
     }
   }
@@ -52,9 +53,12 @@ async function start(command: Extract<AudioCaptureCommand, { type: 'start' }>, c
   await cleanup()
   if (currentGeneration !== generation) return
   sessionId = command.session_id
+  const nativeFormat = command.native_format === true
   if (!window.AudioContext || !navigator.mediaDevices?.getUserMedia) throw new Error('当前系统不支持麦克风采集。')
   const captured = await navigator.mediaDevices.getUserMedia({
-    audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+    audio: nativeFormat
+      ? { autoGainControl: false, echoCancellation: false, noiseSuppression: false }
+      : { autoGainControl: true, echoCancellation: true, noiseSuppression: true, channelCount: 1 },
   })
   if (currentGeneration !== generation) {
     captured.getTracks().forEach((track) => track.stop())
@@ -63,12 +67,16 @@ async function start(command: Extract<AudioCaptureCommand, { type: 'start' }>, c
   stream = captured
   const tracks = captured.getAudioTracks()
   if (!tracks.length || tracks.some((track) => track.readyState !== 'live')) throw new Error('未获取到麦克风音频，请检查设备及权限。')
-  const audioContext = new AudioContext({ sampleRate: 16_000 })
+  const sampleRate = nativeFormat ? tracks[0].getSettings().sampleRate : 16_000
+  const audioContext = new AudioContext(sampleRate ? { sampleRate } : undefined)
   context = audioContext
-  if (audioContext.sampleRate !== 16_000) throw new Error('麦克风无法初始化为 16 kHz 音频。')
+  if (!nativeFormat && audioContext.sampleRate !== 16_000) throw new Error('麦克风无法初始化为 16 kHz 音频。')
   await audioContext.audioWorklet.addModule(new URL('./capture-processor.js?no-inline', import.meta.url))
   if (currentGeneration !== generation) return
-  const node = new AudioWorkletNode(audioContext, 'seed-pcm-capture', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] })
+  const node = new AudioWorkletNode(audioContext, 'seed-pcm-capture', {
+    numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+    ...(nativeFormat ? { channelCountMode: 'max', processorOptions: { nativeFormat } } : {}),
+  })
   processor = node
   let accepting = true
   let resumed = false
@@ -77,14 +85,26 @@ async function start(command: Extract<AudioCaptureCommand, { type: 'start' }>, c
   const notifyStarted = () => {
     if (!started && accepting && resumed && receivedPcm && currentGeneration === generation) {
       started = true
-      window.seedAudioCapture.emit({ type: 'started', session_id: command.session_id, sample_rate: 16_000, channels: 1, format: 'pcm16' })
+      window.seedAudioCapture.emit({
+        type: 'started', session_id: command.session_id,
+        ...(nativeFormat ? {} : { sample_rate: 16_000, channels: 1, format: 'pcm16' }),
+      })
     }
   }
   let flushed: (() => void) | null = null
-  node.port.onmessage = (event: MessageEvent<{ type: string; pcm?: ArrayBuffer }>) => {
+  node.port.onmessage = (event: MessageEvent<{ type: string; pcm?: ArrayBuffer; channels?: number }>) => {
     if (event.data.type === 'flushed') { flushed?.(); return }
     if (accepting && sessionId === command.session_id && event.data.pcm?.byteLength) {
-      window.seedAudioCapture.chunk(command.session_id, event.data.pcm)
+      if (nativeFormat) {
+        const channels = event.data.channels
+        if (!channels) return
+        window.seedAudioCapture.chunk(command.session_id, event.data.pcm, {
+          encoding: 'pcm_f32le', sample_rate: audioContext.sampleRate,
+          channels, bits_per_sample: 32, layout: 'planar',
+        })
+      } else {
+        window.seedAudioCapture.chunk(command.session_id, event.data.pcm)
+      }
       receivedPcm = true
       notifyStarted()
     }

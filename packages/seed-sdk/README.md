@@ -1641,6 +1641,28 @@ export default class UpdateSubscriber extends PluginService {
 { "permissions": ["device.audio.capture"] }
 ```
 
+插件后端通过 `this.app.audio.subscribe()` 开始实时录音并订阅音频块：
+
+```ts
+const recording = await this.app.audio.subscribe({ source: 'microphone', signal }, (chunk) => {
+  // chunk.data 是 Uint8Array。根据 chunk.format 转换成下游需要的格式和分包长度。
+  forwardAudio(chunk);
+});
+
+// 结束采集并等待最后的音频块完成交付
+await recording.stop();
+await recording.closed;
+```
+
+- 支持 `microphone`、`system` 和 `mixed`。`mixed` 同时交付两路采样，根据 `chunk.source` 区分。系统音频平台要求与分段录音相同。
+- `format` 报告每块实际的 `encoding`、`sample_rate`、`channels`、`bits_per_sample` 和 `layout`。对于 `planar`，各声道按顺序连续存放，每个声道含 `frames` 个样本。按音源使用 `sample_offset`，跨音源按 `sequence` 查交付顺序。
+- 音频块按采集顺序交付且无重叠。回调完成后继续接收；回调持续落后超过缓冲上限时，`closed` 以 `audio_stream_overflow` 拒绝。音频流在内存中交付，需要持久化时由插件写入自己的存储。
+- 用 `pause()` 和 `resume()` 控制采集。正常停止使用 `stop()`，`closed` 等待剩余回调结束；取消录音使用 `unsubscribe()` 或传入的 `AbortSignal`。插件卸载时宿主会停止其订阅录音。
+
+#### 兼容分段录音
+
+`capture.segment` 和 `capture.consume` 已弃用，新插件采用上面的实时订阅。下面的旧调用继续支持已安装插件和已有的持久片段。
+
 `src/service.ts`：
 
 ```ts

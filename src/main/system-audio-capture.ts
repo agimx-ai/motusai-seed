@@ -1,3 +1,5 @@
+import type { AudioStreamFormat } from '@motus-ai/seed-sdk'
+
 export type SystemAudioMetadata = {
   sampleRate: number; channelsPerFrame: number; bitsPerChannel: number; isFloat: boolean; encoding: string
 }
@@ -11,11 +13,11 @@ export interface SystemAudioRecorder {
   stop(): Promise<void>
 }
 
-export type SystemAudioRecorderFactory = () => Promise<SystemAudioRecorder>
+export type SystemAudioRecorderFactory = (nativeFormat?: boolean) => Promise<SystemAudioRecorder>
 
 function cancelled() { return Object.assign(new Error('系统音频采集已取消。'), { code: 'audio_capture_cancelled' }) }
 
-const defaultFactory: SystemAudioRecorderFactory = async () => {
+const defaultFactory: SystemAudioRecorderFactory = async (nativeFormat) => {
   if (process.platform === 'darwin') {
     const [major, minor] = process.getSystemVersion().split('.').map(Number)
     if (major! < 14 || (major === 14 && minor! < 2)) {
@@ -23,7 +25,7 @@ const defaultFactory: SystemAudioRecorderFactory = async () => {
     }
   }
   const { createSystemAudioRecorder } = await import('./system-audio-backends.js')
-  return createSystemAudioRecorder()
+  return createSystemAudioRecorder(nativeFormat)
 }
 
 /** Core Audio Tap / WASAPI only. No screen, browser display media or video track. */
@@ -34,19 +36,20 @@ export class SystemAudioCapture {
   private rejectReady: ((error: Error) => void) | null = null
 
   constructor(
-    private readonly data: (pcm: Buffer) => void,
+    private readonly data: (pcm: Buffer, format?: AudioStreamFormat) => void,
     private readonly failed: (error: Error) => void,
     private readonly factory: SystemAudioRecorderFactory = defaultFactory,
+    private readonly nativeFormat = false,
   ) {}
 
   async start() {
-    const recorder = await this.factory()
+    const recorder = await (this.nativeFormat ? this.factory(true) : this.factory())
     if (this.stopped) {
       await recorder.stop()
       throw cancelled()
     }
     this.recorder = recorder
-    let formatValid = false
+    let format: AudioStreamFormat | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
     let resolveReady!: () => void
     const ready = new Promise<void>((resolve, reject) => {
@@ -63,18 +66,34 @@ export class SystemAudioCapture {
       this.failed(error)
     }
     recorder.on('metadata', (metadata) => {
-      formatValid = metadata.sampleRate === 16_000 && metadata.channelsPerFrame === 1
-        && metadata.bitsPerChannel === 16 && !metadata.isFloat && metadata.encoding === 'pcm_s16le'
-      if (!formatValid) fail(new Error('系统音频格式不符合 PCM16 单声道 16 kHz 采集协议。'))
+      const valid = this.nativeFormat
+        ? Number.isSafeInteger(metadata.sampleRate) && metadata.sampleRate > 0
+          && Number.isSafeInteger(metadata.channelsPerFrame) && metadata.channelsPerFrame > 0
+          && [8, 16, 24, 32, 64].includes(metadata.bitsPerChannel) && typeof metadata.encoding === 'string'
+        : metadata.sampleRate === 16_000 && metadata.channelsPerFrame === 1
+          && metadata.bitsPerChannel === 16 && !metadata.isFloat && metadata.encoding === 'pcm_s16le'
+      if (!valid) {
+        fail(new Error(this.nativeFormat
+          ? '系统音频采集返回了无效的格式。'
+          : '系统音频格式不符合 PCM16 单声道 16 kHz 采集协议。'))
+        return
+      }
+      format = {
+        encoding: metadata.encoding, sample_rate: metadata.sampleRate, channels: metadata.channelsPerFrame,
+        bits_per_sample: metadata.bitsPerChannel, layout: 'interleaved',
+      }
+      if (this.nativeFormat) resolveReady()
     })
     recorder.on('data', ({ data }) => {
       if (this.stopped) return
-      if (!formatValid || !Buffer.isBuffer(data) || !data.length || data.length % 2 || data.length > 64_000) {
+      if (!format || !Buffer.isBuffer(data) || !data.length ||
+        data.length % (format.channels * format.bits_per_sample / 8) || data.length > 64_000) {
         fail(new Error('系统音频返回了无效的 PCM 数据。'))
         return
       }
       resolveReady()
-      this.data(data)
+      if (this.nativeFormat) this.data(data, format)
+      else this.data(data)
     })
     recorder.on('error', fail)
     recorder.on('stop', () => fail(new Error('系统音频来源已断开。')))

@@ -27,6 +27,7 @@ import type { PluginResources, PluginFilePicker } from './resources.js';
 import { createSystemNotificationClient, type SystemNotificationService } from './notifications.js';
 import { createUserProfileClient, type SeedUserService } from './user-profile.js';
 import { createCloudResourceClient, type CloudResourceService } from './cloud-resources.js';
+import { createAudioClient, type AudioService } from './audio.js';
 
 export type PluginManifest = {
   id: string;
@@ -90,6 +91,10 @@ export type PluginServices = {
   connections: SeedConnectionService;
   secrets: SeedSecretService;
   authorization: SeedAuthorizationService;
+  /** @deprecated Use `PluginService.app.audio.subscribe()` for live audio delivery. */
+  invokeHost(service: 'seed.audio', argumentsValue: Record<string, unknown> & {
+    operation: 'capture.segment' | 'capture.consume';
+  }): Promise<unknown>;
   invokeHost(service: string, argumentsValue: Record<string, unknown>): Promise<unknown>;
   data: PluginDataStore;
   locale?: string;
@@ -102,6 +107,7 @@ export type ServiceApp = PluginServices & {
   settings: PluginSettingsStore;
   events: PluginEventService;
   notifications: SystemNotificationService;
+  audio: AudioService;
 };
 
 export class Plugin extends Component {
@@ -212,6 +218,11 @@ export class PluginService extends Component {
         (error) => {
           void app.diagnostics.error('plugin.event.subscription.failed', error).catch(() => undefined);
         },
+      ),
+      audio: createAudioClient(
+        (service, args) => app.invokeHost(service, args),
+        this.signal,
+        (error) => { void app.diagnostics.error('plugin.audio.subscription.failed', error).catch(() => undefined); },
       ),
     };
     this.dataAccess = new PluginDataAccess(app.data);

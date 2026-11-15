@@ -45,8 +45,8 @@ async function host(getUserMedia = vi.fn(async () => mediaStream()), producePcm 
   return { listener, emit, chunk, contexts, order, worklets }
 }
 
-function mediaStream() {
-  const track = { readyState: 'live', onended: null, stop: vi.fn() }
+function mediaStream(sampleRate?: number) {
+  const track = { readyState: 'live', onended: null, stop: vi.fn(), getSettings: () => ({ sampleRate }) }
   return { getTracks: () => [track], getAudioTracks: () => [track], track }
 }
 
@@ -76,6 +76,26 @@ describe('AudioWorklet capture lifecycle', () => {
     expect(order.indexOf('chunk')).toBeLessThan(order.indexOf('stopped'))
     expect(contexts).toHaveLength(1)
     expect(contexts[0].close).toHaveBeenCalledOnce()
+  })
+
+  it('uses the reported microphone rate and channels in native mode without requesting processing', async () => {
+    const getUserMedia = vi.fn(async () => mediaStream(44_100))
+    const { listener, emit, chunk, contexts, worklets } = await host(getUserMedia, false)
+    listener({ type: 'start', session_id: 'native', native_format: true })
+    await vi.waitFor(() => expect(worklets).toHaveLength(1))
+    expect(getUserMedia).toHaveBeenCalledWith({
+      audio: { autoGainControl: false, echoCancellation: false, noiseSuppression: false },
+    })
+    expect(contexts[0].options).toEqual({ sampleRate: 44_100 })
+    contexts[0].sampleRate = 44_100
+    const pcm = new ArrayBuffer(16)
+    worklets[0].port.onmessage?.({ data: { type: 'pcm', pcm, channels: 2 } })
+    await vi.waitFor(() => expect(emit).toHaveBeenCalledWith({ type: 'started', session_id: 'native' }))
+    expect(chunk).toHaveBeenCalledWith('native', pcm, {
+      encoding: 'pcm_f32le', sample_rate: 44_100, channels: 2, bits_per_sample: 32, layout: 'planar',
+    })
+    listener({ type: 'stop', session_id: 'native' })
+    await vi.waitFor(() => expect(emit).toHaveBeenCalledWith({ type: 'stopped', session_id: 'native' }))
   })
 
   it('disposes a cancelled late permission result without closing a newer capture', async () => {

@@ -2,14 +2,15 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 
-function processor() {
-  let Constructor: new () => { process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean; port: { onmessage(event: unknown): void } }
-  const messages: Array<{ type: string; pcm?: ArrayBuffer }> = []
+function processor(nativeFormat = false) {
+  let Constructor: new (options: { processorOptions: { nativeFormat: boolean } }) =>
+    { process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean; port: { onmessage(event: unknown): void } }
+  const messages: Array<{ type: string; pcm?: ArrayBuffer; channels?: number }> = []
   runInNewContext(readFileSync(new URL('./capture-processor.js', import.meta.url), 'utf8'), {
     AudioWorkletProcessor: class { port = { postMessage: (message: { type: string; pcm?: ArrayBuffer }, transfer?: ArrayBuffer[]) => messages.push(structuredClone(message, { transfer })) } },
     registerProcessor: (name: string, constructor: typeof Constructor) => { expect(name).toBe('seed-pcm-capture'); Constructor = constructor },
   })
-  return { capture: new Constructor!(), messages }
+  return { capture: new Constructor!({ processorOptions: { nativeFormat } }), messages }
 }
 
 describe('20ms microphone AudioWorklet', () => {
@@ -33,5 +34,13 @@ describe('20ms microphone AudioWorklet', () => {
     expect(messages.map((message) => message.type)).toEqual(['pcm', 'flushed'])
     expect(messages[0].pcm?.byteLength).toBe(256)
     expect(new Int16Array(messages[0].pcm!)[0]).toBe(-32_768)
+  })
+
+  it('publishes native Float32 planes without clipping, overlap or batching', () => {
+    const { capture, messages } = processor(true)
+    capture.process([[Float32Array.of(1.25, 0.5), Float32Array.of(-1.25, -0.5)]], [[new Float32Array(2)]])
+    capture.process([[Float32Array.of(0.75), Float32Array.of(-0.75)]], [[new Float32Array(1)]])
+    expect(messages.map(({ channels, pcm }) => [channels, ...new Float32Array(pcm!)]))
+      .toEqual([[2, 1.25, 0.5, -1.25, -0.5], [2, 0.75, -0.75]])
   })
 })

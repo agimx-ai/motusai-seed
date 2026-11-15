@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { BrowserWindow, ipcMain, powerMonitor, session, systemPreferences } from 'electron';
+import type { AudioStreamFormat } from '@motus-ai/seed-sdk';
 import { parseAudioCaptureSource, type AudioCaptureSource } from '../shared/audio-capture';
 import { SystemAudioCapture, type SystemAudioRecorderFactory } from './system-audio-capture';
 import { AudioPcmMixer } from './audio-pcm-mixer';
 import { AudioSegmentStore } from './audio-segment-store';
 import { LatestAudioRecording } from './latest-audio-recording';
+import { AudioStream } from './audio-stream';
 
 export type AudioState = 'idle' | 'starting' | 'recording' | 'paused' | 'stopping' | 'failed';
 export type AudioStatus = {
@@ -83,6 +85,8 @@ export class AudioService {
   private readonly durableStore: AudioSegmentStore | null;
   private localRecording: LatestAudioRecording | null = null;
   private recordingSaveTask: Promise<void> = Promise.resolve();
+  private live: AudioStream | null = null;
+  private readonly audioStreams = new Map<string, AudioStream>();
 
   constructor(
     private readonly stateChanged: (status: AudioStatus) => void = () => undefined,
@@ -125,19 +129,28 @@ export class AudioService {
     if (type === 'error' && (!this.inputsNeedRestart || this.recoveryTask)) this.fail(String(value.message || '音频采集失败。'));
   };
 
-  private handleChunk = (event: Electron.IpcMainEvent, sessionId: string, pcm: ArrayBuffer) => {
+  private handleChunk = (event: Electron.IpcMainEvent, sessionId: string, pcm: ArrayBuffer, format?: AudioStreamFormat) => {
     this.trustedSender(event);
     if (sessionId !== (this.inputSessionId || this.sessionId) || !pcm?.byteLength) return;
-    this.acceptPcm('microphone', Buffer.from(pcm));
+    this.acceptPcm('microphone', Buffer.from(pcm), format);
   };
 
-  private acceptPcm(source: 'microphone' | 'system', pcm: Buffer) {
-    if (!['recording', 'stopping'].includes(this.state) || (this.source !== 'mixed' && this.source !== source)) return;
+  private acceptPcm(source: 'microphone' | 'system', pcm: Buffer, format?: AudioStreamFormat) {
+    if (this.source !== 'mixed' && this.source !== source) return;
+    const recording = this.state === 'recording' || this.state === 'stopping';
     try {
+      if (this.live) {
+        if (recording || this.state === 'starting' || (this.state === 'paused' && this.recoveryTask && this.resumeAfterSleep)) {
+          if (!format) throw new Error('音频采集未提供源格式。');
+          this.live.append(source, format, pcm);
+        }
+        return;
+      }
+      if (!recording) return;
       this.localRecording?.append(source, pcm);
       this.appendPcm(this.source === 'mixed' ? this.mixer.push(source, pcm) : pcm);
     } catch (error) {
-      this.fail(error instanceof Error ? error.message : String(error));
+      this.fail(error instanceof Error ? error.message : String(error), error instanceof Error ? error : undefined);
     }
   }
 
@@ -272,13 +285,14 @@ export class AudioService {
     this.stateChanged(this.snapshot());
   }
 
-  private fail(message: string) {
+  private fail(message: string, error?: Error) {
     if (this.state === 'failed') return;
     if (this.startedAt && !this.pausedAt) this.pausedAt = Date.now();
     void this.finishLocalRecording();
     void this.systemCapture?.stop().catch(() => undefined);
     this.systemCapture = null;
     this.mixer.clear();
+    if (this.live) this.finishAudioStream(this.live, error ?? codedError(message, 'audio_capture_failed'));
     if (this.failureResetTimer) clearTimeout(this.failureResetTimer);
     this.error = message;
     this.setState('failed');
@@ -294,7 +308,7 @@ export class AudioService {
       pending.reject(codedError(message, 'audio_capture_failed'));
     }
     this.pendingEvents.clear();
-    if (this.durableStore && this.ownerPackageId && this.sessionId) {
+    if (!this.live && this.durableStore && this.ownerPackageId && this.sessionId) {
       void this.durableStore.updateState(this.ownerPackageId, this.sessionId, 'interrupted').catch(() => undefined);
     }
     this.failureResetTimer = setTimeout(() => {
@@ -314,6 +328,7 @@ export class AudioService {
     void this.systemCapture?.stop().catch(() => undefined);
     this.systemCapture = null;
     this.mixer.clear();
+    this.live = null;
     this.captureGeneration += 1;
     for (const pending of this.pendingEvents.values()) {
       clearTimeout(pending.timer);
@@ -339,7 +354,7 @@ export class AudioService {
     this.setState('idle');
   }
 
-  private async start(argumentsValue: Record<string, unknown>, packageId: string) {
+  private async start(argumentsValue: Record<string, unknown>, packageId: string, stream?: AudioStream) {
     const source = parseAudioCaptureSource(argumentsValue.source);
     if (source !== 'microphone' && !['darwin', 'win32'].includes(process.platform)) {
       throw codedError('当前平台不支持系统音频采集。请选择麦克风。', 'audio_source_unsupported');
@@ -353,6 +368,7 @@ export class AudioService {
         this.ownerPackageId === packageId &&
         this.sessionId === sessionId &&
         this.source === source &&
+        this.live === (stream ?? null) &&
         (this.state === 'recording' || this.state === 'paused')
       )
         return this.snapshot();
@@ -362,6 +378,7 @@ export class AudioService {
     this.sessionId = sessionId;
     this.ownerPackageId = packageId;
     this.source = source;
+    this.live = stream ?? null;
     const generation = ++this.captureGeneration;
     const assertStarting = () => {
       if (this.captureGeneration !== generation || this.state !== 'starting')
@@ -373,12 +390,12 @@ export class AudioService {
     this.pcmBaseOffsetBytes = 0;
     this.setState('starting');
     try {
-      await this.durableStore?.create(packageId, sessionId, source);
+      if (!stream) await this.durableStore?.create(packageId, sessionId, source);
       assertStarting();
       this.inputSessionId = sessionId;
       await this.startInputs(assertStarting);
       assertStarting();
-      if (this.recordingsRoot) {
+      if (!stream && this.recordingsRoot) {
         const setup = this.recordingSaveTask.then(async () => {
           assertStarting();
           const recording = await LatestAudioRecording.start(this.recordingsRoot!, source).catch((error) => {
@@ -404,7 +421,7 @@ export class AudioService {
       return this.snapshot();
     } catch (error) {
       if (this.captureGeneration !== generation) throw error;
-      await this.durableStore?.discard(packageId, sessionId).catch(() => undefined);
+      if (!stream) await this.durableStore?.discard(packageId, sessionId).catch(() => undefined);
       const message = error instanceof Error ? error.message : String(error);
       this.fail(message);
       if (error && typeof error === 'object' && 'code' in error) throw error;
@@ -425,15 +442,18 @@ export class AudioService {
       const window = await this.ensureWindow();
       assertInput();
       const started = this.waitForCaptureEvent('started');
-      window.webContents.send('seed-audio:command', { type: 'start', session_id: this.inputSessionId });
+      window.webContents.send('seed-audio:command', {
+        type: 'start', session_id: this.inputSessionId, ...(this.live ? { native_format: true } : {}),
+      });
       await started;
       assertInput();
     }
     if (this.source !== 'microphone') {
       const capture = new SystemAudioCapture(
-        (pcm) => { if (generation === this.inputGeneration) this.acceptPcm('system', pcm); },
+        (pcm, format) => { if (generation === this.inputGeneration) this.acceptPcm('system', pcm, format); },
         (error) => { if (generation === this.inputGeneration) this.fail(error.message); },
         this.systemRecorderFactory,
+        Boolean(this.live),
       );
       this.systemCapture = capture;
       await capture.start();
@@ -476,7 +496,7 @@ export class AudioService {
       await this.segmentTask?.catch(() => undefined);
       if (generation !== this.captureGeneration) return;
       if (this.pcmBytes > this.segmentOffsetBytes) await this.captureSegment();
-      if (generation === this.captureGeneration)
+      if (!this.live && generation === this.captureGeneration)
         await this.durableStore?.updateState(this.ownerPackageId, this.sessionId, 'paused');
     })();
     this.sleepTask = task;
@@ -507,7 +527,7 @@ export class AudioService {
       this.mixer.clear();
       await this.startInputs(assertCurrent);
       assertCurrent();
-      await this.durableStore?.updateState(this.ownerPackageId, sessionId, 'recording');
+      if (!this.live) await this.durableStore?.updateState(this.ownerPackageId, sessionId, 'recording');
       assertCurrent();
       this.pausedTotalMs += Math.max(0, Date.now() - this.pausedAt);
       this.pausedAt = 0;
@@ -553,7 +573,7 @@ export class AudioService {
     this.mixer.clear();
     await this.segmentTask;
     this.pausedAt = Date.now();
-    await this.durableStore?.updateState(this.ownerPackageId, this.sessionId, 'paused');
+    if (!this.live) await this.durableStore?.updateState(this.ownerPackageId, this.sessionId, 'paused');
     this.setState('paused');
     return this.snapshot();
   }
@@ -576,7 +596,7 @@ export class AudioService {
     }
     this.pausedTotalMs += Math.max(0, Date.now() - this.pausedAt);
     this.pausedAt = 0;
-    await this.durableStore?.updateState(this.ownerPackageId, this.sessionId, 'recording');
+    if (!this.live) await this.durableStore?.updateState(this.ownerPackageId, this.sessionId, 'recording');
     this.setState('recording');
     return this.snapshot();
   }
@@ -646,6 +666,7 @@ export class AudioService {
   }
 
   private async segment() {
+    if (this.live) throw codedError('实时订阅会话提供连续音频。', 'audio_stream_session');
     if (!['recording', 'paused'].includes(this.state))
       throw codedError('当前没有可分段的录音。', 'audio_session_not_recording');
     return {
@@ -665,6 +686,12 @@ export class AudioService {
     await this.sleepTask;
     const durationMs = this.durationMs();
     await this.stopInputs();
+    if (this.live) {
+      const live = this.live;
+      this.finishAudioStream(live);
+      this.reset();
+      return { session_id: live.sessionId, state: 'captured', duration_ms: durationMs };
+    }
     await this.segmentTask;
     this.appendPcm(this.mixer.flush());
     const sessionId = this.sessionId;
@@ -681,6 +708,8 @@ export class AudioService {
 
   private async cancel() {
     this.lastFailure = null;
+    const live = this.live;
+    if (live) this.finishAudioStream(live, undefined, true);
     this.invalidateStart();
     this.invalidateInputs();
     await this.sleepTask?.catch(() => undefined);
@@ -696,12 +725,16 @@ export class AudioService {
     await this.finishLocalRecording();
     for (const [id, audio] of this.completedAudio)
       if (audio.captureSessionId === sessionId) this.completedAudio.delete(id);
-    if (packageId && sessionId) await this.durableStore?.discard(packageId, sessionId);
+    if (!live && packageId && sessionId) await this.durableStore?.discard(packageId, sessionId);
     this.reset();
     return { session_id: sessionId, state: 'cancelled' };
   }
 
   private async interrupt() {
+    if (this.live) {
+      const { session_id } = await this.cancel();
+      return { session_id, state: 'interrupted' };
+    }
     this.invalidateStart();
     this.invalidateInputs();
     await this.sleepTask?.catch(() => undefined);
@@ -750,8 +783,81 @@ export class AudioService {
     }
   }
 
+  private removeAudioStream(stream: AudioStream) {
+    if (stream.expiry) clearTimeout(stream.expiry);
+    if (this.audioStreams.get(stream.sessionId) === stream) this.audioStreams.delete(stream.sessionId);
+  }
+
+  private finishAudioStream(stream: AudioStream, error?: Error, discard = false) {
+    stream.close(error, discard);
+    if (!stream.expiry && this.audioStreams.get(stream.sessionId) === stream)
+      stream.expiry = setTimeout(() => this.removeAudioStream(stream), 30_000).unref();
+  }
+
+  private async unsubscribeAudioStream(stream: AudioStream) {
+    this.removeAudioStream(stream);
+    stream.close(undefined, true);
+    if (this.live === stream && this.state !== 'stopping') await this.cancel();
+  }
+
+  private async invokeAudioStream(
+    operation: string,
+    args: Record<string, unknown>,
+    packageId: string,
+    taskId?: string,
+  ) {
+    const sessionId = args.session_id;
+    if (typeof sessionId !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(sessionId))
+      throw codedError('音频订阅 ID 无效。', 'audio_session_invalid');
+    const current = this.audioStreams.get(sessionId);
+    if (current && current.packageId !== packageId)
+      throw codedError('音频订阅属于另一个插件。', 'audio_session_forbidden');
+    if (operation === 'stream.subscribe') {
+      if (current || this.audioStreams.size >= 8)
+        throw codedError('音频订阅已存在或达到上限。', 'audio_stream_limit');
+      const stream = new AudioStream(packageId, sessionId);
+      this.audioStreams.set(sessionId, stream);
+      try {
+        return await this.start(args, packageId, stream);
+      } catch (error) {
+        this.removeAudioStream(stream);
+        throw error;
+      }
+    }
+    if (operation === 'stream.unsubscribe') {
+      if (current) await this.unsubscribeAudioStream(current);
+      return;
+    }
+    if (!current) throw codedError('音频订阅已结束。', 'audio_stream_closed');
+    if (operation === 'stream.next') {
+      try {
+        const delivery = await current.next();
+        if (delivery.done) this.removeAudioStream(current);
+        return delivery;
+      } catch (error) {
+        if (current.expiry) this.removeAudioStream(current);
+        throw error;
+      }
+    }
+    if (operation === 'stream.stop' && this.live !== current) return;
+    if (this.live !== current) throw codedError('音频订阅已结束。', 'audio_stream_closed');
+    if (operation === 'stream.pause') return await this.pause();
+    if (operation === 'stream.resume') return await this.resume();
+    if (operation === 'stream.stop') {
+      try {
+        return await this.stop(taskId);
+      } catch (error) {
+        if (this.live === current && this.state === 'stopping')
+          this.fail(error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+    }
+    throw codedError(`Audio 不支持操作：${operation}`, 'audio_operation_unsupported');
+  }
+
   async invoke(argumentsValue: Record<string, unknown>, packageId = '', taskId?: string) {
     const operation = String(argumentsValue.operation || '');
+    if (operation.startsWith('stream.')) return await this.invokeAudioStream(operation, argumentsValue, packageId, taskId);
     if (
       operation.startsWith('capture.') &&
       !['capture.start', 'capture.sessions', 'capture.read', 'capture.ack', 'capture.discard'].includes(operation)
@@ -816,9 +922,18 @@ export class AudioService {
     return await this.cancel();
   }
 
+  async releasePlugin(packageId: string) {
+    for (const stream of this.audioStreams.values())
+      if (stream.packageId === packageId) await this.unsubscribeAudioStream(stream);
+  }
+
   async destroy() {
     await this.interrupt().catch(() => undefined);
     this.reset();
+    for (const stream of this.audioStreams.values()) {
+      stream.close(undefined, true);
+      this.removeAudioStream(stream);
+    }
     await this.recordingSaveTask;
     this.completedAudio.clear();
     this.window?.destroy();

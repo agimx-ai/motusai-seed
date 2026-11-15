@@ -64,6 +64,7 @@ function fixture() {
     pluginCapabilityCatalog: new PluginCapabilityCatalog(),
     pluginEvents: { closePlugin: vi.fn() },
     cloudResources: { closePlugin: vi.fn(), reset: vi.fn() },
+    audioService: { releasePlugin: vi.fn() },
     systemNotifications: { clear: vi.fn() },
     pluginViewHosts: new Map([
       [one.package_id, { plugin: one, destroy: destroyOne }],

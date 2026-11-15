@@ -58,6 +58,23 @@ describe('pure system audio platform adapters', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('uses the macOS source format and keeps split multi-channel sample frames intact', async () => {
+    const { child, launch } = helper()
+    const recorder = new MacSystemAudioRecorder('/app/audio/audiotee', launch as unknown as typeof spawn, true)
+    const data = vi.fn()
+    recorder.on('data', data)
+    await recorder.start()
+    expect(launch).toHaveBeenCalledWith('/app/audio/audiotee', ['--chunk-duration', '0.02'], { shell: false, stdio: 'pipe' })
+    child.stderr.write(JSON.stringify({ message_type: 'metadata', data: {
+      sample_rate: 48_000, channels_per_frame: 2, bits_per_channel: 32, is_float: true, encoding: 'pcm_f32le',
+    } }) + '\n')
+    child.stdout.write(Buffer.from([1, 2, 3, 4, 5, 6, 7]))
+    expect(data).not.toHaveBeenCalled()
+    child.stdout.write(Buffer.from([8]))
+    expect(data).toHaveBeenCalledExactlyOnceWith({ data: Buffer.from([1, 2, 3, 4, 5, 6, 7, 8]) })
+    await recorder.stop()
+  })
+
   it('maps WASAPI events into the common PCM contract and clears polling on stop', async () => {
     vi.useFakeTimers()
     const events = [{ type: 4, sampleRate: 16000, channelsPerFrame: 1, bitsPerChannel: 16, isFloat: false, encoding: 'pcm_s16le' }, { type: 0, data: Buffer.alloc(640) }]
@@ -86,6 +103,24 @@ describe('pure system audio platform adapters', () => {
     await recorder.start()
     await vi.advanceTimersByTimeAsync(10)
     expect(error).toHaveBeenCalledWith(expect.objectContaining({ message: 'Output device unavailable' }))
+    await recorder.stop()
+  })
+
+  it('requests the WASAPI source rate and channel count and passes bytes through', async () => {
+    vi.useFakeTimers()
+    const nativeFormat = { type: 4, encoding: 'pcm_f32le', sampleRate: 48_000, channelsPerFrame: 6 }
+    const bytes = Buffer.alloc(24, 7)
+    const events = [nativeFormat, { type: 0, data: bytes }]
+    const native = { startSystemAudio: vi.fn(), processEvents: vi.fn(() => events.splice(0)), stop: vi.fn() }
+    const recorder = new WindowsSystemAudioRecorder(native, true)
+    const metadata = vi.fn()
+    const data = vi.fn()
+    recorder.on('metadata', metadata).on('data', data)
+    await recorder.start()
+    expect(native.startSystemAudio).toHaveBeenCalledWith({ chunkDurationMs: 20, stereo: true, emitSilence: false, mute: false })
+    await vi.advanceTimersByTimeAsync(10)
+    expect(metadata).toHaveBeenCalledExactlyOnceWith(nativeFormat)
+    expect(data).toHaveBeenCalledExactlyOnceWith({ data: bytes })
     await recorder.stop()
   })
 })

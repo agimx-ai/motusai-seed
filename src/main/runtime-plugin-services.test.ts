@@ -35,6 +35,7 @@ function fixture(kind = 'sandboxed-web') {
     pluginCapabilityCatalog: { publish: vi.fn() },
     pluginEvents: { reconcile: vi.fn(), closePlugin: vi.fn() },
     cloudResources: { invoke: vi.fn(), closePlugin: vi.fn(), reset: vi.fn() },
+    audioService: { releasePlugin: vi.fn() },
     systemNotifications: { invoke: vi.fn(async () => 'sent'), clear: vi.fn() },
     pluginIsAuthorized: vi.fn(() => true),
     store: { systemNotificationsEnabled: vi.fn(() => true) },
@@ -331,6 +332,7 @@ describe('generic plugin SDK brokers', () => {
     await call('two', 'seed.plugin-task', { id: 'task', phase: 'started', label: 'Other' });
     await expect(call('one', 'seed.plugin-task', { id: 'task', phase: 'started' })).rejects.toThrow('Duplicate');
     await runtime.releasePluginWork('com.example.one', true);
+    expect(runtime.audioService.releasePlugin).toHaveBeenCalledExactlyOnceWith('com.example.one');
     expect(runtime.sandboxTasks.size).toBe(1);
     expect(runtime.handleWorkerEvent.mock.calls.map(([event]: any[]) => event.phase)).toEqual([
       'started',
