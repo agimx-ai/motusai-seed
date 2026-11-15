@@ -1,6 +1,6 @@
 import { prefersReducedMotion, toast } from '@motus-ai/seed-sdk';
 import { ActionButton, SegmentedControl, StatusBadge } from '@motus-ai/seed-sdk/react';
-import { ChevronRight, Clock, Eye, MoreHorizontal, Pencil, Pin, Share2, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
+import { ChevronRight, Clock, Eye, Forward, MoreHorizontal, Pencil, Pin, ThumbsUp, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -322,6 +322,9 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
   }, [id, onEngagementChange, retry]);
   const articleLoaded = Boolean(article);
   const shareUrl = article?.share_url;
+  const shareCount = article?.share_count === undefined
+    ? undefined
+    : new Intl.NumberFormat(locale).format(article.share_count);
   useEffect(() => { if (articleLoaded) heading.current?.focus(); }, [articleLoaded]);
 
   async function shareTip() {
@@ -334,6 +337,14 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
       toast.success(t('experienceTips.shareCopied'));
     } catch {
       toast.error(t('experienceTips.shareCopyFailed'));
+      return;
+    }
+    if (article?.share_count === undefined) return;
+    try {
+      const { share_count } = await window.motusSeed.recordExperienceTipShare(id);
+      setArticle((current) => current && { ...current, share_count: Math.max(current.share_count ?? 0, share_count) });
+    } catch {
+      // The link was already copied. Keep displaying the last confirmed count.
     }
   }
 
@@ -399,9 +410,12 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
               )}
               {!error && (
                 <button type="button" className="experience-metric experience-article-action"
+                  aria-label={shareCount === undefined
+                    ? t('experienceTips.share')
+                    : t('experienceTips.shareWithCount', { count: shareCount })}
                   onClick={() => void shareTip()}>
-                  <Share2 size={14} aria-hidden="true" />
-                  {t('experienceTips.share')}
+                  <Forward size={14} aria-hidden="true" />
+                  {shareCount}
                 </button>
               )}
             </div>

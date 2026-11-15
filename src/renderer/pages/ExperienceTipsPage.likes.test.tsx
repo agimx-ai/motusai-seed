@@ -30,12 +30,14 @@ it.each([
     liked: false,
     body: 'Example text.',
     images: [],
-    ...(shareUrl ? { share_url: shareUrl } : {}),
+    ...(shareUrl ? { share_url: shareUrl, share_count: 3 } : {}),
   };
   const copyText = vi.fn(async () => {});
+  const recordExperienceTipShare = vi.fn(async () => ({ share_count: 4 }));
   const unavailable = vi.spyOn(toast, 'info');
   vi.stubGlobal('motusWindow', { platform: 'darwin', copyText });
   vi.stubGlobal('motusSeed', {
+    recordExperienceTipShare,
     readExperienceTips: async (request: ExperienceTipRead) =>
       request.kind === 'article' ? article : { items: [], next_cursor: null },
     snapshot: async () => ({ languagePreference: 'en-US', locale: 'en-US' }),
@@ -49,7 +51,8 @@ it.each([
     </SeedI18nProvider>,
   );
   const readingTime = await screen.findByText('1 min read');
-  const share = screen.getByRole('button', { name: 'Share' });
+  const label = shareUrl ? 'Share 3' : 'Share';
+  const share = screen.getByRole('button', { name: label });
   const author = screen.getByText('Author');
   const publishedDate = screen.getByText('Nov 12, 2026');
   const views = screen.getByText('25 views').parentElement;
@@ -57,13 +60,16 @@ it.each([
   expect(Array.from(readingTime.parentElement!.children)).toEqual([
     author, publishedDate, readingTime, views, like, share,
   ]);
-  expect(share.textContent).toBe('Share');
+  expect(share.textContent).toBe(shareUrl ? '3' : '');
   fireEvent.click(share);
   if (shareUrl) {
     expect(copyText).toHaveBeenCalledExactlyOnceWith(shareUrl);
+    await screen.findByRole('button', { name: 'Share 4' });
+    expect(recordExperienceTipShare).toHaveBeenCalledExactlyOnceWith(article.tip_id);
     expect(unavailable).not.toHaveBeenCalled();
   } else {
     expect(copyText).not.toHaveBeenCalled();
+    expect(recordExperienceTipShare).not.toHaveBeenCalled();
     expect(unavailable).toHaveBeenCalledExactlyOnceWith('This tip can’t be shared right now.');
   }
 });

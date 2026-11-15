@@ -43,6 +43,7 @@ import {
   experienceTipArticleSchema,
   experienceTipCountsSchema,
   experienceTipEngagementSchema,
+  experienceTipShareCountSchema,
   experienceTipPageSchema,
   experienceTipWriteSchema,
   experienceTipsLocalScope,
@@ -2131,6 +2132,12 @@ export class SeedRuntime {
       throw new Error('Experience tip image is unavailable.');
     }
     return new URL(url.pathname + url.search, this.seedCloudUrl).href;
+  }
+
+  async recordExperienceTipShare(tipId: string) {
+    const result = await this.requestExperienceTip({ kind: 'share', tipId });
+    if (!result.ok) throw new Error(result.message);
+    return experienceTipShareCountSchema.parse(result.value);
   }
 
   async setExperienceTipLike(input: ExperienceTipLike) {

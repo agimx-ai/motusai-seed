@@ -2,6 +2,7 @@ import type { ExperienceTipLike, ExperienceTipRead, ExperienceTipRemoval, Experi
 
 export type ExperienceTipCloudRequest = ExperienceTipRead
   | Exclude<ExperienceTipWrite, { kind: 'account' | 'edit-context' }>
+  | { kind: 'share'; tipId: string }
   | ({ kind: 'like' } & ExperienceTipLike)
   | ({ kind: 'remove' } & ExperienceTipRemoval);
 
@@ -25,7 +26,8 @@ export async function requestExperienceTips(
       break;
     }
     case 'like':
-      path = '/articles/' + request.tipId + '/like';
+    case 'share':
+      path = '/articles/' + request.tipId + '/' + request.kind;
       break;
     case 'submit':
     case 'remove':
@@ -52,7 +54,7 @@ export async function requestExperienceTips(
     : request.kind === 'remove'
       ? JSON.stringify({ action: request.action })
       : 'body' in request ? JSON.stringify(request.body) : undefined;
-  const method = request.kind === 'like' ? 'PUT' : body === undefined ? 'GET' : 'POST';
+  const method = request.kind === 'like' ? 'PUT' : request.kind === 'share' || body !== undefined ? 'POST' : 'GET';
   try {
     let token = await getAccessToken();
     for (let attempt = 0; attempt < 2; attempt++) {
