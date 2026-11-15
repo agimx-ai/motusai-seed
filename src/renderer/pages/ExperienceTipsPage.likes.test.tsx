@@ -30,7 +30,11 @@ it.each([
     liked: false,
     body: 'Example text.',
     images: [],
-    ...(shareUrl ? { share_url: shareUrl, share_count: 3 } : {}),
+    ...(shareUrl ? {
+      share_url: shareUrl,
+      share_count: 3,
+      recent_readers: [{ name: 'Recent Reader', avatar_url: 'https://example.test/avatar.webp' }],
+    } : {}),
   };
   const copyText = vi.fn(async () => {});
   const recordExperienceTipShare = vi.fn(async () => ({ share_count: 4 }));
@@ -55,12 +59,22 @@ it.each([
   const share = screen.getByRole('button', { name: label });
   const author = screen.getByText('Author');
   const publishedDate = screen.getByText('Nov 12, 2026');
-  const views = screen.getByText('25 views').parentElement;
+  const views = screen.getByRole('group', { name: 'Recent readers' });
+  expect(screen.queryByText('25 views')).toBeNull();
   const like = screen.getByRole('button', { name: /^Like\s*0 likes$/ });
   expect(Array.from(readingTime.parentElement!.children)).toEqual([
     author, publishedDate, readingTime, views, like, share,
   ]);
   expect(share.textContent).toBe(shareUrl ? '3' : '');
+  if (shareUrl) {
+    expect(screen.getByText('+24')).toBeTruthy();
+    const reader = screen.getByRole('img', { name: 'Recent Reader' });
+    fireEvent.focus(reader);
+    expect(screen.getByText('Recent Reader')).toBeTruthy();
+    fireEvent.keyDown(reader, { key: 'Escape' });
+  } else {
+    expect(screen.getByText('+25')).toBeTruthy();
+  }
   fireEvent.click(share);
   if (shareUrl) {
     expect(copyText).toHaveBeenCalledExactlyOnceWith(shareUrl);

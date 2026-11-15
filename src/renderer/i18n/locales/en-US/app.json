@@ -27,6 +27,8 @@
     "backToList": "Back to Experience tips",
     "share": "Share",
     "shareWithCount": "Share {{count}}",
+    "recentReaders": "Recent readers",
+    "otherViews": "{{count}} other views",
     "shareCopied": "Link copied",
     "shareUnavailable": "This tip can’t be shared right now.",
     "shareCopyFailed": "Could not copy the link. Please try again.",

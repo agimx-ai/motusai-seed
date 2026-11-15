@@ -105,6 +105,10 @@ export const experienceTipShareCountSchema = z.object({ share_count: z.number().
 export const experienceTipArticleSchema = experienceTipSummarySchema.extend({
   share_count: experienceTipShareCountSchema.shape.share_count.optional(),
   share_url: z.url({ protocol: /^https?$/ }).optional(),
+  recent_readers: z.array(z.object({
+    name: z.string(),
+    avatar_url: z.url({ protocol: /^https?$/ }).optional(),
+  })).max(10).optional(),
   theme: z.string().optional(),
   body: z.string(),
   images: z.array(z.object({

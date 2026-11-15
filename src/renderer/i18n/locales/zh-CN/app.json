@@ -27,6 +27,8 @@
     "backToList": "返回使用技巧",
     "share": "分享",
     "shareWithCount": "分享 {{count}}",
+    "recentReaders": "最近阅读",
+    "otherViews": "其余 {{count}} 次浏览",
     "shareCopied": "链接已复制",
     "shareUnavailable": "这篇技巧暂时无法分享",
     "shareCopyFailed": "没能复制链接，请重试",

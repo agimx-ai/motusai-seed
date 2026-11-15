@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { experienceTipSearchLimit, type ExperienceTipActivityTab, type ExperienceTipArticle, type ExperienceTipCounts, type ExperienceTipRead, type ExperienceTipRemoval, type ExperienceTipSort, type ExperienceTipSummary } from '../../shared/experience-tips';
 import { NavigationCount } from '../components/NavigationCount';
 import { ExperienceMarkdown } from './ExperienceMarkdown';
+import { ExperienceRecentReaders } from './ExperienceRecentReaders';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { HeaderActionButton, HeaderRefreshButton } from '../components/HeaderActionButton';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
@@ -382,7 +383,9 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
                   {t('experienceTips.readingTime', { count: readingMinutes })}
                 </span>
               )}
-              {article.view_count !== undefined && <TipViewCount count={article.view_count} />}
+              {article.view_count !== undefined && (
+                <ExperienceRecentReaders readers={article.recent_readers ?? []} viewCount={article.view_count} />
+              )}
               {article.liked !== undefined && (
                 <button
                   type="button"
