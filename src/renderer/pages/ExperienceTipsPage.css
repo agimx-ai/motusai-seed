@@ -295,6 +295,7 @@ button.experience-row:focus-visible {
 
 .experience-reader-avatar {
   display: grid;
+  flex: none;
   place-items: center;
   inline-size: 1.75rem;
   block-size: 1.75rem;
@@ -308,7 +309,6 @@ button.experience-row:focus-visible {
 
 .experience-reader-more {
   position: relative;
-  flex: none;
   grid-template-columns: minmax(0, 1fr);
   color: var(--muted-foreground);
   font-size: calc(var(--text-xs) * 5 / 6);

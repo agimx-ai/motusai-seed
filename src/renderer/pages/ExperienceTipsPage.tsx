@@ -13,6 +13,7 @@ import { HeaderActionButton, HeaderRefreshButton } from '../components/HeaderAct
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { PageEmptyState } from '../components/PageEmptyState';
 import { SearchInput } from '../components/SearchInput';
+import { UserAvatar } from '../components/UserAvatar';
 import { useSeedI18n } from '../i18n';
 import { formatPublicationDate } from '../lib/display';
 import { userFacingErrorMessage } from '../lib/errors';
@@ -377,7 +378,13 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
           <header className="experience-article-header">
             <h1 ref={heading} tabIndex={-1} className="experience-article-title">{article.title}</h1>
             <div className="experience-meta experience-article-byline">
-              <span>{article.author}</span>
+              <span className="experience-metric">
+                {article.author_avatar_url && (
+                  <UserAvatar name={article.author} imageUrl={article.author_avatar_url}
+                    className="experience-reader-avatar" />
+                )}
+                <span>{article.author}</span>
+              </span>
               {article.published_at && <PublicationDate date={article.published_at} locale={locale} />}
               {readingMinutes > 0 && (
                 <span className="experience-metric">

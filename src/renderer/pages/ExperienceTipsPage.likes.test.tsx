@@ -33,6 +33,7 @@ it.each([
     ...(shareUrl ? {
       share_url: shareUrl,
       share_count: 3,
+      author_avatar_url: 'https://example.test/author.webp',
       recent_readers: [{ name: 'Recent Reader', avatar_url: 'https://example.test/avatar.webp' }],
     } : {}),
   };
@@ -57,7 +58,8 @@ it.each([
   const readingTime = await screen.findByText('1 min read');
   const label = shareUrl ? 'Share 3' : 'Share';
   const share = screen.getByRole('button', { name: label });
-  const author = screen.getByText('Author');
+  const author = screen.getByText('Author').parentElement;
+  expect(author?.querySelector('img')?.getAttribute('src')).toBe(article.author_avatar_url);
   const publishedDate = screen.getByText('Nov 12, 2020');
   const views = screen.getByRole('group', { name: 'Recent readers' });
   expect(screen.queryByText('25 views')).toBeNull();
