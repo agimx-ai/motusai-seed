@@ -40,13 +40,11 @@ function SidebarNavigationLabel({ title }: { title: string }) {
 export function SidebarNavigation({
   view,
   selectedKey,
-  experienceTipCount,
   onNavigate,
   onOpenPlugin,
 }: {
   view: View;
   selectedKey?: string;
-  experienceTipCount?: number;
   onNavigate(view: Exclude<View, 'plugin-view'>): void;
   onOpenPlugin(entry: PluginSidebarEntry): void;
 }) {
@@ -78,7 +76,7 @@ export function SidebarNavigation({
     active: boolean,
     children: readonly PluginSidebarEntry[],
     open?: () => void,
-    badge?: { count: number; max?: number; notification?: boolean },
+    badge?: { count: number; max?: number },
     depth = 0,
   ): ReactNode => {
     const expanded = !collapsed.has(key);
@@ -104,7 +102,7 @@ export function SidebarNavigation({
             {icon}
             <SidebarNavigationLabel title={title} />
             {badge && (
-              <NavigationCount notification={badge.notification}>
+              <NavigationCount>
                 {badge.max !== undefined && badge.count > badge.max
                   ? `${badge.max}+`
                   : new Intl.NumberFormat(i18n.language).format(badge.count)}
@@ -150,7 +148,7 @@ export function SidebarNavigation({
       entry.badge ? { count: entry.badge, max: 99 } : undefined,
       depth,
     );
-  const builtin = (id: 'overview' | 'plugins' | 'activity' | 'experience-tips', icon: ReactNode, count?: number) =>
+  const builtin = (id: 'overview' | 'plugins' | 'activity' | 'experience-tips', icon: ReactNode) =>
     node(
       'host:' + id,
       t('nav.' + id),
@@ -158,7 +156,6 @@ export function SidebarNavigation({
       view === id,
       entries.filter((entry) => entry.parent && 'host' in entry.parent && entry.parent.host === id),
       () => onNavigate(id),
-      count ? { count, notification: true } : undefined,
     );
   return (
     <nav
@@ -169,7 +166,7 @@ export function SidebarNavigation({
         {builtin('overview', <Sprout size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {builtin('plugins', <Blocks size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {builtin('activity', <History size={17} strokeWidth={1.8} aria-hidden="true" />)}
-        {builtin('experience-tips', <BookOpen size={17} strokeWidth={1.8} aria-hidden="true" />, experienceTipCount)}
+        {builtin('experience-tips', <BookOpen size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {entries.filter((entry) => !entry.parent).map((entry) => pluginNode(entry, 0))}
       </ul>
     </nav>

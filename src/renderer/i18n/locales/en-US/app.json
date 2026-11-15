@@ -129,6 +129,9 @@
     "appUnavailable": "The app did not start correctly. Quit and reopen it"
   },
   "nav": {
+    "notifications": "Notifications",
+    "notificationsCount_one": "{{count, number}} notification",
+    "notificationsCount_other": "{{count, number}} notifications",
     "mainNavigation": "Main navigation",
     "quickActions": "Quick actions",
     "expandSection": "Expand {{name}}",
@@ -233,8 +236,6 @@
     "noMatches": "No matching plugins",
     "searchHint": "Try a different keyword or adjust your filters",
     "versionUpdate": "Update available from {{current}} to {{target}}",
-    "updateNotification": "{{count}} plugin updates available",
-    "updateNotificationEmpty": "No plugin updates available",
     "install": "Install",
     "update": "Update",
     "updatingAll": "Updating…",

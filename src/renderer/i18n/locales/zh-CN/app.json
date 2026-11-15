@@ -129,6 +129,9 @@
     "appUnavailable": "应用未能正常启动，请退出并重新打开"
   },
   "nav": {
+    "notifications": "通知",
+    "notificationsCount_one": "{{count, number}} 条通知",
+    "notificationsCount_other": "{{count, number}} 条通知",
     "mainNavigation": "主导航",
     "quickActions": "快捷操作",
     "expandSection": "展开{{name}}",
@@ -233,8 +236,6 @@
     "noMatches": "没有匹配的插件",
     "searchHint": "试试换个关键词，或调整筛选条件",
     "versionUpdate": "可从 {{current}} 更新到 {{target}}",
-    "updateNotification": "{{count}} 个插件可更新",
-    "updateNotificationEmpty": "暂无插件更新",
     "install": "安装",
     "update": "更新",
     "updatingAll": "正在更新…",

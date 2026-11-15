@@ -1,4 +1,4 @@
-import { Bell, CircleGauge, LoaderCircle, LogOut, Settings, X } from 'lucide-react';
+import { CircleGauge, LoaderCircle, LogOut, Settings, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SeedSnapshot } from '../../shared/contracts';
@@ -11,7 +11,7 @@ import { CreditUsageButton } from '../components/CreditUsageButton';
 import { Tooltip } from '@motus-ai/seed-sdk/react';
 import { cx, isSettingsView, type View } from '../lib/display';
 import { SettingsNavigation } from './SettingsNavigation';
-import { notificationCountColors } from '../components/NavigationCount';
+import { SidebarNotificationBell } from './SidebarNotificationBell';
 
 const accountMenuSurfaceClass =
   'seed-account-menu absolute bottom-[50px] left-3 right-3 origin-bottom overflow-hidden rounded-[12px] border p-1';
@@ -165,36 +165,12 @@ export function Sidebar({
             {appName}
           </div>
           <div className="-mr-3 flex shrink-0 items-center gap-1">
-            <Tooltip
-              content={t(pluginUpdateCount > 0 ? 'plugins.updateNotification' : 'plugins.updateNotificationEmpty', {
-                count: pluginUpdateCount,
-              })}
-            >
-              <button
-                className={cx(
-                  'relative grid h-6 w-6 shrink-0 place-items-center rounded-lg transition-colors focus-visible:outline-none',
-                  pluginUpdateCount > 0
-                    ? 'bg-info-soft text-info hover:bg-info-hover'
-                    : 'text-muted-foreground hover:bg-[var(--sidebar-item-active)] hover:text-foreground',
-                )}
-                type="button"
-                onClick={onShowPluginUpdates}
-                aria-label={t(
-                  pluginUpdateCount > 0 ? 'plugins.updateNotification' : 'plugins.updateNotificationEmpty',
-                  { count: pluginUpdateCount },
-                )}
-              >
-                <Bell size={14} strokeWidth={1.8} />
-                {pluginUpdateCount > 0 && (
-                  <span
-                    className={`absolute -right-0.5 -top-0.5 grid h-[10px] min-w-[10px] place-items-center rounded-full px-[2px] text-[7px] font-semibold leading-none ${notificationCountColors}`}
-                    aria-hidden="true"
-                  >
-                    {pluginUpdateCount > 9 ? '9+' : pluginUpdateCount}
-                  </span>
-                )}
-              </button>
-            </Tooltip>
+            <SidebarNotificationBell
+              pluginUpdateCount={pluginUpdateCount}
+              experienceTipCount={experienceTipCount}
+              onShowPluginUpdates={onShowPluginUpdates}
+              onShowExperienceTips={() => navigate('experience-tips')}
+            />
             <SidebarQuickActions collapsed={collapsed} />
             {window.motusWindow.platform !== 'darwin' && (
               <SidebarToggleButton className="h-6 w-6" collapsed={false} onToggle={onToggle} />
@@ -208,7 +184,6 @@ export function Sidebar({
             <SidebarNavigation
               view={view}
               selectedKey={selectedNavigationKey}
-              experienceTipCount={experienceTipCount}
               onNavigate={navigate}
               onOpenPlugin={onOpenPlugin}
             />

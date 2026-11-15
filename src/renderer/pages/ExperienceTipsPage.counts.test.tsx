@@ -5,7 +5,7 @@ import type { SeedEvent } from '../../shared/contracts';
 import type { ExperienceTipRead, ExperienceTipSummary } from '../../shared/experience-tips';
 import { useExperienceTipCounts } from '../hooks/use-experience-tip-counts';
 import { SeedI18nProvider } from '../i18n';
-import { SidebarNavigation } from '../layouts/SidebarNavigation';
+import { SidebarNotificationBell } from '../layouts/SidebarNotificationBell';
 import { ExperienceTipsPage } from './ExperienceTipsPage';
 
 afterEach(() => {
@@ -79,15 +79,21 @@ it('shows unread activity, clears each tab independently, and keeps checkpoints 
       return () => listeners.delete(listener);
     },
   });
-  function Fixture({ userId, showPage }: { userId: string; showPage?: boolean }) {
+  const showPluginUpdates = vi.fn();
+  const showExperienceTips = vi.fn();
+  function Fixture({ userId, showPage, pluginUpdateCount = 0 }: {
+    userId: string;
+    showPage?: boolean;
+    pluginUpdateCount?: number;
+  }) {
     const { counts, refreshCounts, markSeen } = useExperienceTipCounts(userId);
     return (
       <SeedI18nProvider>
-        <SidebarNavigation
-          view="experience-tips"
+        <SidebarNotificationBell
+          pluginUpdateCount={pluginUpdateCount}
           experienceTipCount={counts && counts.articles + counts.my_submissions}
-          onNavigate={vi.fn()}
-          onOpenPlugin={vi.fn()}
+          onShowPluginUpdates={showPluginUpdates}
+          onShowExperienceTips={showExperienceTips}
         />
         {showPage && (
           <ExperienceTipsPage key={userId} dark={false} actionsContainer={null} counts={counts}
@@ -97,16 +103,22 @@ it('shows unread activity, clears each tab independently, and keeps checkpoints 
     );
   }
   const { rerender } = render(<Fixture userId="author" />);
-  const total = await screen.findByRole('button', { name: 'Experience tips, 3' });
+  const total = await screen.findByRole('button', { name: '3 notifications' });
   expect(total.querySelector('.bg-info.text-white')?.textContent).toBe('3');
+  fireEvent.click(total);
+  expect(showExperienceTips).toHaveBeenCalledOnce();
+  rerender(<Fixture userId="author" pluginUpdateCount={2} />);
+  fireEvent.click(screen.getByRole('button', { name: '5 notifications' }));
+  expect(showPluginUpdates).toHaveBeenCalledOnce();
+  expect(showExperienceTips).toHaveBeenCalledOnce();
   rerender(<Fixture userId="author" showPage />);
   expect(screen.getByRole('radio', { name: 'Browse tips 2' }).querySelector('.bg-info.text-white')?.textContent).toBe('2');
   expect(screen.getByRole('radio', { name: 'My submissions 1' }).querySelector('.bg-info.text-white')?.textContent).toBe('1');
-  expect(await screen.findByRole('button', { name: 'Experience tips, 1' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: '1 notification' })).toBeTruthy();
   expect(screen.getByRole('radio', { name: 'Browse tips' })).toBeTruthy();
   fireEvent.click(screen.getByRole('radio', { name: 'My submissions 1' }));
   expect(await screen.findByRole('radio', { name: 'My submissions' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Experience tips' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Notifications' })).toBeTruthy();
   for (const [title, date, label] of [
     ['Stopped tip', unlistedAt, 'Stopped displaying'],
     ['Published tip', publishedAt, 'Published'],
@@ -129,13 +141,13 @@ it('shows unread activity, clears each tab independently, and keeps checkpoints 
   now = time(5);
   review = time(4);
   emit({ type: 'experience.review.changed' });
-  expect(await screen.findByRole('button', { name: 'Experience tips, 1' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: '1 notification' })).toBeTruthy();
   publication = time(5);
   emit({ type: 'experience.articles.changed' });
-  expect(await screen.findByRole('button', { name: 'Experience tips, 3' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: '3 notifications' })).toBeTruthy();
   rerender(<Fixture userId="reader" />);
-  expect(screen.getByRole('button', { name: 'Experience tips' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Notifications' })).toBeTruthy();
   await waitFor(() => expect(storage.get('seed.experienceTipActivitySeen:reader')).toContain(now));
   rerender(<Fixture userId="author" />);
-  expect(await screen.findByRole('button', { name: 'Experience tips, 3' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: '3 notifications' })).toBeTruthy();
 });
