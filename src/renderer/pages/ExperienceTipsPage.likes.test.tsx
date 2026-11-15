@@ -24,7 +24,7 @@ it.each([
     author: 'Author',
     state: 'published',
     submitted_at: null,
-    published_at: '2026-11-12T12:00:00Z',
+    published_at: '2020-11-12T12:00:00Z',
     view_count: 25,
     like_count: 0,
     liked: false,
@@ -58,7 +58,7 @@ it.each([
   const label = shareUrl ? 'Share 3' : 'Share';
   const share = screen.getByRole('button', { name: label });
   const author = screen.getByText('Author');
-  const publishedDate = screen.getByText('Nov 12, 2026');
+  const publishedDate = screen.getByText('Nov 12, 2020');
   const views = screen.getByRole('group', { name: 'Recent readers' });
   expect(screen.queryByText('25 views')).toBeNull();
   const like = screen.getByRole('button', { name: /^Like\s*0 likes$/ });

@@ -14,6 +14,7 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { PageEmptyState } from '../components/PageEmptyState';
 import { SearchInput } from '../components/SearchInput';
 import { useSeedI18n } from '../i18n';
+import { formatPublicationDate } from '../lib/display';
 import { userFacingErrorMessage } from '../lib/errors';
 import './ExperienceTipsPage.css';
 
@@ -39,9 +40,10 @@ async function readExperienceTips(request: ExperienceTipRead, signal: AbortSigna
   }
 }
 
-const formatDate = (date: string | null, language: string) => date
-  ? new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(date))
-  : '';
+function PublicationDate({ date, locale }: { date: string; locale: string }) {
+  const fullDate = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(date));
+  return <time dateTime={date} title={fullDate}>{formatPublicationDate(date, locale)}</time>;
+}
 
 function TipCover({ url }: { url?: string }) {
   const [failed, setFailed] = useState(false);
@@ -95,7 +97,7 @@ function TipMetadata({ item, ranked }: { item: ExperienceTipSummary; ranked: boo
           </span>
         </span>
       )}
-      {item.published_at && <time dateTime={item.published_at}>{formatDate(item.published_at, locale)}</time>}
+      {item.published_at && <PublicationDate date={item.published_at} locale={locale} />}
     </small>
   );
 }
@@ -376,7 +378,7 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
             <h1 ref={heading} tabIndex={-1} className="experience-article-title">{article.title}</h1>
             <div className="experience-meta experience-article-byline">
               <span>{article.author}</span>
-              {article.published_at && <time dateTime={article.published_at}>{formatDate(article.published_at, locale)}</time>}
+              {article.published_at && <PublicationDate date={article.published_at} locale={locale} />}
               {readingMinutes > 0 && (
                 <span className="experience-metric">
                   <Clock size={14} aria-hidden="true" />
