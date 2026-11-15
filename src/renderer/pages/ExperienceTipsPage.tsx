@@ -365,6 +365,12 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
             <div className="experience-meta experience-article-byline">
               <span>{article.author}</span>
               {article.published_at && <time dateTime={article.published_at}>{formatDate(article.published_at, locale)}</time>}
+              {readingMinutes > 0 && (
+                <span className="experience-metric">
+                  <Clock size={14} aria-hidden="true" />
+                  {t('experienceTips.readingTime', { count: readingMinutes })}
+                </span>
+              )}
               {article.view_count !== undefined && <TipViewCount count={article.view_count} />}
               {article.liked !== undefined && (
                 <button
@@ -390,12 +396,6 @@ function ArticlePage({ id, title, dark, onEngagementChange }: {
                     </>
                   )}
                 </button>
-              )}
-              {readingMinutes > 0 && (
-                <span className="experience-metric">
-                  <Clock size={14} aria-hidden="true" />
-                  {t('experienceTips.readingTime', { count: readingMinutes })}
-                </span>
               )}
               {!error && (
                 <button type="button" className="experience-metric experience-article-action"

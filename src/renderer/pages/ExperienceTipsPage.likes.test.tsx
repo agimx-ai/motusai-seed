@@ -24,7 +24,10 @@ it.each([
     author: 'Author',
     state: 'published',
     submitted_at: null,
-    published_at: null,
+    published_at: '2026-11-12T12:00:00Z',
+    view_count: 25,
+    like_count: 0,
+    liked: false,
     body: 'Example text.',
     images: [],
     ...(shareUrl ? { share_url: shareUrl } : {}),
@@ -47,7 +50,13 @@ it.each([
   );
   const readingTime = await screen.findByText('1 min read');
   const share = screen.getByRole('button', { name: 'Share' });
-  expect(readingTime.nextElementSibling).toBe(share);
+  const author = screen.getByText('Author');
+  const publishedDate = screen.getByText('Nov 12, 2026');
+  const views = screen.getByText('25 views').parentElement;
+  const like = screen.getByRole('button', { name: /^Like\s*0 likes$/ });
+  expect(Array.from(readingTime.parentElement!.children)).toEqual([
+    author, publishedDate, readingTime, views, like, share,
+  ]);
   expect(share.textContent).toBe('Share');
   fireEvent.click(share);
   if (shareUrl) {
