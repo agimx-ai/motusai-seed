@@ -47,9 +47,6 @@ export function registerIpc(runtime: SeedRuntime) {
   handle(ipcChannels.snapshot, () => runtime.snapshot());
   handle(ipcChannels.copyMcpSetupPrompt, () => runtime.copyMcpSetupPrompt());
   handle(ipcChannels.readExperienceTips, (_event, input) => runtime.readExperienceTips(experienceTipReadSchema.parse(input)));
-  handle(ipcChannels.downloadExperienceTipImage, (event, input) => {
-    event.sender.downloadURL(runtime.experienceTipImageDownloadUrl(z.url().max(3072).parse(input)));
-  });
   handle(ipcChannels.recordExperienceTipShare, (_event, tipId) => runtime.recordExperienceTipShare(z.uuid().parse(tipId)));
   handle(ipcChannels.setExperienceTipLike, (_event, input) => runtime.setExperienceTipLike(experienceTipLikeSchema.parse(input)));
   handle(ipcChannels.removeExperienceTip, (_event, input) => runtime.removeExperienceTip(experienceTipRemovalSchema.parse(input)));

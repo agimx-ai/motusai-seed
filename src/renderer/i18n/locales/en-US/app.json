@@ -43,11 +43,9 @@
       "open": "Preview image",
       "openNamed": "Preview {{name}}",
       "close": "Close preview",
-      "fit": "Fit to window",
-      "zoom": "Zoom level",
-      "download": "Download original",
-      "loadFailed": "Could not load the image. Refresh the article and try again.",
-      "downloadFailed": "Could not download the image. Refresh the article and try again."
+      "previous": "Previous image",
+      "next": "Next image",
+      "loadFailed": "Could not load the image. Refresh the article and try again."
     },
     "viewCount_one": "{{count}} view",
     "viewCount_other": "{{count}} views",

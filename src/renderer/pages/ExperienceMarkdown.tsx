@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { toast } from '@motus-ai/seed-sdk';
-import { ImagePreview } from '@motus-ai/seed-sdk/react';
+import { ImagePreview, type ImagePreviewImage } from '@motus-ai/seed-sdk/react';
 import {
   MarkdownRenderer,
   defaultMarkdownTheme,
@@ -24,7 +23,7 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
 }) {
   const { t } = useTranslation();
   const [root, setRoot] = useState<ShadowRoot>();
-  const [preview, setPreview] = useState<{ articleId: string; src: string; alt: string }>();
+  const [preview, setPreview] = useState<{ articleId: string; slides: ImagePreviewImage[]; index: number }>();
   const attachRoot = useCallback((host: HTMLDivElement | null) => {
     if (host) setRoot(host.shadowRoot ?? host.attachShadow({ mode: 'open' }));
   }, []);
@@ -51,17 +50,22 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
         onReadingMinutes(Math.ceil(words / wordsPerMinute));
 
         const approvedUrls = new Set(images.values());
-        const previewable = new Set(Array.from(markdownBody.querySelectorAll('img')).filter((image) =>
+        const previewable = Array.from(markdownBody.querySelectorAll('img')).filter((image) =>
           approvedUrls.has(image.getAttribute('src') ?? ''),
-        ));
+        );
         const open = (event: MouseEvent | KeyboardEvent) => {
           const image = event.target;
-          if (!(image instanceof HTMLImageElement) || !previewable.has(image)) return;
+          if (!(image instanceof HTMLImageElement) || !previewable.includes(image)) return;
           if (event instanceof KeyboardEvent && (event.repeat || (event.key !== 'Enter' && event.key !== ' '))) return;
           if (image.complete && !image.naturalWidth) return;
           event.preventDefault();
           image.focus({ preventScroll: true });
-          setPreview({ articleId: article.id, src: image.src, alt: image.alt });
+          const gallery = previewable.filter((item) => !item.complete || item.naturalWidth > 0);
+          setPreview({
+            articleId: article.id,
+            slides: gallery.map(({ src, alt }) => ({ src, alt })),
+            index: gallery.indexOf(image),
+          });
         };
         for (const image of previewable) {
           image.tabIndex = 0;
@@ -116,24 +120,16 @@ export function ExperienceMarkdown({ article, dark, onReadingMinutes, onImageErr
       )}
       {preview?.articleId === article.id && (
         <ImagePreview
-          src={preview.src}
-          alt={preview.alt}
-          title={preview.alt || t('experienceTips.imagePreview.title')}
+          images={preview.slides}
+          initialIndex={preview.index}
+          title={t('experienceTips.imagePreview.title')}
           labels={{
             close: t('experienceTips.imagePreview.close'),
-            fit: t('experienceTips.imagePreview.fit'),
-            zoom: t('experienceTips.imagePreview.zoom'),
+            previous: t('experienceTips.imagePreview.previous'),
+            next: t('experienceTips.imagePreview.next'),
             loadFailed: t('experienceTips.imagePreview.loadFailed'),
           }}
           onClose={() => setPreview(undefined)}
-          download={{
-            label: t('experienceTips.imagePreview.download'),
-            onClick: () => {
-              void window.motusSeed.downloadExperienceTipImage(preview.src).catch(() => {
-                toast.error(t('experienceTips.imagePreview.downloadFailed'));
-              });
-            },
-          }}
         />
       )}
     </div>

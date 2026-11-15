@@ -106,7 +106,8 @@
     "@bytemd/plugin-gfm": "1.22.0",
     "@bytemd/plugin-frontmatter": "1.22.0",
     "@bytemd/plugin-highlight-ssr": "1.22.0",
-    "bytemd": "1.22.0"
+    "bytemd": "1.22.0",
+    "yet-another-react-lightbox": "3.33.1"
   },
   "bin": {
     "seed-plugin": "dist/tools/cli.mjs"

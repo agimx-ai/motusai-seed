@@ -2120,20 +2120,6 @@ export class SeedRuntime {
     return (request.kind === 'article' ? experienceTipArticleSchema : experienceTipPageSchema).parse(result.value);
   }
 
-  experienceTipImageDownloadUrl(value: string) {
-    const url = new URL(value);
-    const match = /^\/api\/v1\/experience-tip-images\/([^/]+)\/([^/]+)$/.exec(url.pathname);
-    if (
-      !this.user || this.stopping ||
-      url.username || url.password || url.hash ||
-      !match || !z.uuid().safeParse(match[1]).success || !z.uuid().safeParse(match[2]).success ||
-      url.searchParams.size !== 1 || !url.searchParams.get('ticket')
-    ) {
-      throw new Error('Experience tip image is unavailable.');
-    }
-    return new URL(url.pathname + url.search, this.seedCloudUrl).href;
-  }
-
   async recordExperienceTipShare(tipId: string) {
     const result = await this.requestExperienceTip({ kind: 'share', tipId });
     if (!result.ok) throw new Error(result.message);

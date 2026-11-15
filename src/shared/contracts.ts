@@ -384,7 +384,6 @@ export type SeedApi = {
   resetOrphanedPluginData(pluginIds: string[]): Promise<PluginDataResetResult>;
   snapshot(): Promise<SeedSnapshot>;
   readExperienceTips(input: ExperienceTipRead): Promise<ExperienceTipPage | ExperienceTipArticle | ExperienceTipCounts>;
-  downloadExperienceTipImage(url: string): Promise<void>;
   recordExperienceTipShare(tipId: string): Promise<{ share_count: number }>;
   setExperienceTipLike(input: ExperienceTipLike): Promise<ExperienceTipEngagement>;
   removeExperienceTip(input: ExperienceTipRemoval): Promise<void>;
@@ -448,7 +447,6 @@ export const ipcChannels = {
   resetOrphanedPluginData: 'seed:plugins:reset-orphaned-data',
   snapshot: 'seed:snapshot',
   readExperienceTips: 'seed:experience-tips:read',
-  downloadExperienceTipImage: 'seed:experience-tips:download-image',
   recordExperienceTipShare: 'seed:experience-tips:share',
   setExperienceTipLike: 'seed:experience-tips:like',
   removeExperienceTip: 'seed:experience-tips:remove',
