@@ -1,12 +1,11 @@
 import obsidianIcon from '@lobehub/icons-static-svg/icons/obsidian-color.svg';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ObsidianPluginBatchResult, ObsidianPluginStatus } from '../../../shared/obsidian-plugin';
 import { PluginActionButton } from './PluginActionButton';
 
 export function ObsidianPluginEntry() {
   const { t } = useTranslation();
-  const headingId = useId();
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(true);
   const [status, setStatus] = useState<ObsidianPluginStatus | null>(null);
@@ -85,41 +84,38 @@ export function ObsidianPluginEntry() {
   const needsReload = vaults.some((vault) => vault.status !== 'failed' && vault.status !== 'current' && vault.activation === 'reload');
 
   return (
-    <section aria-labelledby={headingId} className="mb-7 mt-4">
-      <h3 id={headingId} className="mb-2 px-2 text-[16px] font-medium">{t('obsidianPlugin.section')}</h3>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-[14px] border border-border bg-card px-3 py-2.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-muted">
-            <img src={obsidianIcon} alt="" className="h-6 w-6" />
-          </span>
-          <div className="min-w-0">
-            <div className="text-[14px] font-medium leading-5">MotusAI for Obsidian</div>
-            <div className="text-[12px] leading-5 text-muted-foreground">{t('obsidianPlugin.summary')}</div>
-          </div>
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-[14px] border border-border bg-card px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-muted">
+          <img src={obsidianIcon} alt="" className="h-6 w-6" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-[14px] font-medium leading-5">MotusAI for Obsidian</div>
+          <div className="text-[12px] leading-5 text-muted-foreground">{t('obsidianPlugin.summary')}</div>
         </div>
-        <PluginActionButton
-          action={action}
-          label={label}
-          busy={busy}
-          disabled={checking || state === 'current'}
-          onStart={() => void runAction()}
-        />
-        {!checking && !busy && !result && statusMessage && (
-          <p role={state === 'error' ? 'alert' : 'status'} className="col-span-full m-0 text-[12px] text-muted-foreground">
-            {statusMessage}
-          </p>
-        )}
-        {result?.ok && vaults.length === 0 && (
-          <p role="status" className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.noVaults')}</p>
-        )}
-        {resultErrors.length > 0 && (
-          <div role="alert" className="col-span-full space-y-1 text-[12px] leading-5 text-destructive">
-            {resultErrors.map((error) => <p key={error} className="m-0">{t(`obsidianPlugin.errors.${error}`)}</p>)}
-          </div>
-        )}
-        {needsEnable && <p className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.activation.enable')}</p>}
-        {needsReload && <p className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.activation.reload')}</p>}
       </div>
-    </section>
+      <PluginActionButton
+        action={action}
+        label={label}
+        busy={busy}
+        disabled={checking || state === 'current'}
+        onStart={() => void runAction()}
+      />
+      {!checking && !busy && !result && statusMessage && (
+        <p role={state === 'error' ? 'alert' : 'status'} className="col-span-full m-0 text-[12px] text-muted-foreground">
+          {statusMessage}
+        </p>
+      )}
+      {result?.ok && vaults.length === 0 && (
+        <p role="status" className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.noVaults')}</p>
+      )}
+      {resultErrors.length > 0 && (
+        <div role="alert" className="col-span-full space-y-1 text-[12px] leading-5 text-destructive">
+          {resultErrors.map((error) => <p key={error} className="m-0">{t(`obsidianPlugin.errors.${error}`)}</p>)}
+        </div>
+      )}
+      {needsEnable && <p className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.activation.enable')}</p>}
+      {needsReload && <p className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.activation.reload')}</p>}
+    </div>
   );
 }

@@ -212,7 +212,6 @@
     "cancelling": "正在取消…"
   },
   "obsidianPlugin": {
-    "section": "Obsidian 插件",
     "summary": "将应用到所有已登记的 Obsidian 仓库",
     "button": {
       "current": "已是最新版",
@@ -244,6 +243,7 @@
     "uninstalling": "卸载中…",
     "search": "搜索插件",
     "installedSection": "已安装",
+    "integrationsSection": "应用集成",
     "localDevelopment": "本地开发",
     "loadingInstalled": "正在加载已安装插件",
     "loadingAvailable": "正在加载可用插件",

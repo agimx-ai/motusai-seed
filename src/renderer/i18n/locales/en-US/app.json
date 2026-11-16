@@ -212,7 +212,6 @@
     "cancelling": "Cancelling…"
   },
   "obsidianPlugin": {
-    "section": "Obsidian plugin",
     "summary": "Applies to all registered Obsidian vaults",
     "button": {
       "current": "Up to date",
@@ -244,6 +243,7 @@
     "uninstalling": "Uninstalling…",
     "search": "Search plugins",
     "installedSection": "Installed",
+    "integrationsSection": "App integrations",
     "localDevelopment": "Local development",
     "loadingInstalled": "Loading installed plugins",
     "loadingAvailable": "Loading available plugins",

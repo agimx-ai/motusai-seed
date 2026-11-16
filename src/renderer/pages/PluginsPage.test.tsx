@@ -37,7 +37,8 @@ function render(overrides: Partial<typeof props> = {}) {
 describe('Plugin list loading states', () => {
   it('keeps Obsidian installation available without Seed plugins or catalog matches', () => {
     const html = render({ query: 'unmatched' });
-    expect(html).toContain('Obsidian 插件');
+    expect(html).toContain('>应用集成</h3>');
+    expect(html).toContain('MotusAI for Obsidian');
     expect(html).toContain('检查中…');
     expect(html).toContain('没有匹配的插件');
   });
