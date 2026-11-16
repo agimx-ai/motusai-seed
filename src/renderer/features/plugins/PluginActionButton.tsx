@@ -8,6 +8,7 @@ import { cx } from '../../lib/display'
 
 type Props = {
   action: 'install' | 'update' | 'details' | 'uninstall' | 'updateAll'
+  label?: string
   progress?: PluginInstallProgress
   busy?: boolean
   disabled?: boolean
@@ -119,7 +120,7 @@ function ProgressRing({ phase, percent, cancelable = false }: {
   </span>
 }
 
-export function PluginActionButton({ action, progress, busy = false, disabled = false, reserveActions, onStart, onCancel }: Props) {
+export function PluginActionButton({ action, label, progress, busy = false, disabled = false, reserveActions, onStart, onCancel }: Props) {
   const { t } = useTranslation()
   const reduceMotion = useReducedMotion()
   const uninstall = action === 'uninstall'
@@ -128,9 +129,9 @@ export function PluginActionButton({ action, progress, busy = false, disabled = 
   const active = !uninstall && !updateAll && (busy || Boolean(progress))
   const filled = !active && (action === 'install' || action === 'update' || (updateAll && !disabled && !busy))
   const cancelable = Boolean(progress?.cancelable)
-  const idleLabel = uninstall
+  const idleLabel = label ?? (uninstall
     ? t(busy ? 'plugins.uninstalling' : 'plugins.uninstall')
-    : updateAll && busy ? t('plugins.updatingAll') : t(`plugins.storeAction.${action === 'install' ? 'get' : action}`)
+    : updateAll && busy ? t('plugins.updatingAll') : t(`plugins.storeAction.${action === 'install' ? 'get' : action}`))
   const statusLabel = progress?.phase === 'downloading' && typeof progress.percent === 'number'
     ? t('plugins.installProgress.downloading', { percent: Math.round(progress.percent) })
     : t(`plugins.installProgress.${progress?.phase || 'preparing'}`)
@@ -143,7 +144,7 @@ export function PluginActionButton({ action, progress, busy = false, disabled = 
     ? [...reserveActions.map((candidate) => candidate === 'uninstall'
         ? t('plugins.uninstall')
         : t(`plugins.storeAction.${candidate === 'install' ? 'get' : candidate}`)), idleLabel]
-    : uninstall || updateAll
+    : uninstall || updateAll || label !== undefined
       ? [idleLabel]
       : [t('plugins.storeAction.get'), t('plugins.storeAction.update'), t('plugins.storeAction.details')]
 

@@ -54,6 +54,15 @@ describe('Plugin action geometry', () => {
     expect(html.slice(0, html.indexOf('<button'))).toContain('relative isolate inline-grid')
   })
 
+  it('fits a custom status label inside the same compact capsule', () => {
+    const label = 'Already up to date'
+    const html = renderAction({ action: 'details', label, disabled: true }, 'en-US')
+    expect(html.slice(0, html.indexOf('<button'))).toContain(label)
+    expect(html).toContain('aria-label="Already up to date"')
+    expect(html).toContain('h-[26px]')
+    expect(html).toContain('disabled=""')
+  })
+
   it('keeps Details secondary while install and update use blue backgrounds with white labels', () => {
     const details = renderAction({ action: 'details' })
     expect(details).toContain('text-foreground')

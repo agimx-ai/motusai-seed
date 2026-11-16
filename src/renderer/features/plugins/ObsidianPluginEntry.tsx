@@ -1,9 +1,8 @@
 import obsidianIcon from '@lobehub/icons-static-svg/icons/obsidian-color.svg';
-import { ActionButton } from '@motus-ai/seed-sdk/react';
-import { LoaderCircle } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ObsidianPluginBatchResult, ObsidianPluginStatus } from '../../../shared/obsidian-plugin';
+import { PluginActionButton } from './PluginActionButton';
 
 export function ObsidianPluginEntry() {
   const { t } = useTranslation();
@@ -71,14 +70,17 @@ export function ObsidianPluginEntry() {
   }
 
   const state = status?.state;
-  const button = busy ? 'working' : checking || !state ? 'checking' : state;
+  const action = (!checking || busy) && (state === 'install' || state === 'update') ? state : 'details';
+  const label = busy || action !== 'details'
+    ? undefined
+    : t(`obsidianPlugin.button.${checking || !state ? 'checking' : state}`);
   const statusMessage = status?.state === 'error'
     ? t(`obsidianPlugin.errors.${status.error}`)
     : status?.state === 'noVaults' ? t('obsidianPlugin.noVaults') : null;
 
   const vaults = result?.ok ? result.vaults : [];
-  const counts = { installed: 0, updated: 0, current: 0, failed: 0 };
-  for (const vault of vaults) counts[vault.status] += 1;
+  const resultErrors = result && !result.ok ? [result.error]
+    : [...new Set(vaults.flatMap((vault) => vault.status === 'failed' ? [vault.error] : []))];
   const needsEnable = vaults.some((vault) => vault.status !== 'failed' && vault.status !== 'current' && vault.activation === 'enable');
   const needsReload = vaults.some((vault) => vault.status !== 'failed' && vault.status !== 'current' && vault.activation === 'reload');
 
@@ -95,53 +97,28 @@ export function ObsidianPluginEntry() {
             <div className="text-[12px] leading-5 text-muted-foreground">{t('obsidianPlugin.summary')}</div>
           </div>
         </div>
-        <ActionButton
-          tone={state === 'install' || state === 'update' ? 'primary' : 'neutral'}
-          busy={busy || checking}
-          disabled={state === 'current'}
-          onClick={() => void runAction()}
-        >
-          {busy && <LoaderCircle size={14} className="animate-spin seed-reduced-motion:animate-none" aria-hidden="true" />}
-          {t(`obsidianPlugin.button.${button}`)}
-        </ActionButton>
+        <PluginActionButton
+          action={action}
+          label={label}
+          busy={busy}
+          disabled={checking || state === 'current'}
+          onStart={() => void runAction()}
+        />
         {!checking && !busy && !result && statusMessage && (
           <p role={state === 'error' ? 'alert' : 'status'} className="col-span-full m-0 text-[12px] text-muted-foreground">
             {statusMessage}
           </p>
         )}
-        {busy && <p role="status" className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.installing')}</p>}
-        {result && (
-          <div className="col-span-full space-y-1 text-[12px] leading-5 text-muted-foreground">
-            {!result.ok ? (
-              <p role="alert" className="m-0 text-destructive">{t(`obsidianPlugin.errors.${result.error}`)}</p>
-            ) : vaults.length === 0 ? (
-              <p role="status" className="m-0">{t('obsidianPlugin.noVaults')}</p>
-            ) : (
-              <>
-                <p role="status" className="m-0 tabular-nums">{t('obsidianPlugin.result', counts)}</p>
-                {needsEnable && <p className="m-0">{t('obsidianPlugin.activation.enable')}</p>}
-                {needsReload && <p className="m-0">{t('obsidianPlugin.activation.reload')}</p>}
-                <details>
-                  <summary className="w-fit cursor-pointer rounded text-foreground focus-visible:outline-2 focus-visible:outline-ring">
-                    {t('obsidianPlugin.details')}
-                  </summary>
-                  <ul className="m-0 list-none divide-y divide-border p-0">
-                    {[...vaults].sort((a, b) => a.name.localeCompare(b.name)).map((vault) => (
-                      <li key={vault.path} className="flex flex-wrap items-baseline justify-between gap-x-3 py-1">
-                        <span title={vault.path} className="min-w-0 break-all text-foreground">{vault.name || vault.path}</span>
-                        {vault.status === 'failed' ? (
-                          <span className="text-destructive">{t(`obsidianPlugin.errors.${vault.error}`)}</span>
-                        ) : (
-                          <span>{t(`obsidianPlugin.status.${vault.status}`, { version: vault.version })}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              </>
-            )}
+        {result?.ok && vaults.length === 0 && (
+          <p role="status" className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.noVaults')}</p>
+        )}
+        {resultErrors.length > 0 && (
+          <div role="alert" className="col-span-full space-y-1 text-[12px] leading-5 text-destructive">
+            {resultErrors.map((error) => <p key={error} className="m-0">{t(`obsidianPlugin.errors.${error}`)}</p>)}
           </div>
         )}
+        {needsEnable && <p className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.activation.enable')}</p>}
+        {needsReload && <p className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.activation.reload')}</p>}
       </div>
     </section>
   );

@@ -215,23 +215,12 @@
     "section": "Obsidian 插件",
     "summary": "将应用到所有已登记的 Obsidian 仓库",
     "button": {
-      "install": "安装",
-      "update": "发现新版本",
       "current": "已是最新版",
       "noVaults": "检查仓库",
       "error": "重试检查",
-      "checking": "检查中…",
-      "working": "处理中…"
+      "checking": "检查中…"
     },
-    "installing": "正在检查版本并安装到 Obsidian 仓库…",
     "noVaults": "未发现 Obsidian 仓库。请先在 Obsidian 中打开仓库，再重试。",
-    "result": "已安装 {{installed}} 个，已更新 {{updated}} 个，无需更新 {{current}} 个，失败 {{failed}} 个。",
-    "details": "查看各仓库结果",
-    "status": {
-      "installed": "已安装 {{version}}",
-      "updated": "已更新至 {{version}}",
-      "current": "无需更新 · {{version}}"
-    },
     "activation": {
       "enable": "部分仓库需要在 Obsidian 的「设置 → 第三方插件」中启用 MotusAI Agent。",
       "reload": "部分仓库需要重开 Obsidian 或重新启用插件后，更新才会生效。"

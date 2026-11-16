@@ -215,23 +215,12 @@
     "section": "Obsidian plugin",
     "summary": "Applies to all registered Obsidian vaults",
     "button": {
-      "install": "Install",
-      "update": "New version available",
       "current": "Up to date",
       "noVaults": "Check vaults",
       "error": "Retry check",
-      "checking": "Checking…",
-      "working": "Working…"
+      "checking": "Checking…"
     },
-    "installing": "Checking the release and installing in Obsidian vaults…",
     "noVaults": "No Obsidian vaults found. Open a vault in Obsidian and try again.",
-    "result": "Installed in {{installed}}, updated in {{updated}}, no update needed in {{current}}, failed in {{failed}}.",
-    "details": "View results by vault",
-    "status": {
-      "installed": "Installed {{version}}",
-      "updated": "Updated to {{version}}",
-      "current": "No update needed · {{version}}"
-    },
     "activation": {
       "enable": "In some vaults, enable MotusAI Agent under Obsidian Settings → Community plugins.",
       "reload": "In some vaults, reopen Obsidian or toggle the plugin off and back on to load the update."
