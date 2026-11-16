@@ -59,6 +59,7 @@ export const seedDistributionEventSchema = z.discriminatedUnion('type', [
   seedDistributionEventBaseSchema.extend({ type: z.literal('client.mcp-clients.changed') }),
   seedDistributionEventBaseSchema.extend({ type: z.literal('plugin.catalog.changed') }),
   seedDistributionEventBaseSchema.extend({ type: z.literal('experience.articles.changed') }),
+  seedDistributionEventBaseSchema.extend({ type: z.literal('obsidian.release.changed') }),
   seedDistributionEventBaseSchema.extend({
     type: z.literal('client.release.changed'),
     channel: z.enum(['stable', 'beta']),

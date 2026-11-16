@@ -36,7 +36,11 @@ export function ObsidianPluginEntry() {
     };
     onFocus();
     window.addEventListener('focus', onFocus);
+    const unsubscribe = window.motusSeed.subscribe?.((event) => {
+      if (event.type === 'obsidian.release.changed') onFocus();
+    });
     return () => {
+      unsubscribe?.();
       window.removeEventListener('focus', onFocus);
       requestId.current += 1;
     };

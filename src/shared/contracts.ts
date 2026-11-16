@@ -32,6 +32,7 @@ export type SeedDistributionEvent =
   | { ver: 1; type: 'client.mcp-clients.changed'; dist_id: string; revision: string; occurred_at: string }
   | { ver: 1; type: 'client.discoveries.changed'; dist_id: string; revision: string; occurred_at: string }
   | { ver: 1; type: 'plugin.catalog.changed'; dist_id: string; revision: string; occurred_at: string }
+  | { ver: 1; type: 'obsidian.release.changed'; dist_id: string; revision: string; occurred_at: string }
   | { ver: 1; type: 'experience.articles.changed'; dist_id: string; revision: string; occurred_at: string }
   | {
       ver: 1;
@@ -357,6 +358,7 @@ export type PluginUpdateResult = {
 export type SeedEvent =
   | { type: 'snapshot.changed'; snapshot: SeedSnapshot }
   | { type: 'experience.articles.changed' }
+  | { type: 'obsidian.release.changed' }
   | { type: 'experience.review.changed' }
   | { type: 'logs.upload.progress'; progress: TerminalLogUploadProgress | null }
   | { type: 'plugin.install.progress'; pluginId: string; progress: PluginInstallProgress }

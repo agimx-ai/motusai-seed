@@ -241,7 +241,7 @@
       "invalidVault": "The vault is unavailable or lacks a .obsidian configuration folder.",
       "invalidVaults": "Some Obsidian vaults are unavailable or their plugin status could not be read.",
       "invalidInstallation": "Could not identify the existing plugin files.",
-      "releaseUnavailable": "The official release is unavailable. Check your network and try again.",
+      "releaseUnavailable": "The plugin release is unavailable on Seed Cloud. Try again later.",
       "downloadFailed": "Could not download or verify the official plugin. Try again.",
       "changed": "The vault or plugin changed during installation. Try again.",
       "installFailed": "Could not write the plugin files. Check vault permissions and try again."

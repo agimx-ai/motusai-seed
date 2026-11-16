@@ -2,7 +2,7 @@ import { fetchMcpClients } from './mcp-clients';
 import type { McpClientEntry } from '../shared/mcp-clients';
 import { join } from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { app, BrowserWindow, clipboard, nativeTheme, powerSaveBlocker, shell, session } from 'electron';
+import { app, BrowserWindow, clipboard, nativeTheme, net, powerSaveBlocker, shell, session } from 'electron';
 import { z } from 'zod';
 import { buildConfig } from '../shared/build-config.generated';
 import type {
@@ -91,6 +91,8 @@ import { validateLocalClientCapabilityApproval } from './local-client-capability
 import { SidecarProcessService } from './sidecar-process-service';
 import { discoverDistribution } from './distribution-discovery';
 import { SeedDistributionEvents } from './distribution-events';
+import { ObsidianPluginInstaller } from './obsidian-plugin-installer';
+import { activateObsidianPlugin, registeredObsidianVaultPaths } from './obsidian-desktop';
 import { AnnouncementInbox } from './announcements';
 import { CompanionDiscoveryFeed } from './companion-discoveries';
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization';
@@ -130,6 +132,9 @@ export class SeedRuntime {
   readonly store: SeedStore;
   readonly connector: ConnectorManager;
   private readonly seedCloudUrl = serverUrlSchema.parse(buildConfig.seedCloudUrl);
+  private readonly obsidianPlugin = new ObsidianPluginInstaller(
+    this.seedCloudUrl, (url, options) => net.fetch(url, options), registeredObsidianVaultPaths, activateObsidianPlugin,
+  );
   private distribution: SeedDistribution | undefined;
   private user: TerminalUserProfile | undefined;
   private startupStatus: SeedSnapshot['startup']['status'] = 'initializing';
@@ -2025,8 +2030,25 @@ export class SeedRuntime {
     } catch { /* Keep the last successful list or bundled default. */ }
   }
 
+  obsidianPluginStatus(force: boolean) {
+    return this.obsidianPlugin.status(force);
+  }
+
+  installObsidianPlugin() {
+    return this.obsidianPlugin.installAll();
+  }
+
+  private refreshObsidianPluginVersion() {
+    this.obsidianPlugin.invalidateRelease();
+    this.emit({ type: 'obsidian.release.changed' });
+  }
+
   private async handleDistributionEvent(event: SeedDistributionEvent) {
     if (event.dist_id !== buildConfig.distributionId) return;
+    if (event.type === 'obsidian.release.changed') {
+      this.refreshObsidianPluginVersion();
+      return;
+    }
     if (event.type === 'client.mcp-clients.changed') {
       await this.refreshMcpClients();
       return;
@@ -2068,6 +2090,7 @@ export class SeedRuntime {
   }
 
   private async reconcileDistributionState() {
+    this.refreshObsidianPluginVersion();
     if (this.user) this.emit({ type: 'experience.articles.changed' });
     await this.currentDistribution(true);
     await this.companionDiscoveries.refresh();

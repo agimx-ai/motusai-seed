@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain, net } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain } from 'electron';
 import { z } from 'zod';
 import {
   auditQuerySchema,
@@ -10,8 +10,6 @@ import {
 import { experienceTipLikeSchema, experienceTipReadSchema, experienceTipRemovalSchema, experienceTipSourceSchema } from '../shared/experience-tips';
 import { ipcChannels } from '../shared/contracts';
 import type { SeedRuntime } from './runtime';
-import { ObsidianPluginInstaller } from './obsidian-plugin-installer';
-import { activateObsidianPlugin, registeredObsidianVaultPaths } from './obsidian-desktop';
 
 function assertTrustedSender(event: Electron.IpcMainInvokeEvent) {
   if (event.senderFrame !== event.sender.mainFrame) throw new Error('拒绝来自子页面的 IPC 请求。');
@@ -32,13 +30,8 @@ function handle<T extends unknown[], R>(
 }
 
 export function registerIpc(runtime: SeedRuntime) {
-  const obsidian = new ObsidianPluginInstaller(
-    (input, options) => net.fetch(input, options),
-    registeredObsidianVaultPaths,
-    activateObsidianPlugin,
-  );
-  handle(ipcChannels.obsidianPluginStatus, (_event, force) => obsidian.status(force === true));
-  handle(ipcChannels.installObsidianPlugin, () => obsidian.installAll());
+  handle(ipcChannels.obsidianPluginStatus, (_event, force) => runtime.obsidianPluginStatus(force === true));
+  handle(ipcChannels.installObsidianPlugin, () => runtime.installObsidianPlugin());
   handle(ipcChannels.pluginViewMessage, (event, token, message) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) throw new Error('Plugin view requires the product window.');

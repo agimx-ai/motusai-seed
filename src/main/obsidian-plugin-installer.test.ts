@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ObsidianPluginInstaller, obsidianPluginId } from './obsidian-plugin-installer';
 
-const repository = 'agimx-ai/motusai-obsidian-agent';
+const cloudUrl = 'https://seed-cloud.example';
+const releaseBase = `${cloudUrl}/api/v1/obsidian-plugin/releases`;
 const version = '0.1.86';
 const distribution = {
   'main.js': 'module.exports = class {};\n',
@@ -15,16 +16,15 @@ const distribution = {
 
 function officialRelease(options: { tamper?: string; beforeAsset?: () => Promise<void> } = {}) {
   return vi.fn(async (url: string) => {
-    if (url === `https://api.github.com/repos/${repository}/releases/latest`) {
+    if (url === `${releaseBase}/latest`) {
       return Response.json({
-        tag_name: version,
-        prerelease: false,
-        draft: false,
+        version,
         assets: Object.entries(distribution).map(([name, content]) => ({
           name,
           size: Buffer.byteLength(content),
-          digest: `sha256:${createHash('sha256').update(content).digest('hex')}`,
-          browser_download_url: `https://github.com/${repository}/releases/download/${version}/${name}`,
+          sha256: createHash('sha256').update(content).digest('hex'),
+          url: 'https://untrusted.example/asset',
+
         })),
       });
     }
@@ -78,7 +78,7 @@ describe('MotusAI for Obsidian installer', () => {
       symlink(vault, alias, 'junction'),
     ]);
     const fetchRelease = officialRelease();
-    const service = new ObsidianPluginInstaller(fetchRelease, async () => [vault, old, newer, missing, alias], activate);
+    const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [vault, old, newer, missing, alias], activate);
 
     await expect(service.installAll()).resolves.toMatchObject({
       ok: true,
@@ -111,7 +111,7 @@ describe('MotusAI for Obsidian installer', () => {
     await Promise.all([existing(old, '0.1.85'), existing(latest, version)]);
     const paths = [old, latest];
     const fetchRelease = officialRelease();
-    const service = new ObsidianPluginInstaller(fetchRelease, async () => paths, activate);
+    const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => paths, activate);
 
     await expect(service.status()).resolves.toEqual({ state: 'update' });
     expect(fetchRelease).toHaveBeenCalledTimes(1);
@@ -127,13 +127,13 @@ describe('MotusAI for Obsidian installer', () => {
   it('never reports up to date when release lookup fails', async () => {
     await existing(vault, version);
     const fetchRelease = vi.fn(async () => new Response(null, { status: 503 }));
-    const service = new ObsidianPluginInstaller(fetchRelease, async () => [vault], activate);
+    const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [vault], activate);
     await expect(service.status()).resolves.toEqual({ state: 'error', error: 'releaseUnavailable' });
   });
 
   it('returns an empty result without requesting the release when there are no registered vaults', async () => {
     const fetchRelease = officialRelease();
-    const service = new ObsidianPluginInstaller(fetchRelease, async () => [], activate);
+    const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [], activate);
     await expect(service.status()).resolves.toEqual({ state: 'noVaults' });
     await expect(service.installAll()).resolves.toEqual({ ok: true, vaults: [] });
     expect(fetchRelease).not.toHaveBeenCalled();
@@ -141,7 +141,7 @@ describe('MotusAI for Obsidian installer', () => {
 
   it('leaves installed files intact when package verification fails', async () => {
     await existing(vault, '0.1.85');
-    const service = new ObsidianPluginInstaller(officialRelease({ tamper: 'main.js' }), async () => [vault], activate);
+    const service = new ObsidianPluginInstaller(cloudUrl, officialRelease({ tamper: 'main.js' }), async () => [vault], activate);
     await expect(service.installAll()).resolves.toEqual({ ok: false, error: 'downloadFailed' });
     expect(await readFile(join(plugin, 'main.js'), 'utf8')).toBe('old script');
     expect(await readFile(join(plugin, 'styles.css'), 'utf8')).toBe('old styles');
@@ -154,7 +154,7 @@ describe('MotusAI for Obsidian installer', () => {
     const changeVault = vi.fn(async () => existing(vault, '0.1.87'));
     let changing: Promise<void> | undefined;
     const fetchRelease = officialRelease({ beforeAsset: () => { changing ??= changeVault(); return changing; } });
-    const service = new ObsidianPluginInstaller(fetchRelease, async () => [vault, other], activate);
+    const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [vault, other], activate);
     const install = service.installAll();
     expect(service.installAll()).toBe(install);
     await expect(install).resolves.toMatchObject({
@@ -168,25 +168,38 @@ describe('MotusAI for Obsidian installer', () => {
     expect(changeVault).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the official release page hashes when the API rate limit is reached', async () => {
-    const release = officialRelease();
-    const page = `https://github.com/${repository}/releases`;
-    const fetchRelease = async (url: string) => {
-      if (url.startsWith('https://api.github.com/')) return new Response('rate limit', { status: 403 });
-      if (url === `${page}/latest`) {
-        return new Response(`<include-fragment src="${page}/expanded_assets/${version}"></include-fragment>`);
-      }
-      if (url === `${page}/expanded_assets/${version}`) {
-        return new Response(Object.entries(distribution).map(([name, content]) => `
-          <li><a href="/${repository}/releases/download/${version}/${name}">${name}</a>
-          <clipboard-copy value="sha256:${createHash('sha256').update(content).digest('hex')}"></clipboard-copy></li>
-        `).join(''));
-      }
-      return release(url);
-    };
-    const service = new ObsidianPluginInstaller(fetchRelease, async () => [vault], activate);
-    await expect(service.installAll()).resolves.toMatchObject({ ok: true, vaults: [{ status: 'installed', version }] });
-    expect(await readFile(join(plugin, 'main.js'), 'utf8')).toBe(distribution['main.js']);
+  it('pins version checks and all asset downloads to Seed Cloud and rejects redirects', async () => {
+    const fixture = officialRelease();
+    const fetchRelease = vi.fn((url: string, options?: RequestInit) => {
+      if (url === `${releaseBase}/${version}/main.js`)
+        return Promise.resolve(Response.redirect('https://untrusted.example/asset', 302));
+      return fixture(url);
+    });
+    const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [vault], activate);
+    await expect(service.installAll()).resolves.toEqual({ ok: false, error: 'downloadFailed' });
+    expect(fetchRelease.mock.calls.map(([url]) => url).sort()).toEqual([
+      `${releaseBase}/latest`,
+      ...Object.keys(distribution).map((name) => `${releaseBase}/${version}/${name}`),
+    ].sort());
+    expect(fetchRelease.mock.calls.every(([, options]) => options?.redirect === 'error')).toBe(true);
+    expect(await readdir(join(vault, '.obsidian'))).toEqual([]);
+  });
+
+  it('reads fresh Cloud metadata after the release cache is invalidated', async () => {
+    await existing(vault, version);
+    const fixture = officialRelease();
+    let current = version;
+    const fetchRelease = vi.fn(async (url: string) => {
+      const response = await fixture(url);
+      const metadata = await response.json();
+      return Response.json({ ...metadata, version: current });
+    });
+    const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [vault], activate);
+    await expect(service.status()).resolves.toEqual({ state: 'current' });
+    current = '0.1.87';
+    service.invalidateRelease();
+    await expect(service.status()).resolves.toEqual({ state: 'update' });
+    expect(fetchRelease).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a symlink substituting for the plugin directory', async () => {
@@ -195,7 +208,7 @@ describe('MotusAI for Obsidian installer', () => {
     await mkdir(outside);
     await symlink(outside, plugin, 'junction');
     const fetchRelease = officialRelease();
-    const service = new ObsidianPluginInstaller(fetchRelease, async () => [vault], activate);
+    const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [vault], activate);
     await expect(service.status()).resolves.toEqual({ state: 'error', error: 'invalidVaults' });
     await expect(service.installAll()).resolves.toMatchObject({
       ok: true,

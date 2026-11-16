@@ -12,28 +12,22 @@ import type {
 import { compareSeedVersions, seedVersionPattern } from '../shared/seed-version';
 
 export const obsidianPluginId = 'motusai-vault-agent';
-const repository = 'agimx-ai/motusai-obsidian-agent';
-const releaseUrl = `https://api.github.com/repos/${repository}/releases/latest`;
-const releasesPage = `https://github.com/${repository}/releases`;
-const stableTag = /^v?\d+\.\d+\.\d+$/;
+const releasesPath = '/api/v1/obsidian-plugin/releases/';
 const files = ['main.js', 'styles.css', 'manifest.json'] as const;
 const limits = { 'main.js': 64 * 1024 * 1024, 'styles.css': 4 * 1024 * 1024, 'manifest.json': 32 * 1024 };
 const versionSchema = z.string().max(80).regex(seedVersionPattern);
 const manifestSchema = z.object({ id: z.literal(obsidianPluginId), version: versionSchema });
 const assetSchema = z.object({
-  name: z.string(),
+  name: z.enum(files),
   size: z.number().int().positive(),
-  digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  browser_download_url: z.string(),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
 });
 const releaseSchema = z.object({
-  tag_name: z.string().max(81),
-  draft: z.literal(false),
-  prerelease: z.literal(false),
-  assets: z.array(z.object({ name: z.string() }).passthrough()),
+  version: z.string().max(80).regex(/^\d+\.\d+\.\d+$/),
+  assets: z.array(assetSchema).length(files.length),
 });
 
-type Release = { version: string; assets: Map<(typeof files)[number], { url: string; digest: string; size?: number }> };
+type Release = z.infer<typeof releaseSchema>;
 type ReleaseFetch = (url: string, init?: RequestInit) => Promise<Response>;
 type Distribution = Record<(typeof files)[number], Buffer>;
 type InstalledVault = { path: string; installedVersion: string | null; complete: boolean };
@@ -103,76 +97,31 @@ async function readResponse(response: Response, limit: number) {
   }
 }
 
-function releaseVersion(tag: string) {
-  if (tag.length > 81 || !stableTag.test(tag)) throw new Error('Expected a stable Obsidian release');
-  return tag.replace(/^v/, '');
-}
-
-async function getReleaseFromWebsite(fetchRelease: ReleaseFetch): Promise<Release> {
-  // GitHub's anonymous REST quota can be shared by every user behind one IP.
-  const latest = await fetchRelease(`${releasesPage}/latest`, { signal: AbortSignal.timeout(12_000) });
-  const page = (await readResponse(latest, 1024 * 1024)).toString('utf8');
-  const prefix = `${releasesPage}/expanded_assets/`;
-  const fragments = [...page.matchAll(/<include-fragment\b[^>]*\bsrc="([^"]+)"/gi)]
-    .map((match) => match[1]!)
-    .filter((url) => url.startsWith(prefix));
-  if (fragments.length !== 1) throw new Error('Invalid GitHub release page');
-  const tag = fragments[0]!.slice(prefix.length);
-  const version = releaseVersion(tag);
-  const response = await fetchRelease(`${prefix}${tag}`, {
-    redirect: 'error', signal: AbortSignal.timeout(12_000),
-  });
-  const html = (await readResponse(response, 512 * 1024)).toString('utf8');
-  const rows = html.match(/<li\b[^>]*>[\s\S]*?<\/li>/gi) ?? [];
-  const assets: Release['assets'] = new Map();
-  for (const name of files) {
-    const path = `/${repository}/releases/download/${tag}/${name}`;
-    const matches = rows.filter((row) => row.includes(`href="${path}"`));
-    const digest = matches.length === 1
-      ? matches[0]?.match(/<clipboard-copy\b[^>]*\bvalue="(sha256:[a-f0-9]{64})"/)?.[1]
-      : undefined;
-    if (!digest) throw new Error('Missing published Obsidian release digest');
-    assets.set(name, { url: `https://github.com${path}`, digest });
-  }
-  return { version, assets };
-}
-
-async function getRelease(fetchRelease: ReleaseFetch): Promise<Release> {
-  const response = await fetchRelease(releaseUrl, {
-    headers: { Accept: 'application/vnd.github+json' },
+async function getRelease(fetchRelease: ReleaseFetch, base: URL): Promise<Release> {
+  const response = await fetchRelease(new URL('latest', base).href, {
+    headers: { Accept: 'application/json' },
     redirect: 'error',
     signal: AbortSignal.timeout(12_000),
   });
-  if (response.status === 403 || response.status === 429) {
-    await response.body?.cancel();
-    return getReleaseFromWebsite(fetchRelease);
-  }
-  const json = await readResponse(response, 512 * 1024);
+  const json = await readResponse(response, 32 * 1024);
   const release = releaseSchema.parse(JSON.parse(json.toString('utf8')));
-  const version = releaseVersion(release.tag_name);
-  const assets: Release['assets'] = new Map();
-  for (const name of files) {
-    const matches = release.assets.filter((asset) => asset.name === name);
-    const asset = assetSchema.parse(matches.length === 1 ? matches[0] : undefined);
-    const url = `${releasesPage}/download/${release.tag_name}/${name}`;
-    if (asset.size > limits[name] || asset.browser_download_url !== url) {
-      throw new Error('Unexpected Obsidian release asset');
-    }
-    assets.set(name, { url, size: asset.size, digest: asset.digest });
+  const names = new Set(release.assets.map(({ name }) => name));
+  if (names.size !== files.length || release.assets.some(({ name, size }) => size > limits[name])) {
+    throw new Error('Unexpected Obsidian release asset');
   }
-  return { version, assets };
+  return release;
 }
 
-async function downloadRelease(fetchRelease: ReleaseFetch, release: Release): Promise<Distribution> {
-  const results = await Promise.allSettled(files.map(async (name) => {
-    const asset = release.assets.get(name)!;
-    const response = await fetchRelease(asset.url, {
+async function downloadRelease(fetchRelease: ReleaseFetch, base: URL, release: Release): Promise<Distribution> {
+  const results = await Promise.allSettled(release.assets.map(async ({ name, size, sha256 }) => {
+    const response = await fetchRelease(new URL(`${release.version}/${name}`, base).href, {
       headers: { Accept: 'application/octet-stream' },
+      redirect: 'error',
       signal: AbortSignal.timeout(90_000),
     });
-    const bytes = await readResponse(response, asset.size ?? limits[name]);
+    const bytes = await readResponse(response, size);
     const digest = createHash('sha256').update(bytes).digest('hex');
-    if (!bytes.length || (asset.size !== undefined && bytes.length !== asset.size) || `sha256:${digest}` !== asset.digest) {
+    if (bytes.length !== size || digest !== sha256) {
       throw new Error('Invalid Obsidian release digest');
     }
     if (name === 'manifest.json' && manifestSchema.parse(JSON.parse(bytes.toString('utf8'))).version !== release.version) {
@@ -252,12 +201,21 @@ export class ObsidianPluginInstaller {
   private installing: Promise<ObsidianPluginBatchResult> | null = null;
   private release: { value: Release; expires: number } | null = null;
   private checkingRelease: Promise<Release> | null = null;
+  private readonly releaseBase: URL;
 
   constructor(
+    cloudUrl: string,
     private readonly fetchRelease: ReleaseFetch,
     private readonly registeredVaultPaths: () => Promise<string[]>,
     private readonly activate: (path: string, update: boolean) => Promise<ObsidianPluginActivation>,
-  ) {}
+  ) {
+    this.releaseBase = new URL(releasesPath, cloudUrl);
+  }
+
+  invalidateRelease() {
+    this.release = null;
+    this.checkingRelease = null;
+  }
 
   installAll(): Promise<ObsidianPluginBatchResult> {
     this.installing ??= this.installBatch().finally(() => { this.installing = null; });
@@ -267,11 +225,14 @@ export class ObsidianPluginInstaller {
   private latestRelease(force = false) {
     if (this.checkingRelease) return this.checkingRelease;
     if (!force && this.release && this.release.expires > Date.now()) return Promise.resolve(this.release.value);
-    this.checkingRelease = getRelease(this.fetchRelease).then((value) => {
-      this.release = { value, expires: Date.now() + 5 * 60_000 };
+    const checking = getRelease(this.fetchRelease, this.releaseBase).then((value) => {
+      if (this.checkingRelease === checking) this.release = { value, expires: Date.now() + 5 * 60_000 };
       return value;
-    }).finally(() => { this.checkingRelease = null; });
-    return this.checkingRelease;
+    }).finally(() => {
+      if (this.checkingRelease === checking) this.checkingRelease = null;
+    });
+    this.checkingRelease = checking;
+    return checking;
   }
 
   private async scanVaults() {
@@ -326,7 +287,7 @@ export class ObsidianPluginInstaller {
     });
     if (!pending.length) return { ok: true, vaults };
 
-    const distribution = await downloadRelease(this.fetchRelease, release).catch(() => null);
+    const distribution = await downloadRelease(this.fetchRelease, this.releaseBase, release).catch(() => null);
     if (!distribution) return { ok: false, error: 'downloadFailed' };
     for (const vault of pending) {
       const { path } = vault;
