@@ -134,11 +134,13 @@ export class ObservationStore {
     const cutoff = boundary && String(boundary.timestamp) > ageCutoff ? String(boundary.timestamp) : ageCutoff
     this.database.prepare(`DELETE FROM observation_records WHERE trace_id IS NULL AND timestamp < ? AND outcome != 'running'`)
       .run(cutoff)
+    // Collect running trace IDs once. Probing each old row can scan the same long trace repeatedly.
     this.database.prepare(`DELETE FROM observation_records WHERE trace_id IN (
-      SELECT DISTINCT older.trace_id FROM observation_records older WHERE older.timestamp < ?
-        AND older.trace_id IS NOT NULL AND NOT EXISTS (
-          SELECT 1 FROM observation_records running WHERE running.trace_id = older.trace_id AND running.outcome = 'running'
-        )
+      SELECT DISTINCT trace_id FROM observation_records INDEXED BY observation_time_idx
+      WHERE timestamp < ? AND trace_id IS NOT NULL AND trace_id NOT IN (
+        SELECT trace_id FROM observation_records INDEXED BY observation_outcome_time_idx
+        WHERE outcome = 'running' AND trace_id IS NOT NULL
+      )
     )`).run(cutoff)
   }
 

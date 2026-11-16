@@ -201,6 +201,43 @@ describe('ObservationStore', () => {
     } finally { await rm(directory, { recursive: true, force: true }) }
   })
 
+  it('prunes over the row limit without rescanning a large running trace', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'seed-observations-'))
+    const observations = new ObservationStore(directory, 'MotusAI Seed')
+    const knex = createKnex({ client: 'better-sqlite3', connection: { filename: observations.databasePath }, useNullAsDefault: true })
+    const event = { level: 'info' as const, source: 'main' as const, event: 'retention.test', message: 'Retention test' }
+    const span = { ...event, trace_id: 'long-trace', span_id: 'running-span' }
+    try {
+      await knex.raw(`
+        WITH RECURSIVE fixture(n) AS (
+          VALUES (1)
+          UNION ALL SELECT n + 1 FROM fixture WHERE n < 200100
+        )
+        INSERT INTO observation_records (id, timestamp, source, operation, category, risk, outcome, summary, trace_id)
+        SELECT 'fixture-' || n, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days', printf('+%d seconds', n)),
+          'system', 'host.invoke', 'system', 'read', 'allowed', 'Retention fixture',
+          CASE WHEN n = 1 THEN NULL ELSE 'long-trace' END FROM fixture
+      `)
+      observations.record({ ...span, phase: 'started' })
+      for (let index = 0; index < 498; index++) observations.record(event)
+
+      const started = performance.now()
+      observations.record(event)
+      expect(performance.now() - started).toBeLessThan(1_000)
+      const rows = knex('observation_records')
+      expect(await rows.clone().where({ id: 'fixture-1' }).first()).toBeUndefined()
+      expect(await rows.clone().whereIn('id', ['fixture-2', 'fixture-200100']).select('id')).toHaveLength(2)
+
+      observations.record({ ...span, phase: 'completed' })
+      for (let index = 0; index < 500; index++) observations.record(event)
+      expect(await rows.clone().where({ trace_id: span.trace_id }).first()).toBeUndefined()
+    } finally {
+      await knex.destroy()
+      await observations.close()
+      await rm(directory, { recursive: true, force: true })
+    }
+  }, 15_000)
+
   it('drops the obsolete audit table and prunes an expired trace as a whole', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'seed-observations-'))
     try {
