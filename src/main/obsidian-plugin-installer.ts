@@ -263,16 +263,21 @@ export class ObsidianPluginInstaller {
     const { targets, failures } = scan;
     if (!targets.length) return failures.length ? { state: 'error', error: 'invalidVaults' } : { state: 'noVaults' };
     const needsInstall = targets.some((vault) => vault.installedVersion === null);
-    if (targets.every((vault) => vault.installedVersion === null)) return { state: 'install', updateAvailable: false };
+    const installedVersions = [...new Set(targets.flatMap((vault) => vault.installedVersion ? [vault.installedVersion] : []))]
+      .sort(compareSeedVersions);
+    if (!installedVersions.length) return { state: 'install', updateAvailable: false };
 
     const release = await this.latestRelease(force).catch(() => null);
-    if (!release) return needsInstall ? { state: 'install' } : { state: 'error', error: 'releaseUnavailable' };
+    if (!release) return needsInstall
+      ? { state: 'install', installedVersions }
+      : { state: 'error', error: 'releaseUnavailable', installedVersions };
     const actions = targets.map((vault) => vaultAction(vault, release.version));
     const updateAvailable = actions.includes('update');
-    if (needsInstall) return { state: 'install', updateAvailable };
-    if (updateAvailable) return { state: 'update' };
-    if (actions.includes('install')) return { state: 'install', updateAvailable: false };
-    return failures.length ? { state: 'error', error: 'invalidVaults' } : { state: 'current' };
+    const targetVersion = updateAvailable ? release.version : undefined;
+    if (needsInstall) return { state: 'install', updateAvailable, installedVersions, targetVersion };
+    if (updateAvailable) return { state: 'update', installedVersions, targetVersion };
+    if (actions.includes('install')) return { state: 'install', updateAvailable: false, installedVersions };
+    return failures.length ? { state: 'error', error: 'invalidVaults', installedVersions } : { state: 'current', installedVersions };
   }
 
   private async installBatch(): Promise<ObsidianPluginBatchResult> {

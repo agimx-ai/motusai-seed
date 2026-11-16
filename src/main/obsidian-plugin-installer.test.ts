@@ -115,16 +115,17 @@ describe('MotusAI for Obsidian installer', () => {
 
     await expect(service.status()).resolves.toEqual({ state: 'install', updateAvailable: false });
     expect(fetchRelease).not.toHaveBeenCalled();
-    paths.push(old, latest);
-    await expect(service.status()).resolves.toEqual({ state: 'install', updateAvailable: true });
+    paths.push(latest, old);
+    const installedVersions = ['0.1.85', version];
+    await expect(service.status()).resolves.toEqual({ state: 'install', updateAvailable: true, installedVersions, targetVersion: version });
     expect(fetchRelease).toHaveBeenCalledTimes(1);
     paths.shift();
-    await expect(service.status()).resolves.toEqual({ state: 'update' });
+    await expect(service.status()).resolves.toEqual({ state: 'update', installedVersions, targetVersion: version });
     expect(fetchRelease).toHaveBeenCalledTimes(1);
 
     paths.push(vault);
     await expect(service.installAll()).resolves.toMatchObject({ ok: true });
-    await expect(service.status()).resolves.toEqual({ state: 'current' });
+    await expect(service.status()).resolves.toEqual({ state: 'current', installedVersions: [version] });
     expect(fetchRelease).toHaveBeenCalledTimes(5);
   });
 
@@ -132,7 +133,7 @@ describe('MotusAI for Obsidian installer', () => {
     await existing(vault, version);
     const fetchRelease = vi.fn(async () => new Response(null, { status: 503 }));
     const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [vault], activate);
-    await expect(service.status()).resolves.toEqual({ state: 'error', error: 'releaseUnavailable' });
+    await expect(service.status()).resolves.toEqual({ state: 'error', error: 'releaseUnavailable', installedVersions: [version] });
   });
 
   it('returns an empty result without requesting the release when there are no registered vaults', async () => {
@@ -199,10 +200,10 @@ describe('MotusAI for Obsidian installer', () => {
       return Response.json({ ...metadata, version: current });
     });
     const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => [vault], activate);
-    await expect(service.status()).resolves.toEqual({ state: 'current' });
+    await expect(service.status()).resolves.toEqual({ state: 'current', installedVersions: [version] });
     current = '0.1.87';
     service.invalidateRelease();
-    await expect(service.status()).resolves.toEqual({ state: 'update' });
+    await expect(service.status()).resolves.toEqual({ state: 'update', installedVersions: [version], targetVersion: current });
     expect(fetchRelease).toHaveBeenCalledTimes(2);
   });
 
