@@ -1,7 +1,9 @@
-import obsidianIcon from '@lobehub/icons-static-svg/icons/obsidian-color.svg';
+import { ThemedIcon } from '@motus-ai/seed-sdk/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ObsidianPluginBatchResult, ObsidianPluginStatus } from '../../../shared/obsidian-plugin';
+import obsidianIcon from '../../assets/obsidian-integration.svg';
+import obsidianDarkIcon from '../../assets/obsidian-integration-dark.svg';
 import { PluginActionButton } from './PluginActionButton';
 
 export function ObsidianIntegrationCard() {
@@ -87,7 +89,7 @@ export function ObsidianIntegrationCard() {
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-[14px] border border-border bg-card px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-muted">
-          <img src={obsidianIcon} alt="" className="h-6 w-6" />
+          <ThemedIcon iconDataUrl={obsidianIcon} iconDarkDataUrl={obsidianDarkIcon} className="h-6 w-6" />
         </span>
         <div className="min-w-0">
           <div className="text-[14px] font-medium leading-5">MotusAI for Obsidian</div>
