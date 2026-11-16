@@ -211,6 +211,33 @@
     "cancel": "取消登录",
     "cancelling": "正在取消…"
   },
+  "obsidianPlugin": {
+    "section": "Obsidian 插件",
+    "summary": "为所有已登记的 Obsidian 仓库安装或更新插件",
+    "installAll": "安装到全部仓库",
+    "installing": "正在检查版本并安装到 Obsidian 仓库…",
+    "noVaults": "未发现 Obsidian 仓库。请先在 Obsidian 中打开仓库，再重试。",
+    "result": "已安装 {{installed}} 个，已更新 {{updated}} 个，无需更新 {{current}} 个，失败 {{failed}} 个。",
+    "details": "查看各仓库结果",
+    "status": {
+      "installed": "已安装 {{version}}",
+      "updated": "已更新至 {{version}}",
+      "current": "无需更新 · {{version}}"
+    },
+    "activation": {
+      "enable": "部分仓库需要在 Obsidian 的「设置 → 第三方插件」中启用 MotusAI Agent。",
+      "reload": "部分仓库需要重开 Obsidian 或重新启用插件后，更新才会生效。"
+    },
+    "errors": {
+      "vaultsUnavailable": "无法读取 Obsidian 的仓库列表，请重试。",
+      "invalidVault": "仓库不可用或缺少 .obsidian 配置目录。",
+      "invalidInstallation": "无法识别已有插件文件。",
+      "releaseUnavailable": "暂时无法获取官方版本，请检查网络后重试。",
+      "downloadFailed": "未能下载或校验官方插件，请重试。",
+      "changed": "安装期间仓库或插件已变化，请重试。",
+      "installFailed": "写入失败，请检查仓库权限后重试。"
+    }
+  },
   "plugins": {
     "mcpToolsAvailable": "此插件提供 MCP 工具",
     "breadcrumb": "插件详情路径",

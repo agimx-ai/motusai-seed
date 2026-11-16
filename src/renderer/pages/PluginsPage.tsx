@@ -21,6 +21,7 @@ import {
 import { PluginActionButton } from '../features/plugins/PluginActionButton';
 import { PluginDetailActions } from '../features/plugins/PluginDetailActions';
 import { PluginListSkeleton } from '../features/plugins/PluginListSkeleton';
+import { ObsidianPluginEntry } from '../features/plugins/ObsidianPluginEntry';
 import { pluginMcpTools } from '../features/plugins/mcp-tools';
 import { isCatalogPluginInstallable } from '../../shared/plugin-updates';
 import { compareSeedVersions } from '../../shared/seed-version';
@@ -423,6 +424,7 @@ export function PluginsPage({
             )}
           </section>
         )}
+        <ObsidianPluginEntry />
         <section aria-busy={catalogLoading} className={showCatalogEmpty ? 'flex flex-1 flex-col' : undefined}>
           <div className="px-1">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">

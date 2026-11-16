@@ -35,6 +35,13 @@ function render(overrides: Partial<typeof props> = {}) {
 }
 
 describe('Plugin list loading states', () => {
+  it('keeps Obsidian installation available without Seed plugins or catalog matches', () => {
+    const html = render({ query: 'unmatched' });
+    expect(html).toContain('Obsidian 插件');
+    expect(html).toContain('安装到全部仓库');
+    expect(html).toContain('没有匹配的插件');
+  });
+
   it('shows animated installed and catalog placeholders instead of an initial empty message', () => {
     const html = render({ installedLoading: true, catalogLoading: true });
     expect(html.match(/role="status"/g)).toHaveLength(2);

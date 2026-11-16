@@ -211,6 +211,33 @@
     "cancel": "Cancel sign-in",
     "cancelling": "Cancelling…"
   },
+  "obsidianPlugin": {
+    "section": "Obsidian plugin",
+    "summary": "Install or update the plugin in every registered Obsidian vault",
+    "installAll": "Install in all vaults",
+    "installing": "Checking the release and installing in Obsidian vaults…",
+    "noVaults": "No Obsidian vaults found. Open a vault in Obsidian and try again.",
+    "result": "Installed in {{installed}}, updated in {{updated}}, no update needed in {{current}}, failed in {{failed}}.",
+    "details": "View results by vault",
+    "status": {
+      "installed": "Installed {{version}}",
+      "updated": "Updated to {{version}}",
+      "current": "No update needed · {{version}}"
+    },
+    "activation": {
+      "enable": "In some vaults, enable MotusAI Agent under Obsidian Settings → Community plugins.",
+      "reload": "In some vaults, reopen Obsidian or toggle the plugin off and back on to load the update."
+    },
+    "errors": {
+      "vaultsUnavailable": "Could not read the Obsidian vault list. Try again.",
+      "invalidVault": "The vault is unavailable or lacks a .obsidian configuration folder.",
+      "invalidInstallation": "Could not identify the existing plugin files.",
+      "releaseUnavailable": "The official release is unavailable. Check your network and try again.",
+      "downloadFailed": "Could not download or verify the official plugin. Try again.",
+      "changed": "The vault or plugin changed during installation. Try again.",
+      "installFailed": "Could not write the plugin files. Check vault permissions and try again."
+    }
+  },
   "plugins": {
     "mcpToolsAvailable": "This plugin provides MCP tools",
     "breadcrumb": "Plugin details",
