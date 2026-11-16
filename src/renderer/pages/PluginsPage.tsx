@@ -22,6 +22,7 @@ import { PluginActionButton } from '../features/plugins/PluginActionButton';
 import { PluginDetailActions } from '../features/plugins/PluginDetailActions';
 import { PluginListSkeleton } from '../features/plugins/PluginListSkeleton';
 import { AppIntegrationsSection } from '../features/plugins/AppIntegrationsSection';
+import type { ObsidianIntegration } from '../features/plugins/use-obsidian-integration';
 import { pluginMcpTools } from '../features/plugins/mcp-tools';
 import { isCatalogPluginInstallable } from '../../shared/plugin-updates';
 import { compareSeedVersions } from '../../shared/seed-version';
@@ -53,6 +54,7 @@ type PluginsPageProps = {
   updateCount: number;
   updatesBusy: boolean;
   onUpdateAll: () => void;
+  obsidian: ObsidianIntegration;
   installProgress: Record<string, PluginInstallProgress>;
   hasMore: boolean;
   loadingMore: boolean;
@@ -84,6 +86,7 @@ export function PluginsPage({
   updateCount,
   updatesBusy,
   onUpdateAll,
+  obsidian,
   installProgress,
   hasMore,
   loadingMore,
@@ -424,7 +427,7 @@ export function PluginsPage({
             )}
           </section>
         )}
-        <AppIntegrationsSection />
+        <AppIntegrationsSection obsidian={obsidian} />
         <section aria-busy={catalogLoading} className={showCatalogEmpty ? 'flex flex-1 flex-col' : undefined}>
           <div className="pl-2 pr-1">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">

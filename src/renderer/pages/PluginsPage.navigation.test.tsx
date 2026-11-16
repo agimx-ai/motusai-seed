@@ -65,6 +65,7 @@ function fixture(selectedPlugin: SeedInstalledPlugin | SeedCatalogPlugin = insta
       <PluginsPage appName="Seed" plugins={'source' in selectedPlugin ? [selectedPlugin] : []} catalogPlugins={[catalog]}
         selectedPlugin={selectedPlugin} pluginNavigation={navigation} onNavigationChange={setNavigation}
         installedLoading={false} catalogLoading={false} query="" searchRef={createRef()} busy="" updateCount={0}
+        obsidian={{ busy: false, checking: true, status: null, result: null, updateAvailable: false, async runAction() {} }}
         updatesBusy={false} installProgress={{}} hasMore={false} loadingMore={false} onUpdateAll={() => {}}
         onQueryChange={() => {}} onLoadMore={() => {}} onSelectPlugin={() => {}} onInstall={() => {}}
         onCancelInstall={() => {}} onUninstall={() => {}} />

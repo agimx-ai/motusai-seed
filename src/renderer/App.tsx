@@ -34,6 +34,7 @@ import type { PluginHeaderNavigation } from './features/plugins/plugin-navigatio
 import { userFacingErrorMessage } from './lib/errors';
 import { useSeedI18n } from './i18n';
 import { usePluginFrontends } from './features/plugins/use-plugin-frontends';
+import { useObsidianIntegration } from './features/plugins/use-obsidian-integration';
 import { pluginSidebar } from './features/plugins/plugin-sidebar';
 import { PluginViewSurface } from './features/plugins/PluginViewSurface';
 
@@ -46,6 +47,7 @@ export default function App() {
   const { locale } = useSeedI18n();
   const { snapshot, busy, run, logUploadProgress, cancelLogUpload, pluginInstallProgress, cancelPluginInstall } =
     useSeed();
+  const obsidian = useObsidianIntegration(Boolean(snapshot?.user));
   const { counts: experienceTipCounts, refreshCounts: refreshExperienceTipCounts, markSeen: markExperienceTipActivitySeen } =
     useExperienceTipCounts(snapshot?.user?.id);
   const themePreference = snapshot?.themePreference ?? 'system';
@@ -358,7 +360,7 @@ export default function App() {
           selectedNavigationKey={pluginRoute?.key}
           snapshot={snapshot}
           loggingOut={busy === 'logout'}
-          pluginUpdateCount={pluginUpdateCount}
+          pluginUpdateCount={pluginUpdateCount + Number(obsidian.updateAvailable)}
           experienceTipCount={experienceTipCounts ? experienceTipCounts.articles + experienceTipCounts.my_submissions : undefined}
           onNavigate={navigate}
           onOpenPlugin={(entry) => pluginSidebar.open(entry.key)}
@@ -433,6 +435,7 @@ export default function App() {
                 updateCount={pluginUpdateCount}
                 updatesBusy={updatingAllPlugins}
                 onUpdateAll={() => void updateAllPlugins()}
+                obsidian={obsidian}
                 installProgress={pluginInstallProgress}
                 hasMore={searchQuery ? Boolean(currentSearch?.page.nextCursor) : Boolean(snapshot.catalogNextCursor)}
                 loadingMore={pluginQuery.trim() ? pluginSearchLoading : busy === 'plugin-catalog-load-more'}

@@ -60,6 +60,7 @@ it('keeps the same plugin DOM and unsaved draft when a product confirmation open
         searchRef={createRef()}
         busy=""
         updateCount={0}
+        obsidian={{ busy: false, checking: true, status: null, result: null, updateAvailable: false, async runAction() {} }}
         updatesBusy={false}
         installProgress={{}}
         hasMore={false}

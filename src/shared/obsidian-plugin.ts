@@ -12,5 +12,6 @@ export type ObsidianPluginBatchResult =
   | { ok: false; error: 'vaultsUnavailable' | 'releaseUnavailable' | 'downloadFailed' };
 
 export type ObsidianPluginStatus =
-  | { state: 'install' | 'update' | 'current' | 'noVaults' }
+  | { state: 'install'; updateAvailable?: boolean }
+  | { state: 'update' | 'current' | 'noVaults' }
   | { state: 'error'; error: 'vaultsUnavailable' | 'releaseUnavailable' | 'invalidVaults' };

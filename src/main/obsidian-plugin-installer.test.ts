@@ -109,16 +109,20 @@ describe('MotusAI for Obsidian installer', () => {
     const old = join(root, 'Old vault');
     const latest = join(root, 'Current vault');
     await Promise.all([existing(old, '0.1.85'), existing(latest, version)]);
-    const paths = [old, latest];
+    const paths = [vault];
     const fetchRelease = officialRelease();
     const service = new ObsidianPluginInstaller(cloudUrl, fetchRelease, async () => paths, activate);
 
+    await expect(service.status()).resolves.toEqual({ state: 'install', updateAvailable: false });
+    expect(fetchRelease).not.toHaveBeenCalled();
+    paths.push(old, latest);
+    await expect(service.status()).resolves.toEqual({ state: 'install', updateAvailable: true });
+    expect(fetchRelease).toHaveBeenCalledTimes(1);
+    paths.shift();
     await expect(service.status()).resolves.toEqual({ state: 'update' });
     expect(fetchRelease).toHaveBeenCalledTimes(1);
-    paths.push(vault);
-    await expect(service.status()).resolves.toEqual({ state: 'install' });
-    expect(fetchRelease).toHaveBeenCalledTimes(1);
 
+    paths.push(vault);
     await expect(service.installAll()).resolves.toMatchObject({ ok: true });
     await expect(service.status()).resolves.toEqual({ state: 'current' });
     expect(fetchRelease).toHaveBeenCalledTimes(5);

@@ -1,75 +1,12 @@
 import { ThemedIcon } from '@motus-ai/seed-sdk/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ObsidianPluginBatchResult, ObsidianPluginStatus } from '../../../shared/obsidian-plugin';
 import obsidianIcon from '../../assets/obsidian-integration.svg';
 import obsidianDarkIcon from '../../assets/obsidian-integration-dark.svg';
 import { PluginActionButton } from './PluginActionButton';
+import type { ObsidianIntegration } from './use-obsidian-integration';
 
-export function ObsidianIntegrationCard() {
+export function ObsidianIntegrationCard({ busy, checking, status, result, runAction }: ObsidianIntegration) {
   const { t } = useTranslation();
-  const [busy, setBusy] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [status, setStatus] = useState<ObsidianPluginStatus | null>(null);
-  const [result, setResult] = useState<ObsidianPluginBatchResult | null>(null);
-  const requestId = useRef(0);
-  const installing = useRef(false);
-
-  const refreshStatus = useCallback(async (force = false) => {
-    const api = window.motusSeed;
-    const id = ++requestId.current;
-    setChecking(true);
-    try {
-      const next = await api.obsidianPluginStatus(force);
-      if (requestId.current === id) setStatus(next);
-    } catch {
-      if (requestId.current === id) setStatus({ state: 'error', error: 'vaultsUnavailable' });
-    } finally {
-      if (requestId.current === id) setChecking(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!window.motusSeed?.obsidianPluginStatus) return;
-    const onFocus = () => {
-      if (!installing.current) void refreshStatus();
-    };
-    onFocus();
-    window.addEventListener('focus', onFocus);
-    const unsubscribe = window.motusSeed.subscribe?.((event) => {
-      if (event.type === 'obsidian.release.changed') onFocus();
-    });
-    return () => {
-      unsubscribe?.();
-      window.removeEventListener('focus', onFocus);
-      requestId.current += 1;
-    };
-  }, [refreshStatus]);
-
-  async function runAction() {
-    if (checking || installing.current || !status) return;
-    if (status.state === 'error' || status.state === 'noVaults') {
-      setResult(null);
-      await refreshStatus(true);
-      return;
-    }
-    if (status.state === 'current') return;
-
-    installing.current = true;
-    setBusy(true);
-    setResult(null);
-    try {
-      const next = await window.motusSeed.installObsidianPlugin();
-      setResult(next);
-      if (next.ok) await refreshStatus();
-    } catch {
-      setResult({ ok: false, error: 'downloadFailed' });
-    } finally {
-      installing.current = false;
-      setBusy(false);
-    }
-  }
-
   const state = status?.state;
   const action = (!checking || busy) && (state === 'install' || state === 'update') ? state : 'details';
   const label = busy || action !== 'details'

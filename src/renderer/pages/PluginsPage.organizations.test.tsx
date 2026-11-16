@@ -65,6 +65,7 @@ function page(
         searchRef={createRef()}
         busy=""
         updateCount={0}
+        obsidian={{ busy: false, checking: true, status: null, result: null, updateAvailable: false, async runAction() {} }}
         updatesBusy={false}
         installProgress={{}}
         hasMore={false}

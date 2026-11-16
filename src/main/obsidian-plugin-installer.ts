@@ -262,13 +262,16 @@ export class ObsidianPluginInstaller {
     if (!scan) return { state: 'error', error: 'vaultsUnavailable' };
     const { targets, failures } = scan;
     if (!targets.length) return failures.length ? { state: 'error', error: 'invalidVaults' } : { state: 'noVaults' };
-    if (targets.some((vault) => vault.installedVersion === null)) return { state: 'install' };
+    const needsInstall = targets.some((vault) => vault.installedVersion === null);
+    if (targets.every((vault) => vault.installedVersion === null)) return { state: 'install', updateAvailable: false };
 
     const release = await this.latestRelease(force).catch(() => null);
-    if (!release) return { state: 'error', error: 'releaseUnavailable' };
+    if (!release) return needsInstall ? { state: 'install' } : { state: 'error', error: 'releaseUnavailable' };
     const actions = targets.map((vault) => vaultAction(vault, release.version));
-    if (actions.includes('update')) return { state: 'update' };
-    if (actions.includes('install')) return { state: 'install' };
+    const updateAvailable = actions.includes('update');
+    if (needsInstall) return { state: 'install', updateAvailable };
+    if (updateAvailable) return { state: 'update' };
+    if (actions.includes('install')) return { state: 'install', updateAvailable: false };
     return failures.length ? { state: 'error', error: 'invalidVaults' } : { state: 'current' };
   }
 
