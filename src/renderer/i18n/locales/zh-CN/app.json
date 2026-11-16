@@ -213,8 +213,16 @@
   },
   "obsidianPlugin": {
     "section": "Obsidian 插件",
-    "summary": "为所有已登记的 Obsidian 仓库安装或更新插件",
-    "installAll": "安装到全部仓库",
+    "summary": "将应用到所有已登记的 Obsidian 仓库",
+    "button": {
+      "install": "安装",
+      "update": "发现新版本",
+      "current": "已是最新版",
+      "noVaults": "检查仓库",
+      "error": "重试检查",
+      "checking": "检查中…",
+      "working": "处理中…"
+    },
     "installing": "正在检查版本并安装到 Obsidian 仓库…",
     "noVaults": "未发现 Obsidian 仓库。请先在 Obsidian 中打开仓库，再重试。",
     "result": "已安装 {{installed}} 个，已更新 {{updated}} 个，无需更新 {{current}} 个，失败 {{failed}} 个。",
@@ -231,6 +239,7 @@
     "errors": {
       "vaultsUnavailable": "无法读取 Obsidian 的仓库列表，请重试。",
       "invalidVault": "仓库不可用或缺少 .obsidian 配置目录。",
+      "invalidVaults": "部分 Obsidian 仓库不可用，或无法读取插件状态。",
       "invalidInstallation": "无法识别已有插件文件。",
       "releaseUnavailable": "暂时无法获取官方版本，请检查网络后重试。",
       "downloadFailed": "未能下载或校验官方插件，请重试。",

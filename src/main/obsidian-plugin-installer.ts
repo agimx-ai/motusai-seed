@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type {
   ObsidianPluginActivation,
   ObsidianPluginBatchResult,
+  ObsidianPluginStatus,
   ObsidianPluginVaultError,
   ObsidianPluginVaultResult,
 } from '../shared/obsidian-plugin';
@@ -239,8 +240,18 @@ async function installRelease(distribution: Distribution, vault: InstalledVault)
   }
 }
 
+function vaultAction(vault: InstalledVault, latestVersion: string) {
+  if (!vault.installedVersion) return 'install';
+  const comparison = compareSeedVersions(latestVersion, vault.installedVersion);
+  if (comparison > 0) return 'update';
+  if (comparison === 0 && !vault.complete) return 'install';
+  return 'current';
+}
+
 export class ObsidianPluginInstaller {
   private installing: Promise<ObsidianPluginBatchResult> | null = null;
+  private release: { value: Release; expires: number } | null = null;
+  private checkingRelease: Promise<Release> | null = null;
 
   constructor(
     private readonly fetchRelease: ReleaseFetch,
@@ -253,13 +264,23 @@ export class ObsidianPluginInstaller {
     return this.installing;
   }
 
-  private async installBatch(): Promise<ObsidianPluginBatchResult> {
+  private latestRelease(force = false) {
+    if (this.checkingRelease) return this.checkingRelease;
+    if (!force && this.release && this.release.expires > Date.now()) return Promise.resolve(this.release.value);
+    this.checkingRelease = getRelease(this.fetchRelease).then((value) => {
+      this.release = { value, expires: Date.now() + 5 * 60_000 };
+      return value;
+    }).finally(() => { this.checkingRelease = null; });
+    return this.checkingRelease;
+  }
+
+  private async scanVaults() {
     const paths = await this.registeredVaultPaths().catch(() => null);
-    if (!paths) return { ok: false, error: 'vaultsUnavailable' };
+    if (!paths) return null;
 
     const checked = new Set<string>();
     const targets: InstalledVault[] = [];
-    const vaults: ObsidianPluginVaultResult[] = [];
+    const failures: ObsidianPluginVaultResult[] = [];
     for (const suppliedPath of paths) {
       const resolved = isAbsolute(suppliedPath) ? await realpath(suppliedPath).catch(() => null) : null;
       const path = resolved ?? suppliedPath;
@@ -269,17 +290,37 @@ export class ObsidianPluginInstaller {
         if (!resolved || resolved === parse(resolved).root) throw new InstallerError('invalidVault');
         targets.push(await inspectVault(resolved));
       } catch (error) {
-        vaults.push({ path, name: basename(path), status: 'failed', error: error instanceof InstallerError ? error.code : 'invalidVault' });
+        failures.push({ path, name: basename(path), status: 'failed', error: error instanceof InstallerError ? error.code : 'invalidVault' });
       }
     }
+    return { targets, failures };
+  }
+
+  async status(force = false): Promise<ObsidianPluginStatus> {
+    const scan = await this.scanVaults();
+    if (!scan) return { state: 'error', error: 'vaultsUnavailable' };
+    const { targets, failures } = scan;
+    if (!targets.length) return failures.length ? { state: 'error', error: 'invalidVaults' } : { state: 'noVaults' };
+    if (targets.some((vault) => vault.installedVersion === null)) return { state: 'install' };
+
+    const release = await this.latestRelease(force).catch(() => null);
+    if (!release) return { state: 'error', error: 'releaseUnavailable' };
+    const actions = targets.map((vault) => vaultAction(vault, release.version));
+    if (actions.includes('update')) return { state: 'update' };
+    if (actions.includes('install')) return { state: 'install' };
+    return failures.length ? { state: 'error', error: 'invalidVaults' } : { state: 'current' };
+  }
+
+  private async installBatch(): Promise<ObsidianPluginBatchResult> {
+    const scan = await this.scanVaults();
+    if (!scan) return { ok: false, error: 'vaultsUnavailable' };
+    const { targets, failures: vaults } = scan;
     if (!targets.length) return { ok: true, vaults };
 
-    const release = await getRelease(this.fetchRelease).catch(() => null);
+    const release = await this.latestRelease(true).catch(() => null);
     if (!release) return { ok: false, error: 'releaseUnavailable' };
     const pending = targets.filter((vault) => {
-      if (!vault.installedVersion) return true;
-      const comparison = compareSeedVersions(release.version, vault.installedVersion);
-      if (comparison > 0 || (comparison === 0 && !vault.complete)) return true;
+      if (!vault.installedVersion || vaultAction(vault, release.version) !== 'current') return true;
       vaults.push({ path: vault.path, name: basename(vault.path), status: 'current', version: vault.installedVersion });
       return false;
     });

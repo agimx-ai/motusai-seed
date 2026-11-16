@@ -1,4 +1,4 @@
-import type { ObsidianPluginBatchResult } from './obsidian-plugin';
+import type { ObsidianPluginBatchResult, ObsidianPluginStatus } from './obsidian-plugin';
 import type { ExperienceTipArticle, ExperienceTipCounts, ExperienceTipEngagement, ExperienceTipLike, ExperienceTipPage, ExperienceTipRead, ExperienceTipRemoval, ExperienceTipSource } from './experience-tips';
 import type { SeedBillingReceipt, SeedNavigationTarget } from '@motus-ai/seed-sdk';
 import type { SeedConsumedCapability, SeedPluginLabel } from './plugin-manifest';
@@ -389,6 +389,7 @@ export type SeedApi = {
   setExperienceTipLike(input: ExperienceTipLike): Promise<ExperienceTipEngagement>;
   removeExperienceTip(input: ExperienceTipRemoval): Promise<void>;
   openExperienceTipSource(input: ExperienceTipSource): Promise<void>;
+  obsidianPluginStatus(force?: boolean): Promise<ObsidianPluginStatus>;
   installObsidianPlugin(): Promise<ObsidianPluginBatchResult>;
   personalCreditWallet(): Promise<{ available: number; total?: number }>;
   personalCreditGrants(cursor?: string): Promise<PersonalCreditGrantPage>;
@@ -453,6 +454,7 @@ export const ipcChannels = {
   setExperienceTipLike: 'seed:experience-tips:like',
   removeExperienceTip: 'seed:experience-tips:remove',
   openExperienceTipSource: 'seed:experience-tips:open-source',
+  obsidianPluginStatus: 'seed:obsidian-plugin:status',
   installObsidianPlugin: 'seed:obsidian-plugin:install',
   personalCreditWallet: 'seed:credits:personal-wallet',
   personalCreditGrants: 'seed:credits:personal-grants',

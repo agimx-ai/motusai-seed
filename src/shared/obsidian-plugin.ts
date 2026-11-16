@@ -10,3 +10,7 @@ export type ObsidianPluginVaultResult = { path: string; name: string } & (
 export type ObsidianPluginBatchResult =
   | { ok: true; vaults: ObsidianPluginVaultResult[] }
   | { ok: false; error: 'vaultsUnavailable' | 'releaseUnavailable' | 'downloadFailed' };
+
+export type ObsidianPluginStatus =
+  | { state: 'install' | 'update' | 'current' | 'noVaults' }
+  | { state: 'error'; error: 'vaultsUnavailable' | 'releaseUnavailable' | 'invalidVaults' };

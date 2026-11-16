@@ -105,9 +105,36 @@ describe('MotusAI for Obsidian installer', () => {
     expect(activate).toHaveBeenCalledTimes(2);
   });
 
+  it('reports the aggregate action and checks the updated state after installing', async () => {
+    const old = join(root, 'Old vault');
+    const latest = join(root, 'Current vault');
+    await Promise.all([existing(old, '0.1.85'), existing(latest, version)]);
+    const paths = [old, latest];
+    const fetchRelease = officialRelease();
+    const service = new ObsidianPluginInstaller(fetchRelease, async () => paths, activate);
+
+    await expect(service.status()).resolves.toEqual({ state: 'update' });
+    expect(fetchRelease).toHaveBeenCalledTimes(1);
+    paths.push(vault);
+    await expect(service.status()).resolves.toEqual({ state: 'install' });
+    expect(fetchRelease).toHaveBeenCalledTimes(1);
+
+    await expect(service.installAll()).resolves.toMatchObject({ ok: true });
+    await expect(service.status()).resolves.toEqual({ state: 'current' });
+    expect(fetchRelease).toHaveBeenCalledTimes(5);
+  });
+
+  it('never reports up to date when release lookup fails', async () => {
+    await existing(vault, version);
+    const fetchRelease = vi.fn(async () => new Response(null, { status: 503 }));
+    const service = new ObsidianPluginInstaller(fetchRelease, async () => [vault], activate);
+    await expect(service.status()).resolves.toEqual({ state: 'error', error: 'releaseUnavailable' });
+  });
+
   it('returns an empty result without requesting the release when there are no registered vaults', async () => {
     const fetchRelease = officialRelease();
     const service = new ObsidianPluginInstaller(fetchRelease, async () => [], activate);
+    await expect(service.status()).resolves.toEqual({ state: 'noVaults' });
     await expect(service.installAll()).resolves.toEqual({ ok: true, vaults: [] });
     expect(fetchRelease).not.toHaveBeenCalled();
   });
@@ -169,6 +196,7 @@ describe('MotusAI for Obsidian installer', () => {
     await symlink(outside, plugin, 'junction');
     const fetchRelease = officialRelease();
     const service = new ObsidianPluginInstaller(fetchRelease, async () => [vault], activate);
+    await expect(service.status()).resolves.toEqual({ state: 'error', error: 'invalidVaults' });
     await expect(service.installAll()).resolves.toMatchObject({
       ok: true,
       vaults: [{ name: 'Test vault', status: 'failed', error: 'invalidInstallation' }],

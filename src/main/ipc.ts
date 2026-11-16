@@ -37,6 +37,7 @@ export function registerIpc(runtime: SeedRuntime) {
     registeredObsidianVaultPaths,
     activateObsidianPlugin,
   );
+  handle(ipcChannels.obsidianPluginStatus, (_event, force) => obsidian.status(force === true));
   handle(ipcChannels.installObsidianPlugin, () => obsidian.installAll());
   handle(ipcChannels.pluginViewMessage, (event, token, message) => {
     const window = BrowserWindow.fromWebContents(event.sender);

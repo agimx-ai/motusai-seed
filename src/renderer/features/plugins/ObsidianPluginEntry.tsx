@@ -1,27 +1,76 @@
 import obsidianIcon from '@lobehub/icons-static-svg/icons/obsidian-color.svg';
 import { ActionButton } from '@motus-ai/seed-sdk/react';
 import { LoaderCircle } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ObsidianPluginBatchResult } from '../../../shared/obsidian-plugin';
+import type { ObsidianPluginBatchResult, ObsidianPluginStatus } from '../../../shared/obsidian-plugin';
 
 export function ObsidianPluginEntry() {
   const { t } = useTranslation();
   const headingId = useId();
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [status, setStatus] = useState<ObsidianPluginStatus | null>(null);
   const [result, setResult] = useState<ObsidianPluginBatchResult | null>(null);
+  const requestId = useRef(0);
+  const installing = useRef(false);
 
-  async function install() {
+  const refreshStatus = useCallback(async (force = false) => {
+    const api = window.motusSeed;
+    const id = ++requestId.current;
+    setChecking(true);
+    try {
+      const next = await api.obsidianPluginStatus(force);
+      if (requestId.current === id) setStatus(next);
+    } catch {
+      if (requestId.current === id) setStatus({ state: 'error', error: 'vaultsUnavailable' });
+    } finally {
+      if (requestId.current === id) setChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!window.motusSeed?.obsidianPluginStatus) return;
+    const onFocus = () => {
+      if (!installing.current) void refreshStatus();
+    };
+    onFocus();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      requestId.current += 1;
+    };
+  }, [refreshStatus]);
+
+  async function runAction() {
+    if (checking || installing.current || !status) return;
+    if (status.state === 'error' || status.state === 'noVaults') {
+      setResult(null);
+      await refreshStatus(true);
+      return;
+    }
+    if (status.state === 'current') return;
+
+    installing.current = true;
     setBusy(true);
     setResult(null);
     try {
-      setResult(await window.motusSeed.installObsidianPlugin());
+      const next = await window.motusSeed.installObsidianPlugin();
+      setResult(next);
+      if (next.ok) await refreshStatus();
     } catch {
       setResult({ ok: false, error: 'downloadFailed' });
     } finally {
+      installing.current = false;
       setBusy(false);
     }
   }
+
+  const state = status?.state;
+  const button = busy ? 'working' : checking || !state ? 'checking' : state;
+  const statusMessage = status?.state === 'error'
+    ? t(`obsidianPlugin.errors.${status.error}`)
+    : status?.state === 'noVaults' ? t('obsidianPlugin.noVaults') : null;
 
   const vaults = result?.ok ? result.vaults : [];
   const counts = { installed: 0, updated: 0, current: 0, failed: 0 };
@@ -42,10 +91,20 @@ export function ObsidianPluginEntry() {
             <div className="text-[12px] leading-5 text-muted-foreground">{t('obsidianPlugin.summary')}</div>
           </div>
         </div>
-        <ActionButton tone="primary" busy={busy} onClick={() => void install()}>
+        <ActionButton
+          tone={state === 'install' || state === 'update' ? 'primary' : 'neutral'}
+          busy={busy || checking}
+          disabled={state === 'current'}
+          onClick={() => void runAction()}
+        >
           {busy && <LoaderCircle size={14} className="animate-spin seed-reduced-motion:animate-none" aria-hidden="true" />}
-          {t('obsidianPlugin.installAll')}
+          {t(`obsidianPlugin.button.${button}`)}
         </ActionButton>
+        {!checking && !busy && !result && statusMessage && (
+          <p role={state === 'error' ? 'alert' : 'status'} className="col-span-full m-0 text-[12px] text-muted-foreground">
+            {statusMessage}
+          </p>
+        )}
         {busy && <p role="status" className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.installing')}</p>}
         {result && (
           <div className="col-span-full space-y-1 text-[12px] leading-5 text-muted-foreground">
