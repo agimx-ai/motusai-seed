@@ -88,7 +88,7 @@ export function ObsidianIntegrationCard() {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-[14px] border border-border bg-card py-2.5 pl-[7px] pr-3">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-muted">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border border-plugin-icon-border bg-card">
           <ThemedIcon iconDataUrl={obsidianIcon} iconDarkDataUrl={obsidianDarkIcon} className="h-6 w-6" />
         </span>
         <div className="min-w-0">
