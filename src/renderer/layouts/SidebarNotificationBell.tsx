@@ -47,6 +47,7 @@ export function SidebarNotificationBell({
 
   const badgeCount = reducedMotion ? count : badge.count;
   const badgeText = badgeCount > 9 ? '9+' : String(badgeCount);
+  const showNotifications = pluginUpdateCount > 0 || experienceTipCount === 0 ? onShowPluginUpdates : onShowExperienceTips;
 
   return (
     <Tooltip content={label}>
@@ -58,7 +59,12 @@ export function SidebarNotificationBell({
             : 'text-muted-foreground hover:bg-[var(--sidebar-item-active)] hover:text-foreground',
         )}
         type="button"
-        onClick={pluginUpdateCount > 0 || experienceTipCount === 0 ? onShowPluginUpdates : onShowExperienceTips}
+        onClick={() => {
+          if (!reducedMotion) {
+            animate(swing, [swing.get(), -7, 0], { duration: 0.22, ease: 'easeInOut' });
+          }
+          showNotifications();
+        }}
         aria-label={label}
       >
         <motion.span className="inline-flex" style={{ rotate: swing, transformOrigin: '50% 15%' }} aria-hidden="true">
