@@ -426,7 +426,7 @@ export function PluginsPage({
         )}
         <AppIntegrationsSection />
         <section aria-busy={catalogLoading} className={showCatalogEmpty ? 'flex flex-1 flex-col' : undefined}>
-          <div className="px-1">
+          <div className="pl-2 pr-1">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
               <h3 className="m-0 text-[16px] font-medium">{t('plugins.availableSection')}</h3>
               <PluginActionButton
