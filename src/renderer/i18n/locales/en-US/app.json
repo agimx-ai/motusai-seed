@@ -220,10 +220,6 @@
       "checking": "Checking…"
     },
     "noVaults": "No Obsidian vaults found. Open a vault in Obsidian and try again.",
-    "activation": {
-      "enable": "In some vaults, enable MotusAI Agent under Obsidian Settings → Community plugins.",
-      "reload": "In some vaults, reopen Obsidian or toggle the plugin off and back on to load the update."
-    },
     "errors": {
       "vaultsUnavailable": "Could not read the Obsidian vault list. Try again.",
       "invalidVault": "The vault is unavailable or lacks a .obsidian configuration folder.",

@@ -26,8 +26,6 @@ export function ObsidianIntegrationCard({ busy, checking, status, result, runAct
   const vaults = result?.ok ? result.vaults : [];
   const resultErrors = result && !result.ok ? [result.error]
     : [...new Set(vaults.flatMap((vault) => vault.status === 'failed' ? [vault.error] : []))];
-  const needsEnable = vaults.some((vault) => vault.status !== 'failed' && vault.status !== 'current' && vault.activation === 'enable');
-  const needsReload = vaults.some((vault) => vault.status !== 'failed' && vault.status !== 'current' && vault.activation === 'reload');
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-[14px] border border-border bg-card py-2.5 pl-[7px] pr-3">
@@ -69,8 +67,6 @@ export function ObsidianIntegrationCard({ busy, checking, status, result, runAct
           {resultErrors.map((error) => <p key={error} className="m-0">{t(`obsidianPlugin.errors.${error}`)}</p>)}
         </div>
       )}
-      {needsEnable && <p className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.activation.enable')}</p>}
-      {needsReload && <p className="col-span-full m-0 text-[12px] text-muted-foreground">{t('obsidianPlugin.activation.reload')}</p>}
     </div>
   );
 }

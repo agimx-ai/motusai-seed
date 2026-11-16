@@ -220,10 +220,6 @@
       "checking": "检查中…"
     },
     "noVaults": "未发现 Obsidian 仓库。请先在 Obsidian 中打开仓库，再重试。",
-    "activation": {
-      "enable": "部分仓库需要在 Obsidian 的「设置 → 第三方插件」中启用 MotusAI Agent。",
-      "reload": "部分仓库需要重开 Obsidian 或重新启用插件后，更新才会生效。"
-    },
     "errors": {
       "vaultsUnavailable": "无法读取 Obsidian 的仓库列表，请重试。",
       "invalidVault": "仓库不可用或缺少 .obsidian 配置目录。",

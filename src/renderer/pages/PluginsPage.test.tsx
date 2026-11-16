@@ -44,6 +44,28 @@ describe('Plugin list loading states', () => {
     expect(html).toContain('没有匹配的插件');
   });
 
+  it('keeps the Obsidian vault summary and errors without activation hints', () => {
+    const html = render({
+      obsidian: {
+        ...props.obsidian,
+        checking: false,
+        status: { state: 'current', installedVersions: ['0.1.86'] },
+        result: {
+          ok: true,
+          vaults: [
+            { path: '/new', name: 'New vault', status: 'installed', version: '0.1.86', activation: 'enable' },
+            { path: '/updated', name: 'Updated vault', status: 'updated', version: '0.1.86', activation: 'reload' },
+            { path: '/failed', name: 'Failed vault', status: 'failed', error: 'installFailed' },
+          ],
+        },
+      },
+    });
+    expect(html).toContain('v0.1.86');
+    expect(html).toContain('将应用到所有已登记的 Obsidian 仓库');
+    expect(html).toContain('写入失败，请检查仓库权限后重试。');
+    expect(html).not.toContain('部分仓库需要');
+  });
+
   it('shows animated installed and catalog placeholders instead of an initial empty message', () => {
     const html = render({ installedLoading: true, catalogLoading: true });
     expect(html.match(/role="status"/g)).toHaveLength(2);
