@@ -10,7 +10,10 @@ const callbackScheme = 'com.motusai.seed'
 const deepLinkScheme = 'motusai-seed'
 
 function plistValue(plist, key) {
-  return execFileSync('plutil', ['-extract', key, 'raw', '-o', '-', plist], { encoding: 'utf8' }).trim()
+  return execFileSync('plutil', ['-extract', key, 'raw', '-o', '-', plist], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim()
 }
 
 function registerDevelopmentApp(appPath) {
@@ -43,7 +46,28 @@ function nativeIconFingerprint(iconPath) {
   return hash.digest('hex')
 }
 
-async function registerWithNativeIcon(projectRoot, appPath) {
+function syncLocalizedNames(projectRoot, resources, plist) {
+  const localizations = join(projectRoot, 'resources', 'macos')
+  for (const directory of readdirSync(localizations, { withFileTypes: true })) {
+    if (!directory.isDirectory() || !directory.name.endsWith('.lproj')) continue
+    const strings = readFileSync(join(localizations, directory.name, 'InfoPlist.strings'))
+    const destination = join(resources, directory.name, 'InfoPlist.strings')
+    if (existsSync(destination) && readFileSync(destination).equals(strings)) continue
+    mkdirSync(dirname(destination), { recursive: true })
+    writeFileSync(destination, strings)
+  }
+  let developmentRegion
+  try {
+    developmentRegion = plistValue(plist, 'CFBundleDevelopmentRegion')
+  } catch {
+    // Existing development bundles may lack a default localization.
+  }
+  if (developmentRegion !== 'en') {
+    execFileSync('plutil', ['-replace', 'CFBundleDevelopmentRegion', '-string', 'en', plist])
+  }
+}
+
+async function prepareAndRegisterDevelopmentApp(projectRoot, appPath) {
   const resources = join(appPath, 'Contents', 'Resources')
   const plist = join(appPath, 'Contents', 'Info.plist')
   const cachePath = join(dirname(appPath), 'native-icon.sha256')
@@ -67,6 +91,7 @@ async function registerWithNativeIcon(projectRoot, appPath) {
     execFileSync('plutil', ['-replace', 'CFBundleIconName', '-string', 'Icon', plist])
     execFileSync('plutil', ['-replace', 'CFBundleIconFile', '-string', 'motusai-seed.icns', plist])
   }
+  syncLocalizedNames(projectRoot, resources, plist)
   const binary = registerDevelopmentApp(appPath)
   if (!iconIsCurrent) writeFileSync(cachePath, `${fingerprint}\n`)
   return binary
@@ -87,7 +112,7 @@ export async function prepareElectronDev(projectRoot, electronBinary, electronVe
     if (isAbsolute(readlinkSync(frameworkResources))) {
       throw new Error(`The development Electron app has invalid framework links: ${appPath}`)
     }
-    return registerWithNativeIcon(projectRoot, appPath)
+    return prepareAndRegisterDevelopmentApp(projectRoot, appPath)
   }
 
   mkdirSync(outputDirectory, { recursive: true })
@@ -111,5 +136,5 @@ export async function prepareElectronDev(projectRoot, electronBinary, electronVe
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true })
   }
-  return registerWithNativeIcon(projectRoot, appPath)
+  return prepareAndRegisterDevelopmentApp(projectRoot, appPath)
 }

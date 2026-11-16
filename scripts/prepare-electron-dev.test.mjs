@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -29,6 +29,7 @@ beforeEach(() => {
   writeFileSync(sourceBinary, '')
   writePlist(join(dirname(dirname(sourceBinary)), 'Info.plist'), {})
   appPath = join(root, '.build/electron-dev/test/MotusAI Seed Dev.app')
+  cpSync(new URL('../resources/macos', import.meta.url), join(root, 'resources/macos'), { recursive: true })
   iconPath = join(root, 'resources/app/app-icon.icon')
   mkdirSync(join(iconPath, 'Assets'), { recursive: true })
   writeFileSync(join(iconPath, 'icon.json'), '{"groups":[]}\n')
@@ -79,13 +80,24 @@ describe('native development application icon', () => {
     expect(readFileSync(join(appPath, 'Contents/Resources/motusai-seed.icns'), 'utf8')).toBe('native-fallback')
     expect(JSON.parse(readFileSync(join(appPath, 'Contents/Info.plist'), 'utf8'))).toMatchObject({
       CFBundleIconName: 'Icon', CFBundleIconFile: 'motusai-seed.icns', CFBundleIdentifier: 'com.motusai.seed.dev',
+      CFBundleDevelopmentRegion: 'en',
     })
+    for (const locale of ['en', 'zh_CN', 'zh_TW']) {
+      const strings = `${locale}.lproj/InfoPlist.strings`
+      expect(readFileSync(join(appPath, 'Contents/Resources', strings))).toEqual(
+        readFileSync(join(root, 'resources/macos', strings)),
+      )
+    }
   })
 
   it('upgrades an existing legacy bundle, then reuses the unchanged native icon', async () => {
     existingDevelopmentApp()
     await prepareElectronDev(root, sourceBinary, 'test')
+    const localizedName = join(appPath, 'Contents/Resources/zh_CN.lproj/InfoPlist.strings')
+    expect(readFileSync(localizedName, 'utf8')).toContain('MotusAI 小黑')
+    writeFileSync(localizedName, 'old translation')
     await prepareElectronDev(root, sourceBinary, 'test')
+    expect(readFileSync(localizedName, 'utf8')).toContain('MotusAI 小黑')
     expect(compile).toHaveBeenCalledTimes(1)
     expect(readFileSync(join(appPath, 'Contents/Resources/motusai-seed.icns'), 'utf8')).toBe('native-fallback')
   })

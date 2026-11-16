@@ -69,7 +69,10 @@ export default {
     category: 'public.app-category.productivity',
     target: ['dmg', 'zip'],
     artifactName: 'MotusAI-Seed-${version}-mac-${arch}.${ext}',
+    // Match Electron's lproj directory names so the Dock reads the same names.
+    extraResources: [{ from: 'resources/macos', to: '.' }],
     extendInfo: {
+      CFBundleDevelopmentRegion: 'en',
       NSMicrophoneUsageDescription: `${productName} uses the microphone only when you start a recording from your connected MotusAI workspace.`,
       NSAudioCaptureUsageDescription: `${productName} captures system audio only when you explicitly select system audio or mixed audio for a recording.`,
     },

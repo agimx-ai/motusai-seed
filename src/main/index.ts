@@ -13,7 +13,7 @@ import { SeedRuntime } from './runtime'
 import { parseSeedDeepLink, seedDeepLinkFromArguments } from './deep-link'
 import { ObservationStore, errorDetails } from './observation-store'
 
-process.title = buildConfig.appName
+if (process.platform !== 'darwin') process.title = buildConfig.appName
 app.setName(buildConfig.appName)
 if (process.platform === 'darwin') {
   // The app supplies its own fullscreen item; prevent AppKit from inserting another.
@@ -209,13 +209,16 @@ function createTray() {
 }
 
 function createApplicationMenu() {
-  if (process.platform !== 'darwin') {
+  const isMac = process.platform === 'darwin'
+  const displayName = isMac ? nativeMenuMessages('system').appName : buildConfig.appName
+  app.setAboutPanelOptions({ applicationName: displayName, applicationVersion: app.getVersion() })
+  if (!isMac) {
     Menu.setApplicationMenu(null)
     return
   }
   const messages = nativeMenuMessages(languagePreference)
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: buildConfig.appName, submenu: [{ role: 'about', label: nativeMenuLabel(messages.about, buildConfig.appName) }, { type: 'separator' }, { role: 'hide', label: nativeMenuLabel(messages.hide, buildConfig.appName) }, { role: 'hideOthers', label: messages.hideOthers }, { role: 'unhide', label: messages.showAll }, { type: 'separator' }, { role: 'quit', label: nativeMenuLabel(messages.quitApp, buildConfig.appName) }] },
+    { label: displayName, submenu: [{ role: 'about', label: nativeMenuLabel(messages.about, displayName) }, { type: 'separator' }, { role: 'hide', label: nativeMenuLabel(messages.hide, displayName) }, { role: 'hideOthers', label: messages.hideOthers }, { role: 'unhide', label: messages.showAll }, { type: 'separator' }, { role: 'quit', label: nativeMenuLabel(messages.quitApp, displayName) }] },
     { label: messages.edit, submenu: [{ role: 'undo', label: messages.undo }, { role: 'redo', label: messages.redo }, { type: 'separator' }, { role: 'cut', label: messages.cut }, { role: 'copy', label: messages.copy }, { role: 'paste', label: messages.paste }, { role: 'selectAll', label: messages.selectAll }] },
     { label: messages.view, submenu: [{ role: 'toggleDevTools', label: messages.toggleDevTools, accelerator: 'Command+Alt+I', icon: nativeImage.createMenuSymbol('chevron.left.forwardslash.chevron.right') }, { type: 'separator' }, { role: 'togglefullscreen', label: messages.toggleFullScreen, icon: nativeImage.createMenuSymbol('arrow.up.left.and.arrow.down.right') }] },
     { label: messages.window, submenu: [{ role: 'minimize', label: messages.minimize }, { role: 'zoom', label: messages.zoom }, { type: 'separator' }, { role: 'close', label: messages.closeWindow }] },
@@ -254,7 +257,6 @@ app.on('second-instance', (_event, commandLine) => {
 
 app.whenReady().then(async () => {
   registerPluginViewProtocol(session.defaultSession)
-  app.setAboutPanelOptions({ applicationName: buildConfig.appName, applicationVersion: app.getVersion() })
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {

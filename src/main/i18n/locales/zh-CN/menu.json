@@ -1,4 +1,5 @@
 {
+  "appName": "MotusAI 小黑",
   "about": "关于 {{appName}}",
   "hide": "隐藏 {{appName}}",
   "hideOthers": "隐藏其他",
