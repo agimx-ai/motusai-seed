@@ -162,7 +162,7 @@ export function SidebarNavigation({
       className="-mx-2 min-h-0 overflow-y-auto overscroll-contain px-0.5 pb-2 [&_svg.lucide-message-circle]:scale-95"
       aria-label={t('nav.mainNavigation')}
     >
-      <ul className="m-0 grid gap-0.5 p-0">
+      <ul className="m-0 grid gap-px p-0">
         {builtin('overview', <Sprout size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {builtin('plugins', <Blocks size={17} strokeWidth={1.8} aria-hidden="true" />)}
         {builtin('activity', <History size={17} strokeWidth={1.8} aria-hidden="true" />)}
