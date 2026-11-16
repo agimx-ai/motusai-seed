@@ -103,7 +103,7 @@ import { PluginDevelopmentStatusWriter } from './plugin-development-status';
 import type { PluginDevelopmentStatus } from '@motus-ai/seed-sdk';
 import { PluginDataCleaner } from './plugin-data-cleaner';
 import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error';
-import type { DiagnosticTraceContext } from '../shared/diagnostic-trace';
+import { hostAudioOperation, type DiagnosticTraceContext } from '../shared/diagnostic-trace';
 
 const entitlementResponseSchema = z
   .object({
@@ -1146,6 +1146,9 @@ export class SeedRuntime {
       return;
     }
     if (event.type === 'host.invoke') {
+      const audioOperation = hostAudioOperation(event.service, event.arguments);
+      const details = audioOperation ? { audio_operation: audioOperation } : undefined;
+      const logSuccess = audioOperation !== 'stream.next';
       const trace = event.trace && {
         trace_id: event.trace.trace_id,
         span_id: randomUUID(),
@@ -1158,13 +1161,15 @@ export class SeedRuntime {
         event: 'host.invoke',
         operation: event.service,
         request_id: event.requestId,
+        details,
       };
-      if (span) this.diagnostics.record({ ...span, level: 'info', phase: 'started', message: 'Host service started.' });
+      if (span && logSuccess)
+        this.diagnostics.record({ ...span, level: 'info', phase: 'started', message: 'Host service started.' });
       try {
         const service = this.hostServices.get(event.service);
         if (!service) throw new Error(`Seed 主进程不支持服务：${event.service}`);
         const result = await service(event.arguments);
-        if (span)
+        if (span && logSuccess)
           this.diagnostics.record({
             ...span,
             level: 'info',
@@ -1185,6 +1190,7 @@ export class SeedRuntime {
             event: 'host.invoke',
             operation: event.service,
             request_id: event.requestId,
+            details,
           }),
           level: 'error',
           phase: 'failed',

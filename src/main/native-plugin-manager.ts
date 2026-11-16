@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { utilityProcess, type UtilityProcess } from 'electron';
 import type { NativePluginRuntimeSnapshot, SeedPluginRuntimeDefinition, WorkerCommand } from '../shared/contracts';
 import type { NativePluginCommand, NativePluginEvent, NativePluginOperation } from '../shared/native-plugin-process';
-import type { DiagnosticTraceContext, HostDiagnosticEvent } from '../shared/diagnostic-trace';
+import { hostAudioOperation, type DiagnosticTraceContext, type HostDiagnosticEvent } from '../shared/diagnostic-trace';
 import { pluginErrorBilling, pluginErrorParams } from '../shared/plugin-error';
 
 type Configuration = Extract<WorkerCommand, { type: 'configure' }>;
@@ -205,6 +205,8 @@ export class NativePluginManager {
           throw remoteError('Plugin runtime generation changed.', 'plugin_runtime_stopped');
       };
       const started = performance.now();
+      const audioOperation = hostAudioOperation(event.service, event.arguments);
+      const logSuccess = audioOperation !== 'stream.next';
       const trace: DiagnosticTraceContext = {
         trace_id: event.trace?.trace_id || randomUUID(),
         span_id: randomUUID(),
@@ -220,11 +222,12 @@ export class NativePluginManager {
         plugin_version: this.desired.get(packageId)?.plugin.version,
         request_id: event.requestId,
         operation: event.service,
+        ...(audioOperation ? { details: { audio_operation: audioOperation } } : {}),
       };
-      this.onDiagnostic?.({ ...base, phase: 'started', message: 'Host service started.' });
+      if (logSuccess) this.onDiagnostic?.({ ...base, phase: 'started', message: 'Host service started.' });
       try {
         const result = await this.invokeBroker(packageId, event.service, event.arguments, assertActive, trace);
-        this.onDiagnostic?.({
+        if (logSuccess) this.onDiagnostic?.({
           ...base,
           phase: 'completed',
           duration_ms: Math.round(performance.now() - started),

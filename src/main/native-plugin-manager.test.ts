@@ -84,6 +84,50 @@ const configuration: Extract<WorkerCommand, { type: 'configure' }> = {
 };
 
 describe('NativePluginManager', () => {
+  it('omits successful audio reads while logging failures, controls and relay calls', async () => {
+    state.children.length = 0;
+    const diagnostic = vi.fn();
+    const manager = new NativePluginManager(
+      'Seed',
+      async (_packageId, _service, args) => {
+        if (args.session_id === 'missing') throw Object.assign(new Error('Audio stream closed'), { code: 'audio_stream_closed' });
+        return null;
+      },
+      () => undefined, () => undefined, () => undefined, () => undefined,
+      diagnostic,
+    );
+    try {
+      await manager.start(plugin('audio'), configuration);
+      const child = state.children[0]!;
+      const calls = [
+        ['read', 'seed.audio', 'stream.next', 'open'],
+        ['fail', 'seed.audio', 'stream.next', 'missing'],
+        ['start', 'seed.audio', 'stream.subscribe', 'open'],
+        ['resume', 'seed.audio', 'stream.resume', 'open'],
+        ['stop', 'seed.audio', 'stream.stop', 'open'],
+        ['relay', 'seed.cloud.relay', undefined, undefined],
+      ] as const;
+      for (const [requestId, service, operation, session_id] of calls) {
+        child.emit('message', {
+          type: 'host.invoke', requestId, service, arguments: { operation, session_id },
+        } satisfies NativePluginEvent);
+      }
+      await vi.waitFor(() => expect(child.messages.filter((message) => message.type === 'host.result')).toHaveLength(calls.length));
+
+      const forRequest = (requestId: string) => diagnostic.mock.calls.map(([entry]) => entry)
+        .filter((entry) => entry.request_id === requestId);
+      expect(forRequest('read')).toEqual([]);
+      expect(forRequest('fail')).toMatchObject([{
+        phase: 'failed', error_code: 'audio_stream_closed', details: { audio_operation: 'stream.next' },
+      }]);
+      for (const requestId of ['start', 'resume', 'stop', 'relay']) {
+        expect(forRequest(requestId).map((entry) => entry.phase)).toEqual(['started', 'completed']);
+      }
+    } finally {
+      await manager.stopAll();
+    }
+  });
+
   it('passes the native host call trace into the broker as one correlated child span', async () => {
     state.children.length = 0;
     const broker = vi.fn(async () => null);

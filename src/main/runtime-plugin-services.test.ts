@@ -49,6 +49,28 @@ function fixture(kind = 'sandboxed-web') {
   return { runtime, call };
 }
 describe('generic plugin SDK brokers', () => {
+  it('omits successful frame diagnostics from the connector and retains a failed read', async () => {
+    const { runtime } = fixture();
+    const audio = vi.fn().mockResolvedValueOnce({ done: false }).mockRejectedValueOnce(
+      Object.assign(new Error('Audio stream closed'), { code: 'audio_stream_closed' }),
+    );
+    runtime.hostServices = new Map([['seed.audio', audio]]);
+    runtime.connector.send = vi.fn();
+    const handle = Reflect.get(SeedRuntime.prototype, 'handleWorkerEvent').bind(runtime);
+    const event = {
+      type: 'host.invoke', service: 'seed.audio', arguments: { operation: 'stream.next' },
+      trace: { trace_id: 'capture', span_id: 'subscriber' },
+    };
+    await handle({ ...event, requestId: 'read' });
+    await handle({ ...event, requestId: 'failure' });
+    expect(runtime.connector.send).toHaveBeenNthCalledWith(1, expect.objectContaining({ requestId: 'read', ok: true }));
+    expect(runtime.connector.send).toHaveBeenNthCalledWith(2, expect.objectContaining({ requestId: 'failure', ok: false }));
+    expect(runtime.diagnostics.record).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      request_id: 'failure', phase: 'failed', error_code: 'audio_stream_closed', trace_id: 'capture',
+      details: { audio_operation: 'stream.next' },
+    }));
+  });
+
   it('rejects missing or revoked private-file opening authority without trusting a supplied plugin identity', async () => {
     const { runtime, call } = fixture('native-host');
     runtime.runtimePlugins[1].permissions = ['shell.open-path'];

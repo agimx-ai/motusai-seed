@@ -201,36 +201,29 @@ describe('ObservationStore', () => {
     } finally { await rm(directory, { recursive: true, force: true }) }
   })
 
-  it('prunes over the row limit without rescanning a large running trace', async () => {
+  it('preserves recent diagnostics and user activity above the former row limit', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'seed-observations-'))
     const observations = new ObservationStore(directory, 'MotusAI Seed')
     const knex = createKnex({ client: 'better-sqlite3', connection: { filename: observations.databasePath }, useNullAsDefault: true })
     const event = { level: 'info' as const, source: 'main' as const, event: 'retention.test', message: 'Retention test' }
-    const span = { ...event, trace_id: 'long-trace', span_id: 'running-span' }
     try {
+      const rows = knex('observation_records')
+      await rows.clone().insert({
+        id: 'user-activity', timestamp: '2000-01-01T00:00:00.000Z', source: 'system', operation: 'user.action',
+        category: 'system', risk: 'read', outcome: 'allowed', summary: 'User action', visibility: 'activity',
+      })
       await knex.raw(`
         WITH RECURSIVE fixture(n) AS (
           VALUES (1)
           UNION ALL SELECT n + 1 FROM fixture WHERE n < 200100
         )
-        INSERT INTO observation_records (id, timestamp, source, operation, category, risk, outcome, summary, trace_id)
+        INSERT INTO observation_records (id, timestamp, source, operation, category, risk, outcome, summary, visibility)
         SELECT 'fixture-' || n, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days', printf('+%d seconds', n)),
-          'system', 'host.invoke', 'system', 'read', 'allowed', 'Retention fixture',
-          CASE WHEN n = 1 THEN NULL ELSE 'long-trace' END FROM fixture
+          'system', 'host.invoke', 'system', 'read', 'allowed', 'Retention fixture', 'technical' FROM fixture
       `)
-      observations.record({ ...span, phase: 'started' })
-      for (let index = 0; index < 498; index++) observations.record(event)
-
-      const started = performance.now()
-      observations.record(event)
-      expect(performance.now() - started).toBeLessThan(1_000)
-      const rows = knex('observation_records')
-      expect(await rows.clone().where({ id: 'fixture-1' }).first()).toBeUndefined()
-      expect(await rows.clone().whereIn('id', ['fixture-2', 'fixture-200100']).select('id')).toHaveLength(2)
-
-      observations.record({ ...span, phase: 'completed' })
       for (let index = 0; index < 500; index++) observations.record(event)
-      expect(await rows.clone().where({ trace_id: span.trace_id }).first()).toBeUndefined()
+      expect(await rows.clone().where({ visibility: 'technical' }).count({ total: '*' }).first()).toEqual({ total: 200600 })
+      expect(await rows.clone().where({ visibility: 'activity' }).pluck('id')).toEqual(['user-activity'])
     } finally {
       await knex.destroy()
       await observations.close()
@@ -238,18 +231,29 @@ describe('ObservationStore', () => {
     }
   }, 15_000)
 
-  it('drops the obsolete audit table and prunes an expired trace as a whole', async () => {
+  it('expires only old diagnostics and preserves both activity history and retained span ancestry', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'seed-observations-'))
     try {
       const first = new ObservationStore(directory, 'MotusAI Seed')
-      const base = { level: 'info' as const, source: 'plugin-host' as const, event: 'capability.invoke',
-        message: 'Completed.', plugin_id: 'com.example.plugin', trace_id: 'expired-trace', phase: 'completed' as const }
-      first.record({ ...base, span_id: 'expired-parent', operation: 'task.run' })
-      first.record({ ...base, span_id: 'expired-child', parent_span_id: 'expired-parent', operation: 'search.query' })
       await first.close()
       const knex = createKnex({ client: 'better-sqlite3', connection: { filename: first.databasePath }, useNullAsDefault: true })
       await knex.schema.createTable('audit_entries', (table) => { table.text('id') })
-      await knex('observation_records').where({ span_id: 'expired-parent' }).update({ timestamp: '2000-01-01T00:00:00.000Z' })
+      await knex('audit_entries').insert({ id: 'legacy-activity' })
+      const now = new Date()
+      const old = { timestamp: new Date(now.getTime() - 366 * 86_400_000).toISOString(), source: 'system',
+        operation: 'retention.test', category: 'system', risk: 'read', outcome: 'allowed', summary: 'Retention test' }
+      const technical = { ...old, visibility: 'technical', trace_id: 'mixed-trace' }
+      await knex('observation_records').insert([
+        { ...old, id: 'visible-root', visibility: 'activity', span_id: 'root', trace_id: 'mixed-trace' },
+        { ...technical, id: 'old-bridge', span_id: 'bridge', parent_span_id: 'root' },
+        { ...technical, id: 'old-bridge-child', span_id: 'bridge-child', parent_span_id: 'bridge' },
+        { ...old, id: 'visible-child', visibility: 'activity', parent_span_id: 'bridge-child', trace_id: 'mixed-trace' },
+        { ...technical, id: 'old-parent-of-recent-diagnostic', span_id: 'old-parent' },
+        { ...technical, id: 'recent-diagnostic', timestamp: new Date(now.getTime() - 364 * 86_400_000).toISOString(),
+          parent_span_id: 'old-parent' },
+        { ...technical, id: 'expired-sibling', parent_span_id: 'root' },
+        { ...old, id: 'expired-standalone', visibility: 'technical' },
+      ])
       await knex.destroy()
 
       const second = new ObservationStore(directory, 'MotusAI Seed')
@@ -257,10 +261,16 @@ describe('ObservationStore', () => {
         const store = new SeedStore(directory, 'MotusAI Seed', second)
         try {
           await store.load()
-          expect((await store.queryAudit()).items).toEqual([])
+          expect((await store.queryAudit()).total).toBe(1)
           const verifier = createKnex({ client: 'better-sqlite3',
             connection: { filename: second.databasePath }, useNullAsDefault: true })
-          try { expect(await verifier.schema.hasTable('audit_entries')).toBe(false) }
+          try {
+            expect(await verifier('audit_entries').pluck('id')).toEqual(['legacy-activity'])
+            expect(await verifier('observation_records').orderBy('id').pluck('id')).toEqual([
+              'old-bridge', 'old-bridge-child', 'old-parent-of-recent-diagnostic', 'recent-diagnostic',
+              'visible-child', 'visible-root',
+            ])
+          }
           finally { await verifier.destroy() }
         } finally { await store.close() }
       } finally { await second.close() }

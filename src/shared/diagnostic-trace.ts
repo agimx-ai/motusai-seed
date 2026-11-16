@@ -22,3 +22,7 @@ export type HostDiagnosticEvent = DiagnosticTraceContext & {
   message: string
   details?: Record<string, string | number | boolean | null>
 }
+
+export function hostAudioOperation(service: string, args: Record<string, unknown>): string | undefined {
+  if (service === 'seed.audio' && typeof args.operation === 'string') return args.operation
+}

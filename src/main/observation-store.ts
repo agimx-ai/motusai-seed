@@ -43,8 +43,7 @@ export type DiagnosticInput = Pick<DiagnosticRecord, 'level' | 'source' | 'event
   Partial<Pick<DiagnosticRecord, 'plugin_id' | 'plugin_version' | 'request_id' | 'operation' | 'trace_id' | 'span_id' | 'parent_span_id' | 'phase' | 'duration_ms' | 'error_code' | 'error_name' | 'error_stack' | 'details'>> &
   { evidence_origin?: 'host' | 'plugin' }
 
-const observationRetentionDays = 365
-const observationMaxRows = 200_000
+const diagnosticRetentionDays = 365
 
 export function observationDatabaseFileName(appName: string) {
   const safeName = appName.trim().toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'application'
@@ -80,8 +79,6 @@ export class ObservationStore {
     this.database.pragma('foreign_keys = ON')
     // A synchronous wait would deadlock Main while Knex owns a write transaction.
     this.database.pragma('busy_timeout = 0')
-    // This is a new, pre-release storage contract. Do not migrate or keep the old audit table.
-    this.database.exec('DROP TABLE IF EXISTS audit_entries')
     this.database.exec(`
       CREATE TABLE IF NOT EXISTS observation_records (
         id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, ended_at TEXT,
@@ -97,6 +94,8 @@ export class ObservationStore {
         session_id TEXT, evidence_origin TEXT NOT NULL DEFAULT 'host'
       );
       CREATE INDEX IF NOT EXISTS observation_time_idx ON observation_records(timestamp DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS observation_diagnostic_time_idx ON observation_records(timestamp)
+        WHERE visibility = 'technical';
       CREATE INDEX IF NOT EXISTS observation_category_time_idx ON observation_records(category, timestamp DESC);
       CREATE INDEX IF NOT EXISTS observation_outcome_time_idx ON observation_records(outcome, timestamp DESC);
       CREATE INDEX IF NOT EXISTS observation_trace_idx ON observation_records(trace_id, timestamp, id);
@@ -126,22 +125,30 @@ export class ObservationStore {
     this.drain()
   }
 
-  /** Remove complete traces as a unit, so a retained child never loses its parent. */
+  /** Expire technical diagnostics without removing user activities or disconnecting retained spans. */
   private prune() {
-    const ageCutoff = new Date(Date.now() - observationRetentionDays * 86_400_000).toISOString()
-    const boundary = this.database.prepare(`SELECT timestamp FROM observation_records
-      ORDER BY timestamp DESC, id DESC LIMIT 1 OFFSET ?`).get(observationMaxRows - 1)
-    const cutoff = boundary && String(boundary.timestamp) > ageCutoff ? String(boundary.timestamp) : ageCutoff
-    this.database.prepare(`DELETE FROM observation_records WHERE trace_id IS NULL AND timestamp < ? AND outcome != 'running'`)
-      .run(cutoff)
-    // Collect running trace IDs once. Probing each old row can scan the same long trace repeatedly.
-    this.database.prepare(`DELETE FROM observation_records WHERE trace_id IN (
-      SELECT DISTINCT trace_id FROM observation_records INDEXED BY observation_time_idx
-      WHERE timestamp < ? AND trace_id IS NOT NULL AND trace_id NOT IN (
-        SELECT trace_id FROM observation_records INDEXED BY observation_outcome_time_idx
-        WHERE outcome = 'running' AND trace_id IS NOT NULL
+    const cutoff = new Date(Date.now() - diagnosticRetentionDays * 86_400_000).toISOString()
+    this.database.prepare(`
+      WITH RECURSIVE expired(id, span_id, parent_span_id) AS MATERIALIZED (
+        SELECT id, span_id, parent_span_id FROM observation_records
+        WHERE visibility = 'technical' AND timestamp < ? AND outcome != 'running'
+        AND (trace_id IS NULL OR trace_id NOT IN (
+          SELECT trace_id FROM observation_records INDEXED BY observation_outcome_time_idx
+          WHERE outcome = 'running' AND trace_id IS NOT NULL
+        ))
+      ), retained_parents(span_id) AS (
+        SELECT expired.span_id FROM expired
+        JOIN observation_records AS child ON child.parent_span_id = expired.span_id
+        WHERE child.id NOT IN (SELECT id FROM expired)
+        UNION
+        SELECT expired.parent_span_id FROM expired
+        JOIN retained_parents ON expired.span_id = retained_parents.span_id
+        WHERE expired.parent_span_id IS NOT NULL
       )
-    )`).run(cutoff)
+      DELETE FROM observation_records
+      WHERE id IN (SELECT id FROM expired)
+      AND (span_id IS NULL OR span_id NOT IN (SELECT span_id FROM retained_parents))
+    `).run(cutoff)
   }
 
   private drain() {
