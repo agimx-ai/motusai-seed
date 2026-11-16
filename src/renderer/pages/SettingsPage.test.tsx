@@ -14,6 +14,13 @@ function render(status: AppUpdateStatus = 'disabled', platform: NodeJS.Platform 
 }
 
 describe('Settings version row', () => {
+  it('uses the localized application name in the system and About sections', () => {
+    const html = render()
+    expect(html).toContain('保持 MotusAI 小黑 在系统托盘中运行')
+    expect(html).toContain('在 MotusAI 小黑 运行任务时')
+    expect(html).toContain('MotusAI 小黑 0.2.8 · macOS arm64')
+  })
+
   it('keeps only the update action, without a duplicate release notes entry', () => {
     const html = render()
     expect(html.match(/seed-action-button/g)).toHaveLength(1)

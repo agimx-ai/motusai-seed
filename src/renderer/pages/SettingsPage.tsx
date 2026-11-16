@@ -52,6 +52,7 @@ export function SettingsPage({
   onInstallUpdate,
 }: SettingsPageProps) {
   const { t } = useTranslation();
+  const appName = t('common.appName');
   const { languagePreference, setLanguagePreference } = useSeedI18n();
   const languageOptions: Array<SelectControlOption<SeedLanguagePreference>> = [
     { value: 'system', label: t('settings.languageSystem') },
@@ -139,7 +140,7 @@ export function SettingsPage({
         <div className="rounded-[14px] border border-border bg-card px-5">
           <SettingsRow
             title={t('settings.launchAtLogin')}
-            description={t('settings.launchAtLoginDescription', { appName: snapshot.appName })}
+            description={t('settings.launchAtLoginDescription', { appName })}
             action={
               <ToggleSwitch
                 checked={snapshot.launchAtLogin}
@@ -150,7 +151,7 @@ export function SettingsPage({
           />
           <SettingsRow
             title={t('settings.preventSleep')}
-            description={t('settings.preventSleepDescription', { appName: snapshot.appName })}
+            description={t('settings.preventSleepDescription', { appName })}
             action={
               <ToggleSwitch
                 checked={snapshot.preventSystemSleep}
@@ -178,7 +179,7 @@ export function SettingsPage({
         <div className="rounded-[14px] border border-border bg-card px-5">
           <SettingsRow
             title={t('settings.version')}
-            description={`${snapshot.appName} ${snapshot.appVersion} · ${formatRuntimePlatform(snapshot.platform, snapshot.architecture)} · ${updateDescription}`}
+            description={`${appName} ${snapshot.appVersion} · ${formatRuntimePlatform(snapshot.platform, snapshot.architecture)} · ${updateDescription}`}
             action={updateButton}
           />
         </div>
