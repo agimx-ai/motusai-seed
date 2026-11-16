@@ -1,5 +1,5 @@
 import { ListFilter } from 'lucide-react';
-import { useEffect, useId, useState, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import type { PluginInstallProgress, SeedCatalogPlugin, SeedInstalledPlugin } from '../../shared/contracts';
 import { resolveSeedLocalizedText, type SeedLocalizedText } from '../../shared/plugin-manifest';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +21,7 @@ import {
 import { PluginActionButton } from '../features/plugins/PluginActionButton';
 import { PluginDetailActions } from '../features/plugins/PluginDetailActions';
 import { PluginListSkeleton } from '../features/plugins/PluginListSkeleton';
-import { ObsidianPluginEntry } from '../features/plugins/ObsidianPluginEntry';
+import { AppIntegrationsSection } from '../features/plugins/AppIntegrationsSection';
 import { pluginMcpTools } from '../features/plugins/mcp-tools';
 import { isCatalogPluginInstallable } from '../../shared/plugin-updates';
 import { compareSeedVersions } from '../../shared/seed-version';
@@ -97,7 +97,6 @@ export function PluginsPage({
 }: PluginsPageProps) {
   const { t } = useTranslation();
   const { locale } = useSeedI18n();
-  const integrationsHeadingId = useId();
   const [confirmation, setConfirmation] = useState<
     | { kind: 'install'; plugin: SeedCatalogPlugin; version: string; updating: boolean; currentVersion?: string }
     | { kind: 'uninstall'; plugin: SeedInstalledPlugin }
@@ -425,10 +424,7 @@ export function PluginsPage({
             )}
           </section>
         )}
-        <section aria-labelledby={integrationsHeadingId} className="mb-7 mt-4">
-          <h3 id={integrationsHeadingId} className="mb-2 px-2 text-[16px] font-medium">{t('plugins.integrationsSection')}</h3>
-          <ObsidianPluginEntry />
-        </section>
+        <AppIntegrationsSection />
         <section aria-busy={catalogLoading} className={showCatalogEmpty ? 'flex flex-1 flex-col' : undefined}>
           <div className="px-1">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">

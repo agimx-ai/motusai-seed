@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { ObsidianPluginBatchResult, ObsidianPluginStatus } from '../../../shared/obsidian-plugin';
 import { PluginActionButton } from './PluginActionButton';
 
-export function ObsidianPluginEntry() {
+export function ObsidianIntegrationCard() {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(true);
