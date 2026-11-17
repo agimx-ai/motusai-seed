@@ -20,6 +20,7 @@ import ignore, { type Ignore } from 'ignore'
 import { minimatch } from 'minimatch'
 import { z } from 'zod'
 import type { FilesystemRoot } from '../../../shared/contracts'
+import { systemVisibleDirectoryNames } from './system-directory-visibility'
 
 export type LocalFileMethod = 'list' | 'stat' | 'search' | 'find' | 'grep' | 'read' | 'read_binary' | 'mkdir' | 'write' | 'write_binary' | 'edit' | 'move' | 'delete'
 export type TrashItem = (path: string) => Promise<void>
@@ -161,6 +162,7 @@ export class LocalFileService {
     private backupRoot: string,
     private trashItem: TrashItem,
     private inspectPath: InspectPath = lstat,
+    private visibleDirectoryNames = systemVisibleDirectoryNames,
   ) {}
 
   replaceRoots(roots: FilesystemRoot[]) {
@@ -245,9 +247,14 @@ export class LocalFileService {
     const metadata = await stat(location.target)
     if (!metadata.isDirectory()) throw new LocalFileError('directory_required', 'list 只能用于目录。')
     const entries = await readdir(location.target, { withFileTypes: true })
+    const systemVisibleNames = args.respect_system_visibility === true
+      ? await this.visibleDirectoryNames(location.target, entries.map((entry) => entry.name)).catch(() => {
+        throw new LocalFileError('directory_visibility_unavailable', '暂时无法读取系统的文件显示设置，请重新打开目录。')
+      }) : null
     const maximum = Math.min(500, Math.max(1, Math.floor(Number(args.limit || 500))))
     const pageAfter = args.page_after === undefined ? undefined : asString(args.page_after, 'page_after')
     const allowedEntries = entries
+      .filter((entry) => !systemVisibleNames || systemVisibleNames.has(entry.name))
       .filter((entry) => !pathPolicyError([location.relativePath, entry.name].filter(Boolean).join('/')))
     const remaining = pageAfter === undefined
       ? allowedEntries.sort((left, right) => left.name.localeCompare(right.name))

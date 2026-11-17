@@ -49,6 +49,24 @@ describe('LocalFileService', () => {
     expect(read.sha256).toMatch(/^[a-f0-9]{64}$/)
   })
 
+  it('applies system visibility before slicing pages and keeps background listings complete', async () => {
+    const names = ['.hidden-file', '.env', 'visible-a', 'visible-b']
+    await Promise.all(names.map((name) => writeFile(join(root, name), '')))
+    await mkdir(join(root, 'hidden-directory'))
+    let showHidden = false
+    const browse = new LocalFileService([filesystemRoot], backupRoot, async () => {}, lstat,
+      async () => showHidden ? null : new Set(['visible-a', 'visible-b', '.env']))
+    const args = { respect_system_visibility: true, limit: 1, page_after: '' }
+    const first = await browse.execute('list', filesystemRoot.id, args)
+    expect(first).toMatchObject({ entries: [{ name: 'visible-a' }], truncated: true, next_page: 'visible-a' })
+    const second = await browse.execute('list', filesystemRoot.id, { ...args, page_after: 'visible-a' })
+    expect(second).toMatchObject({ entries: [{ name: 'visible-b' }], truncated: false, next_page: null })
+    const full = await browse.execute('list', filesystemRoot.id, { page_after: '' })
+    expect(full).toMatchObject({ entries: ['.hidden-file', 'hidden-directory', 'visible-a', 'visible-b'].map((name) => ({ name })) })
+    showHidden = true
+    await expect(browse.execute('list', filesystemRoot.id, { respect_system_visibility: true, page_after: '' })).resolves.toEqual(full)
+  })
+
   it('skips inaccessible and unsupported directory entries without failing the whole listing', async () => {
     await writeFile(join(root, 'available.txt'), 'visible')
     await writeFile(join(root, 'hiberfil.sys'), 'protected')
