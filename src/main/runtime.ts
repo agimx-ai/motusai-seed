@@ -92,7 +92,7 @@ import { SidecarProcessService } from './sidecar-process-service';
 import { discoverDistribution } from './distribution-discovery';
 import { SeedDistributionEvents } from './distribution-events';
 import { ObsidianPluginInstaller } from './obsidian-plugin-installer';
-import { activateObsidianPlugin, registeredObsidianVaultPaths } from './obsidian-desktop';
+import { registeredObsidianVaultPaths } from './obsidian-desktop';
 import { AnnouncementInbox } from './announcements';
 import { CompanionDiscoveryFeed } from './companion-discoveries';
 import { authorizationEndpointPermission, PluginBrowserAuthorization } from './plugin-browser-authorization';
@@ -133,7 +133,7 @@ export class SeedRuntime {
   readonly connector: ConnectorManager;
   private readonly seedCloudUrl = serverUrlSchema.parse(buildConfig.seedCloudUrl);
   private readonly obsidianPlugin = new ObsidianPluginInstaller(
-    this.seedCloudUrl, (url, options) => net.fetch(url, options), registeredObsidianVaultPaths, activateObsidianPlugin,
+    this.seedCloudUrl, (url, options) => net.fetch(url, options), registeredObsidianVaultPaths,
   );
   private distribution: SeedDistribution | undefined;
   private user: TerminalUserProfile | undefined;

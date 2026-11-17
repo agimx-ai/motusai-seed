@@ -3,7 +3,6 @@ import { copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, writeF
 import { basename, isAbsolute, join, parse } from 'node:path';
 import { z } from 'zod';
 import type {
-  ObsidianPluginActivation,
   ObsidianPluginBatchResult,
   ObsidianPluginStatus,
   ObsidianPluginVaultError,
@@ -14,6 +13,7 @@ import { compareSeedVersions, seedVersionPattern } from '../shared/seed-version'
 export const obsidianPluginId = 'motusai-vault-agent';
 const releasesPath = '/api/v1/obsidian-plugin/releases/';
 const files = ['main.js', 'styles.css', 'manifest.json'] as const;
+const updateMarker = 'seed-update.json';
 const limits = { 'main.js': 64 * 1024 * 1024, 'styles.css': 4 * 1024 * 1024, 'manifest.json': 32 * 1024 };
 const versionSchema = z.string().max(80).regex(seedVersionPattern);
 const manifestSchema = z.object({ id: z.literal(obsidianPluginId), version: versionSchema });
@@ -143,7 +143,7 @@ async function assertUnchanged(vault: InstalledVault) {
   }
 }
 
-async function installRelease(distribution: Distribution, vault: InstalledVault) {
+async function installRelease(distribution: Distribution, vault: InstalledVault, version: string) {
   await assertUnchanged(vault);
   const config = join(vault.path, '.obsidian');
   const plugins = join(config, 'plugins');
@@ -173,9 +173,16 @@ async function installRelease(distribution: Distribution, vault: InstalledVault)
     }
     const replaced: string[] = [];
     try {
+      if (vault.installedVersion !== null) {
+        await writeFile(join(staging, updateMarker), JSON.stringify({ version }), { flag: 'wx' });
+      }
       for (const name of files) {
         await rename(join(staging, name), join(target, name));
         replaced.push(name);
+      }
+      if (vault.installedVersion !== null) {
+        // Publish the marker only once Obsidian can load the complete release.
+        await rename(join(staging, updateMarker), join(target, updateMarker));
       }
     } catch (error) {
       const rollback = await Promise.allSettled(replaced.reverse().map((name) => existing.has(name)
@@ -207,7 +214,6 @@ export class ObsidianPluginInstaller {
     cloudUrl: string,
     private readonly fetchRelease: ReleaseFetch,
     private readonly registeredVaultPaths: () => Promise<string[]>,
-    private readonly activate: (path: string, update: boolean) => Promise<ObsidianPluginActivation>,
   ) {
     this.releaseBase = new URL(releasesPath, cloudUrl);
   }
@@ -301,11 +307,9 @@ export class ObsidianPluginInstaller {
       const { path } = vault;
       const name = basename(path);
       try {
-        await installRelease(distribution, vault);
+        await installRelease(distribution, vault, release.version);
         const update = vault.installedVersion !== null;
-        const fallback: ObsidianPluginActivation = update ? 'reload' : 'enable';
-        const activation = await this.activate(path, update).catch(() => fallback);
-        vaults.push({ path, name, status: update ? 'updated' : 'installed', version: release.version, activation });
+        vaults.push({ path, name, status: update ? 'updated' : 'installed', version: release.version });
       } catch (error) {
         vaults.push({ path, name, status: 'failed', error: error instanceof InstallerError ? error.code : 'installFailed' });
       }

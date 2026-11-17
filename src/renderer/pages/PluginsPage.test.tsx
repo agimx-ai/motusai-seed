@@ -53,8 +53,8 @@ describe('Plugin list loading states', () => {
         result: {
           ok: true,
           vaults: [
-            { path: '/new', name: 'New vault', status: 'installed', version: '0.1.86', activation: 'enable' },
-            { path: '/updated', name: 'Updated vault', status: 'updated', version: '0.1.86', activation: 'reload' },
+            { path: '/new', name: 'New vault', status: 'installed', version: '0.1.86' },
+            { path: '/updated', name: 'Updated vault', status: 'updated', version: '0.1.86' },
             { path: '/failed', name: 'Failed vault', status: 'failed', error: 'installFailed' },
           ],
         },
