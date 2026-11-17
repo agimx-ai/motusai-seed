@@ -1,4 +1,5 @@
 import { existsSync, watch, type FSWatcher } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { SeedInvocation } from '@motus-ai/seed-sdk'
 import type { FilesystemRoot } from '../../../shared/contracts'
@@ -10,7 +11,7 @@ import {
   type TrashItem,
 } from './file-service'
 
-const fileMethods = ['list', 'stat', 'search', 'find', 'grep', 'read', 'read_binary', 'mkdir', 'write', 'write_binary', 'edit', 'move', 'delete'] as const
+const fileMethods = ['list', 'stat', 'search', 'find', 'grep', 'read', 'read_binary', 'mkdir', 'write', 'write_binary', 'edit', 'move', 'copy', 'delete'] as const
 
 type FileWatchEvent = {
   cursor: number
@@ -20,6 +21,7 @@ type FileWatchEvent = {
 }
 
 type FileWatchSession = {
+  id: string
   watcher: FSWatcher
   cursor: number
   events: FileWatchEvent[]
@@ -99,6 +101,7 @@ export class FileBroker {
   private service: LocalFileService | null = null
   private backupRoot = ''
   private readonly watches = new Map<string, FileWatchSession>()
+  private readonly copies = new Map<string, AbortController>()
 
   constructor(
     private readonly configuration: () => FileBrokerConfiguration,
@@ -119,7 +122,7 @@ export class FileBroker {
     return this.service
   }
 
-  async invoke(method: string, request: SeedInvocation) {
+  async invoke(method: string, request: SeedInvocation, assertActive?: () => void, owner = '') {
     const value = this.current()
     if (method === 'roots') {
       return value.roots.map((root) => ({
@@ -130,6 +133,39 @@ export class FileBroker {
       }))
     }
     let args = request.arguments
+    if (method === 'cancel_copy') {
+      const copy = this.copies.get(JSON.stringify([owner, request.request_id]))
+      copy?.abort(new LocalFileError('invocation_cancelled', '文件复制已取消。'))
+      return { cancelled: Boolean(copy) }
+    }
+    if (method === 'copy') {
+      const locate = (path: unknown) => {
+        if (typeof path !== 'string' || !isAbsolute(path) || path.split(/[\\/]/).includes('..') || process.platform !== 'win32' && path.includes('\\')) {
+          throw new LocalFileError('invalid_path', '复制文件需要明确的绝对源路径和目标路径。')
+        }
+        const root = value.roots.find((candidate) => {
+          const boundary = relative(candidate.rootPath, path)
+          return boundary !== '..' && !boundary.startsWith(`..${sep}`) && !isAbsolute(boundary)
+        })
+        if (!root) throw new LocalFileError('path_escape', '路径超出了文件系统根目录。')
+        const relativePath = relative(root.rootPath, path)
+        if (process.platform === 'win32' && relativePath.split(sep).some((part) => /[:]|[. ]$/.test(part))) {
+          throw new LocalFileError('invalid_path', '文件路径包含不安全的 Windows 路径片段。')
+        }
+        return { root, path: relativePath }
+      }
+      const source = locate(args.source_path)
+      const destination = locate(args.destination_path)
+      const key = JSON.stringify([owner, request.request_id])
+      if (this.copies.has(key)) throw new LocalFileError('duplicate_request', '该文件复制请求正在执行。')
+      const controller = new AbortController()
+      this.copies.set(key, controller)
+      try {
+        const signal = request.signal instanceof AbortSignal ? AbortSignal.any([controller.signal, request.signal]) : controller.signal
+        const result = await this.fileService(value).copy(source.root.id, source.path, destination.root.id, destination.path, signal, assertActive)
+        return { ...result, source_path: resolve(source.root.rootPath, source.path), destination_path: resolve(destination.root.rootPath, destination.path) }
+      } finally { this.copies.delete(key) }
+    }
     // Binary producers can use an absolute destination without discovering a root via another plugin.
     if (method === 'write_binary' && !args.root_id && typeof args.path === 'string' && isAbsolute(args.path)) {
       const path = args.path
@@ -175,7 +211,7 @@ export class FileBroker {
         for (const wake of created.waiters) wake()
         created.waiters.clear()
       })
-      created = { watcher, cursor: 0, events: [], error: null, waiters: new Set() }
+      created = { id: randomUUID(), watcher, cursor: 0, events: [], error: null, waiters: new Set() }
       session = created
       this.watches.set(key, session)
       watcher.on('error', (error) => {
@@ -190,6 +226,9 @@ export class FileBroker {
 
     this.keepWatchAlive(key, session)
     const after = Math.max(0, Math.floor(Number(args.after) || 0))
+    if (typeof args.watch_id === 'string' && args.watch_id !== session.id) {
+      return { events: [], next: session.cursor, watch_id: session.id, resync: true }
+    }
     const waitMs = Math.min(10_000, Math.max(0, Math.floor(Number(args.wait_ms) || 0)))
     if (!session.error && !session.events.some((event) => event.cursor > after) && waitMs > 0) {
       await new Promise<void>((resolveWait) => {
@@ -209,11 +248,13 @@ export class FileBroker {
       return {
         events: [{ cursor: session.cursor, kind: 'resync', path: '', observed_at: new Date().toISOString() }],
         next: session.cursor,
+        watch_id: session.id,
       }
     }
     return {
       events: session.events.filter((event) => event.cursor > after),
       next: Math.max(after, session.cursor),
+      watch_id: session.id,
     }
   }
 
@@ -230,6 +271,7 @@ export class FileBroker {
   }
 
   dispose() {
+    for (const copy of this.copies.values()) copy.abort()
     for (const session of this.watches.values()) {
       if (session.expires) clearTimeout(session.expires)
       session.watcher.close()

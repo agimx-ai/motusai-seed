@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { constants } from 'node:fs'
 import {
   copyFile,
   lstat,
@@ -14,6 +15,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 import ignore, { type Ignore } from 'ignore'
 import { minimatch } from 'minimatch'
 import { z } from 'zod'
@@ -244,10 +246,14 @@ export class LocalFileService {
     if (!metadata.isDirectory()) throw new LocalFileError('directory_required', 'list 只能用于目录。')
     const entries = await readdir(location.target, { withFileTypes: true })
     const maximum = Math.min(500, Math.max(1, Math.floor(Number(args.limit || 500))))
+    const pageAfter = args.page_after === undefined ? undefined : asString(args.page_after, 'page_after')
     const allowedEntries = entries
       .filter((entry) => !pathPolicyError([location.relativePath, entry.name].filter(Boolean).join('/')))
-      .sort((left, right) => left.name.localeCompare(right.name))
-    const selectedEntries = allowedEntries.slice(0, maximum)
+    const remaining = pageAfter === undefined
+      ? allowedEntries.sort((left, right) => left.name.localeCompare(right.name))
+      : allowedEntries.filter((entry) => entry.name > pageAfter)
+        .sort((left, right) => left.name < right.name ? -1 : 1)
+    const selectedEntries = remaining.slice(0, maximum)
     const visible = (await Promise.all(selectedEntries
       .map(async (entry) => {
         const childPath = resolve(location.target, entry.name)
@@ -262,9 +268,13 @@ export class LocalFileService {
           type: child.isSymbolicLink() ? 'symlink' : child.isDirectory() ? 'directory' : child.isFile() ? 'file' : 'other',
           size: child.isFile() ? child.size : undefined,
           modified_at: isoDate(child.mtime),
+          ...(pageAfter !== undefined ? { identity: `${child.dev}:${child.ino}:${child.birthtimeMs}`, revision: `${child.mtimeMs}:${child.ctimeMs}` } : {}),
         }
       }))).filter((entry) => entry !== null)
-    return { path: location.relativePath, entries: visible, truncated: allowedEntries.length > maximum }
+    const truncated = remaining.length > maximum
+    return { path: location.relativePath, entries: visible, truncated,
+      ...(pageAfter !== undefined ? { next_page: truncated ? selectedEntries.at(-1)?.name : null } : {}),
+    }
   }
 
   private async stat(rootId: string, args: Record<string, unknown>) {
@@ -570,6 +580,61 @@ export class LocalFileService {
     if (await stat(destination.target).catch(() => null)) throw new LocalFileError('destination_exists', '目标路径已经存在。')
     await rename(source.target, destination.target)
     return { path: source.relativePath, destination_path: destination.relativePath }
+  }
+
+  async copy(sourceRootId: string, sourcePath: string, destinationRootId: string, destinationPath: string, signal: AbortSignal, assertActive?: () => void) {
+    const checkActive = () => { signal.throwIfAborted(); assertActive?.() }
+    checkActive()
+    const sourceRoot = this.root(sourceRootId, 'read')
+    const destinationRoot = this.root(destinationRootId, 'write')
+    const source = await this.target(sourceRoot, sourcePath, { existing: true })
+    const destination = await this.target(destinationRoot, destinationPath, { existing: false })
+    const parent = await realpath(dirname(destination.target))
+    if (!isInside(destination.root, parent)) throw new LocalFileError('path_escape', '目标文件的父目录超出文件系统根目录。')
+    const target = resolve(parent, basename(destination.target))
+    assertPathAllowed(relative(source.root, source.target).split(sep).join('/'))
+    assertPathAllowed(relative(destination.root, target).split(sep).join('/'))
+    const initial = await lstat(source.target)
+    if (!initial.isFile()) throw new LocalFileError('regular_file_required', '只能复制普通文件。')
+    if (await lstat(target).then(() => true, (error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error
+      return false
+    })) return { status: 'destination_exists' as const }
+
+    const temporary = resolve(parent, `.${randomUUID()}.motusai-tmp`)
+    const sameFile = (current: FileMetadata) => current.isFile() && current.ino === initial.ino && current.dev === initial.dev
+      && current.size === initial.size && current.mtimeMs === initial.mtimeMs && current.ctimeMs === initial.ctimeMs
+    const changed = () => new LocalFileError('source_changed', '复制期间源文件发生变化，请重试。')
+    checkActive()
+    const input = await open(source.target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
+    let output: Awaited<ReturnType<typeof open>> | undefined
+    try {
+      if (!sameFile(await input.stat())) throw changed()
+      output = await open(temporary, 'wx', 0o600)
+      await pipeline(input.createReadStream(), async function* (chunks: AsyncIterable<Buffer>) {
+        for await (const chunk of chunks) { checkActive(); yield chunk }
+      }, output.createWriteStream(), { signal })
+      const current = await lstat(source.target).catch(() => null)
+      if (!current || !sameFile(current)) throw changed()
+      if (await realpath(dirname(destination.target)) !== parent) {
+        throw new LocalFileError('destination_changed', '复制期间目标目录发生变化，请重试。')
+      }
+      checkActive()
+      try { await link(temporary, target) }
+      catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === 'EEXIST') return { status: 'destination_exists' as const }
+        if (code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'ENOSYS') throw new LocalFileError('atomic_copy_unavailable', '目标文件系统不支持安全的无覆盖复制。')
+        throw error
+      }
+      return { status: 'copied' as const, size: initial.size }
+    } finally {
+      await input.close()
+      if (output) {
+        await output.close()
+        await rm(temporary, { force: true })
+      }
+    }
   }
 
   private async delete(rootId: string, args: Record<string, unknown>) {

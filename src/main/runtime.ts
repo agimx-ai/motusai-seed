@@ -3144,7 +3144,7 @@ export class SeedRuntime {
           ? (argumentsValue.request as import('@motus-ai/seed-sdk').SeedInvocation)
           : null;
       if (!method || !request) throw new Error('文件 Broker 请求无效。');
-      return await this.fileBroker.invoke(method, request);
+      return await this.fileBroker.invoke(method, request, assertActive, packageId);
     }
     if (service === 'seed.screen') {
       const plugin = this.runtimePlugins.find((candidate) => candidate.package_id === packageId);
