@@ -2746,7 +2746,13 @@ export class SeedRuntime {
     });
     try {
       await Promise.race([this.waitForPluginServices(), cancelled]);
-      if (controller.signal.aborted || this.stopping || owner.isDestroyed()) return null;
+      if (
+        controller.signal.aborted ||
+        this.stopping ||
+        owner.isDestroyed() ||
+        this.pluginUninstallOperations.has(input.pluginId)
+      )
+        return null;
       const plugin = this.runtimePlugins.find(
         (candidate) => candidate.package_id === input.pluginId && candidate.api_version === 2,
       );
@@ -2777,7 +2783,12 @@ export class SeedRuntime {
     try {
       // A snapshot may reach the renderer before the Connector has started the replacement services.
       await Promise.race([this.waitForPluginServices(), cancelled]);
-      if (this.stopping || owner.isDestroyed() || this.pluginViewMounts.get(owner) !== request) {
+      if (
+        this.stopping ||
+        owner.isDestroyed() ||
+        this.pluginUninstallOperations.has(input.pluginId) ||
+        this.pluginViewMounts.get(owner) !== request
+      ) {
         if (this.pluginViewMounts.get(owner) === request) this.pluginViewMounts.delete(owner);
         return null;
       }

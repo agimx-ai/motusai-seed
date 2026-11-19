@@ -32,6 +32,7 @@ function fixture() {
     pluginViewHosts: new Map([[plugin.package_id, host]]),
     pluginViewMounts: new Map(),
     pluginViewPreparations: new Map(),
+    pluginUninstallOperations: new Set(),
   });
   const input = { pluginId: plugin.package_id, token: 'mount-one' };
   return { runtime, host, owner, plugin, input, configuration };
@@ -62,6 +63,17 @@ describe('product page DOM mounting', () => {
     runtime.pluginIsAuthorized = () => false;
     finish();
     await expect(runtime.mountPluginView(owner, { ...input, background: true })).rejects.toThrow('unavailable');
+  });
+  it('withdraws stale foreground and background retries while a plugin is uninstalling', async () => {
+    const { runtime, host, owner, input } = fixture();
+    runtime.pluginUninstallOperations.add(input.pluginId);
+    await expect(runtime.mountPluginView(owner, input)).resolves.toBeNull();
+    await expect(
+      runtime.mountPluginView(owner, { ...input, token: 'background', background: true }),
+    ).resolves.toBeNull();
+    expect(host.mount).not.toHaveBeenCalled();
+    expect(runtime.pluginViewMounts.size).toBe(0);
+    expect(runtime.pluginViewPreparations.size).toBe(0);
   });
   it('preserves on-demand mounting without allowing community plugins to start in the background', async () => {
     const { runtime, host, owner, input, plugin, configuration } = fixture();
