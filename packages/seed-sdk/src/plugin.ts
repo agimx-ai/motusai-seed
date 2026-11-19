@@ -91,7 +91,7 @@ export type PluginServices = {
   connections: SeedConnectionService;
   secrets: SeedSecretService;
   authorization: SeedAuthorizationService;
-  /** @deprecated Use `PluginService.app.audio.subscribe()` for live audio delivery. */
+  /** @deprecated Use `PluginService.app.audio.startRecording()` and `nextFrame()` for live audio. */
   invokeHost(service: 'seed.audio', argumentsValue: Record<string, unknown> & {
     operation: 'capture.segment' | 'capture.consume';
   }): Promise<unknown>;

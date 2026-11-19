@@ -181,6 +181,12 @@ describe('SeedPluginSandboxSupervisor', () => {
 });
 
 describe('sandbox Host service permissions', () => {
+  it.each(['stream.record', 'stream.next', 'stream.cancel-read', 'stream.cancel'])(
+    'requires audio capture permission for %s',
+    (operation) => {
+      expect(requiredPermissions('seed.audio', { operation })).toEqual(['device.audio.capture']);
+    },
+  );
   it('requires the system notification permission for the SDK notification service', () => {
     expect(requiredPermissions('seed.notifications', { version: 1, operation: 'show' })).toEqual(['system.notifications']);
   });

@@ -102,7 +102,7 @@ describe('NativePluginManager', () => {
       const calls = [
         ['read', 'seed.audio', 'stream.next', 'open'],
         ['fail', 'seed.audio', 'stream.next', 'missing'],
-        ['start', 'seed.audio', 'stream.subscribe', 'open'],
+        ['start', 'seed.audio', 'stream.record', 'open'],
         ['resume', 'seed.audio', 'stream.resume', 'open'],
         ['stop', 'seed.audio', 'stream.stop', 'open'],
         ['relay', 'seed.cloud.relay', undefined, undefined],

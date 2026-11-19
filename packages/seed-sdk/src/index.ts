@@ -4,7 +4,10 @@ export { prefersReducedMotion } from './reduced-motion.js';
 export { Events, type EventRef } from './events.js';
 export type { SeedUserProfile, SeedUserService } from './user-profile.js';
 export type { CloudResourceRequest, CloudResourceChange, CloudResourceSubscription, CloudResourceService } from './cloud-resources.js';
-export type { AudioService, AudioStreamChunk, AudioStreamDelivery, AudioStreamFormat, AudioStreamSubscription } from './audio.js';
+export type {
+  AudioFileOutputPaths, AudioRecording, AudioRecordingResult, AudioService,
+  AudioStreamChunk, AudioStreamDelivery, AudioStreamFormat,
+} from './audio.js';
 export type { PluginSidebar, PluginSidebarHandle, PluginSidebarItem } from './sidebar.js';
 export type {
   PluginBreadcrumb,
