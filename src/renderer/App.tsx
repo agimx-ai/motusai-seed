@@ -119,6 +119,7 @@ export default function App() {
   const pluginSearchRef = useRef<HTMLInputElement>(null);
   const handledNavigationId = useRef('');
   const knownLocalClientScopes = useRef<Set<string> | null>(null);
+  const notifiedLowDiskSession = useRef('');
   const isMac = window.motusWindow.platform === 'darwin';
 
   useEffect(() => {
@@ -198,6 +199,18 @@ export default function App() {
     }
     knownLocalClientScopes.current = current;
   }, [locale, snapshot, t]);
+
+  useEffect(() => {
+    const audio = snapshot?.audio;
+    if (!audio?.lowDiskSpace) {
+      if (!audio || audio.state === 'idle') notifiedLowDiskSession.current = '';
+      return;
+    }
+    const key = audio.sessionId || 'active';
+    if (notifiedLowDiskSession.current === key) return;
+    notifiedLowDiskSession.current = key;
+    toast.warning(t('notifications.audioLowDiskSpace'), { id: 'seed-audio-low-disk-space' });
+  }, [snapshot?.audio, t]);
 
   const globalToaster = (
     <Toaster

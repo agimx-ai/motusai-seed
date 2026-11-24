@@ -17,7 +17,9 @@ export type AudioStreamChunk = {
 };
 
 /** Paths are relative to the calling plugin's private data directory. */
-export type AudioFileOutputPaths = Partial<Record<AudioStreamChunk['source'], string>>;
+export type AudioFileOutputPaths = Partial<Record<AudioStreamChunk['source'] | 'stereo', string>> & {
+  append?: boolean;
+};
 
 export type AudioRecordingResult = {
   session_id: string;
@@ -87,12 +89,14 @@ export function createAudioClient(
         signal.throwIfAborted();
         await invoke(operation);
       };
+      const buffered: AudioStreamChunk[] = [];
       return {
         session_id,
         async nextFrame(readSignal) {
           if (stopping) return null;
           const pendingSignal = readSignal ? AbortSignal.any([signal, readSignal]) : signal;
           pendingSignal.throwIfAborted();
+          if (buffered.length) return buffered.shift()!;
           const read_id = globalThis.crypto.randomUUID();
           const cancel = () => {
             void invoke('cancel-read', { read_id }).catch((error) => {
@@ -103,7 +107,9 @@ export function createAudioClient(
           try {
             const delivery = await invoke('next', { read_id }) as AudioStreamDelivery;
             pendingSignal.throwIfAborted();
-            return delivery.chunks[0] ? decodeChunk(delivery.chunks[0]) : null;
+            if (!delivery.chunks.length) return null;
+            for (const chunk of delivery.chunks) buffered.push(decodeChunk(chunk));
+            return buffered.shift() ?? null;
           } finally {
             pendingSignal.removeEventListener('abort', cancel);
           }

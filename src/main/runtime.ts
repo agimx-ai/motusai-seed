@@ -1352,6 +1352,7 @@ export class SeedRuntime {
         ...(audio.session_id ? { sessionId: audio.session_id } : {}),
         state: audio.state,
         durationMs: audio.duration_ms,
+        ...(audio.audio_save_failed_reason === 'low_disk_space' ? { lowDiskSpace: true as const } : {}),
         relatedTaskCount: audio.task_id && activeTaskIds.has(audio.task_id) ? 1 : 0,
         ...(audio.error ? { error: audio.error } : {}),
       },

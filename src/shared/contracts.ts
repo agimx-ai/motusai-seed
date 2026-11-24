@@ -237,6 +237,7 @@ export type SeedSnapshot = {
     durationMs: number;
     /** Distinct active tasks explicitly associated with this capture operation. */
     relatedTaskCount?: number;
+    lowDiskSpace?: true;
     error?: string;
   };
   mascot: {

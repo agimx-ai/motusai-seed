@@ -547,6 +547,7 @@
     "pluginInstalled": "插件已安装",
     "pluginUninstalled": "插件已卸载",
     "localClientUsingPlugin": "“{{client}}”正在使用“{{plugin}}”",
+    "audioLowDiskSpace": "磁盘剩余空间不足，已暂停保存本地原音（实时转写不受影响）",
     "activityCleared": "活动记录已清空",
     "logsUploaded": "诊断包已上传",
     "settingUpdated": "设置已更新"

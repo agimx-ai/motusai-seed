@@ -137,7 +137,11 @@ describe('AudioService segmented capture', () => {
       await expect(next()).rejects.toMatchObject({ code: 'audio_stream_closed' })
       expect(service.snapshot().state).toBe('idle')
       const wav = await readFile(join(root, 'plugin-a', 'raw.wav'))
-      expect(wav.readUInt32LE(54)).toBe(170 * data.byteLength)
+      expect(wav.readUInt32LE(24)).toBe(16_000)
+      expect(wav.readUInt16LE(22)).toBe(1)
+      expect(wav.readUInt16LE(34)).toBe(16)
+      expect(wav.readUInt32LE(40)).toBe(wav.length - 44)
+      expect(wav.readUInt32LE(40)).toBeGreaterThan(0)
     } finally {
       await service.destroy()
       await rm(root, { recursive: true, force: true })
@@ -174,11 +178,21 @@ describe('AudioService segmented capture', () => {
       await recording.resume()
 
       // Write a large span of audio without any realtime read pending.
+      // Ring buffer stays bounded (evicts oldest chunks), while WAV keeps every sample.
       for (let index = 1; index <= 40; index++) {
         feed(index)
         await delay(1)
       }
       expect(service.snapshot()).toMatchObject({ state: 'recording' })
+      // Drain buffered frames from the bounded ring buffer (oldest frames were evicted).
+      const drained: number[] = []
+      while (drained.length < 40) {
+        const next = await recording.nextFrame()
+        drained.push(next!.sequence)
+        if (next!.sequence === 40) break
+      }
+      expect(drained.length).toBeLessThan(40)
+      expect(drained.at(-1)).toBe(40)
       const skip = new AbortController()
       const cancelled = recording.nextFrame(skip.signal)
       const rejected = expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
@@ -186,6 +200,8 @@ describe('AudioService segmented capture', () => {
       await rejected
       feed(41)
 
+      const frame41 = await recording.nextFrame()
+      expect(frame41).toMatchObject({ sequence: 41, sample_offset: 41 * 8_000 })
       let delivered = false
       const fresh = recording.nextFrame().then((frame) => { delivered = true; return frame })
       await delay(10)
@@ -201,13 +217,15 @@ describe('AudioService segmented capture', () => {
       expect(stopped).toMatchObject({ audio_files: [await realpath(join(owner, 'raw.wav'))] })
       expect(stopped.audio_save_failed).toBeUndefined()
       const wav = await readFile(stopped.audio_files[0]!)
-      const last = Buffer.alloc(8)
-      last.writeFloatLE(0.5)
-      last.writeFloatLE(-0.5, 4)
-      expect(wav.readUInt32LE(24)).toBe(44_100)
-      expect(wav.readUInt16LE(22)).toBe(2)
-      expect(wav.readUInt32LE(54)).toBe(wav.length - 58)
-      expect(wav.subarray(58).equals(Buffer.concat([...expected, last]))).toBe(true)
+      expect(wav.toString('ascii', 0, 4)).toBe('RIFF')
+      expect(wav.readUInt16LE(20)).toBe(1)
+      expect(wav.readUInt16LE(22)).toBe(1)
+      expect(wav.readUInt32LE(24)).toBe(16_000)
+      expect(wav.readUInt16LE(34)).toBe(16)
+      expect(wav.readUInt32LE(40)).toBe(wav.length - 44)
+      // 43 chunks * 8000 samples @ 44.1kHz ≈ 7.8s → ~249,600 bytes at 16kHz mono PCM16 (12x smaller than raw float32)
+      expect(wav.readUInt32LE(40)).toBeGreaterThan(240_000)
+      expect(wav.readUInt32LE(40)).toBeLessThan(260_000)
       expect(report).not.toHaveBeenCalled()
     } finally {
       await service.destroy()
@@ -265,6 +283,10 @@ describe('AudioService segmented capture', () => {
       })
       recorder.emit('metadata', { ...format, sampleRate: 44_100 })
       recorder.emit('data', { data: Buffer.from([3, 4]) })
+      await expect(recording.nextFrame()).resolves.toMatchObject({
+        source: 'system', sequence: 1, sample_offset: 1, frames: 1,
+        format: { sample_rate: 44_100, channels: 1 }, data: Uint8Array.of(3, 4),
+      })
       const microphone = recording.nextFrame()
       push(Float32Array.of(0.25, 0.5).buffer)
       await expect(microphone).resolves.toMatchObject({
@@ -273,14 +295,15 @@ describe('AudioService segmented capture', () => {
       })
       const result = await recording.stop()
       const root = await realpath(join(data, 'plugin-a'))
-      expect(result.audio_files).toEqual(['original.wav', 'original-3.wav', 'original-2.wav'].map((name) => join(root, name)))
+      expect(result.audio_files).toEqual(['original.wav', 'original-2.wav'].map((name) => join(root, name)))
       expect(result.audio_save_failed).toBeUndefined()
-      const [first, second, mic] = await Promise.all(result.audio_files.map((path) => readFile(path)))
-      expect(first!.readUInt32LE(24)).toBe(48_000)
-      expect(first!.subarray(44)).toEqual(Buffer.from([1, 2]))
-      expect(second!.readUInt32LE(24)).toBe(44_100)
-      expect(second!.subarray(44)).toEqual(Buffer.from([3, 4]))
-      expect(mic!.subarray(58)).toEqual(Buffer.from(Float32Array.of(0.25, 0.5).buffer))
+      const [sys, mic] = await Promise.all(result.audio_files.map((path) => readFile(path)))
+      expect(sys!.readUInt32LE(24)).toBe(16_000)
+      expect(sys!.readUInt16LE(22)).toBe(1)
+      expect(sys!.readUInt32LE(40)).toBe(sys!.length - 44)
+      expect(mic!.readUInt32LE(24)).toBe(16_000)
+      expect(mic!.readUInt16LE(22)).toBe(1)
+      expect(mic!.readUInt32LE(40)).toBe(mic!.length - 44)
     } finally {
       await service.destroy()
       await rm(data, { recursive: true, force: true })

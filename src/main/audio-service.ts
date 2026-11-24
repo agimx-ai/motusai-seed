@@ -22,6 +22,7 @@ export type AudioStatus = {
   recovering?: boolean;
   resumed_at?: number;
   audio_save_failed?: true;
+  audio_save_failed_reason?: 'low_disk_space';
 };
 type PendingEvent = {
   resolve(value: Record<string, unknown>): void;
@@ -288,6 +289,7 @@ export class AudioService {
       source: this.source,
       duration_ms: this.durationMs(),
       ...(this.fileOutput?.saveFailed ? { audio_save_failed: true as const } : {}),
+      ...(this.fileOutput?.lowDiskSpace ? { audio_save_failed_reason: 'low_disk_space' as const } : {}),
       ...(this.error ? { error: this.error } : {}),
       ...(this.resumedAt ? { resumed_at: this.resumedAt } : {}),
       ...(this.systemSleeping || this.recoveryTask ? { suspension_reason: 'system_sleep' as const, recovering: Boolean(this.recoveryTask) } : {}),
@@ -408,7 +410,15 @@ export class AudioService {
     this.setState('starting');
     try {
       if (stream) {
-        const output = await AudioFileOutput.prepare(this.pluginDataRoot, packageId, source, argumentsValue.output);
+        const output = await AudioFileOutput.prepare(
+          this.pluginDataRoot,
+          packageId,
+          source,
+          argumentsValue.output,
+          () => {
+            if (this.fileOutput === output) this.stateChanged(this.snapshot());
+          },
+        );
         assertStarting();
         this.fileOutput = output;
       } else await this.durableStore?.create(packageId, sessionId, source);

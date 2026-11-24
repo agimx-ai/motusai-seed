@@ -36,11 +36,14 @@ describe('20ms microphone AudioWorklet', () => {
     expect(new Int16Array(messages[0].pcm!)[0]).toBe(-32_768)
   })
 
-  it('publishes native Float32 planes without clipping, overlap or batching', () => {
+  it('batches native Float32 planes to ~20ms and flushes partials without clipping or overlap', () => {
     const { capture, messages } = processor(true)
     capture.process([[Float32Array.of(1.25, 0.5), Float32Array.of(-1.25, -0.5)]], [[new Float32Array(2)]])
     capture.process([[Float32Array.of(0.75), Float32Array.of(-0.75)]], [[new Float32Array(1)]])
-    expect(messages.map(({ channels, pcm }) => [channels, ...new Float32Array(pcm!)]))
-      .toEqual([[2, 1.25, 0.5, -1.25, -0.5], [2, 0.75, -0.75]])
+    expect(messages).toHaveLength(0)
+    capture.port.onmessage({ data: { type: 'flush' } })
+    expect(messages.map((message) => message.type)).toEqual(['pcm', 'flushed'])
+    expect([messages[0].channels, ...new Float32Array(messages[0].pcm!)])
+      .toEqual([2, 1.25, 0.5, 0.75, -1.25, -0.5, -0.75])
   })
 })

@@ -547,6 +547,7 @@
     "pluginInstalled": "Plugin installed",
     "pluginUninstalled": "Plugin uninstalled",
     "localClientUsingPlugin": "“{{client}}” is using “{{plugin}}”",
+    "audioLowDiskSpace": "Low disk space: local audio recording paused (live transcription continues)",
     "activityCleared": "Activity log cleared",
     "logsUploaded": "Diagnostic package uploaded",
     "settingUpdated": "Settings updated"
