@@ -2,7 +2,7 @@ import { close, fsync, ftruncate, openSync, readSync, realpathSync, statSync, wr
 import { lstat, realpath, statfs } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { promisify } from 'node:util'
-import type { AudioFileOutputPaths, AudioStreamFormat } from '@motus-ai/seed-sdk'
+import type { AudioStreamFormat } from '@motus-ai/seed-sdk'
 import type { AudioCaptureSource } from '../shared/audio-capture'
 
 type Track = 'microphone' | 'system'
