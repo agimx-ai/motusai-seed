@@ -57,7 +57,7 @@ async function start(command: Extract<AudioCaptureCommand, { type: 'start' }>, c
   if (!window.AudioContext || !navigator.mediaDevices?.getUserMedia) throw new Error('当前系统不支持麦克风采集。')
   const captured = await navigator.mediaDevices.getUserMedia({
     audio: nativeFormat
-      ? { autoGainControl: false, echoCancellation: false, noiseSuppression: false }
+      ? { autoGainControl: false, echoCancellation: true, noiseSuppression: true }
       : { autoGainControl: true, echoCancellation: true, noiseSuppression: true, channelCount: 1 },
   })
   if (currentGeneration !== generation) {

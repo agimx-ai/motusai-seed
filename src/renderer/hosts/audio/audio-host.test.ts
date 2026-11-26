@@ -78,13 +78,13 @@ describe('AudioWorklet capture lifecycle', () => {
     expect(contexts[0].close).toHaveBeenCalledOnce()
   })
 
-  it('uses the reported microphone rate and channels in native mode without requesting processing', async () => {
+  it('uses the reported microphone rate and channels in native mode with echo cancellation and noise suppression', async () => {
     const getUserMedia = vi.fn(async () => mediaStream(44_100))
     const { listener, emit, chunk, contexts, worklets } = await host(getUserMedia, false)
     listener({ type: 'start', session_id: 'native', native_format: true })
     await vi.waitFor(() => expect(worklets).toHaveLength(1))
     expect(getUserMedia).toHaveBeenCalledWith({
-      audio: { autoGainControl: false, echoCancellation: false, noiseSuppression: false },
+      audio: { autoGainControl: false, echoCancellation: true, noiseSuppression: true },
     })
     expect(contexts[0].options).toEqual({ sampleRate: 44_100 })
     contexts[0].sampleRate = 44_100
