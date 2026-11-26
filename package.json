@@ -2,7 +2,7 @@
   "name": "motusai-seed",
   "productName": "MotusAI Seed",
   "desktopName": "motusai-seed.desktop",
-  "version": "0.3.26",
+  "version": "0.3.27",
   "private": true,
   "workspaces": [
     "packages/*"
