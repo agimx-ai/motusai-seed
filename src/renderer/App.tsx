@@ -414,7 +414,7 @@ export default function App() {
             }
           />
           <main
-            className={`h-full min-h-0 min-w-0 overflow-auto px-8 max-[980px]:px-6 ${view === 'plugin-view' || (page.view === 'experience-tips' && page.tipId) ? '' : 'pb-16'} ${view === 'overview' ? 'pt-4' : 'pt-0'}`}
+            className={`h-full min-h-0 min-w-0 overflow-auto px-8 max-[980px]:px-6 ${view === 'overview' ? 'pt-4' : 'pt-0'}`}
           >
             {view === 'overview' && <OverviewPage snapshot={snapshot} />}
             {view === 'plugin-view' && pluginRoute && routePluginEnabled && (
