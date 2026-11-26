@@ -1,4 +1,4 @@
-import { watch } from 'node:fs'
+import { statSync, watch } from 'node:fs'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { dirname, join } from 'node:path'
@@ -51,8 +51,19 @@ function restartElectron() {
   }, 180)
 }
 
+const startedAt = Date.now()
+const lastMtimes = new Map()
 const compiledMainWatcher = watch(compiledMainRoot, { recursive: true }, (_event, filename) => {
-  if (filename?.endsWith('.js') || filename?.endsWith('.json')) restartElectron()
+  if (!filename || (!filename.endsWith('.js') && !filename.endsWith('.json'))) return
+  let mtimeMs
+  try {
+    mtimeMs = statSync(join(compiledMainRoot, filename)).mtimeMs
+  } catch {
+    return
+  }
+  if (mtimeMs <= (lastMtimes.get(filename) ?? startedAt)) return
+  lastMtimes.set(filename, mtimeMs)
+  restartElectron()
 })
 
 function stop() {

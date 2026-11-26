@@ -132,7 +132,40 @@ function encodePcm16(samples: number[]) {
   return bytes
 }
 
-/** Downmixes and resamples arbitrary captured PCM to 16 kHz mono 16-bit PCM with a 1-pole low-pass filter. */
+/** Boost-only speech AGC (-18 dBFS target, -50 dBFS noise gate, +18 dB max, -1 dBFS limiter). */
+class SpeechAgc {
+  private gain = 1
+
+  process(samples: number[]) {
+    if (!samples.length) return
+    let sumSq = 0
+    let peak = 0
+    for (let i = 0; i < samples.length; i++) {
+      const v = Number.isFinite(samples[i]) ? samples[i]! : 0
+      sumSq += v * v
+      const a = Math.abs(v)
+      if (a > peak) peak = a
+    }
+    const rms = Math.sqrt(sumSq / samples.length)
+    if (rms >= 0.003) {
+      const desired = Math.max(1, Math.min(8, 0.125 / rms))
+      const coeff = desired < this.gain ? 0.25 : 0.05
+      this.gain += (desired - this.gain) * coeff
+    }
+    if (peak > 0 && peak * this.gain > 0.9) {
+      this.gain = Math.min(this.gain, 0.9 / peak)
+    }
+    if (this.gain !== 1) {
+      for (let i = 0; i < samples.length; i++) samples[i] = samples[i]! * this.gain
+    }
+  }
+
+  reset() {
+    this.gain = 1
+  }
+}
+
+/** Downmixes and resamples arbitrary captured PCM to 16 kHz mono 16-bit PCM with a 1-pole low-pass filter and AGC. */
 class Pcm16MonoResampler {
   private rate = 0
   private position = 0
@@ -140,6 +173,7 @@ class Pcm16MonoResampler {
   private previous = 0
   private filtered = 0
   private alpha = 1
+  private readonly agc = new SpeechAgc()
 
   push(data: Buffer, format: AudioStreamFormat): Buffer {
     const { frameBytes, sampleBytes } = validateFormat(format)
@@ -183,6 +217,7 @@ class Pcm16MonoResampler {
       this.previous = sample
       this.position += 1
     }
+    this.agc.process(out)
     const converted = encodePcm16(out)
     return pending?.length ? Buffer.concat([pending, converted]) : converted
   }
@@ -193,8 +228,10 @@ class Pcm16MonoResampler {
       out.push(this.previous)
       this.next += this.rate
     }
+    this.agc.process(out)
     this.position = this.next = this.previous = this.rate = this.filtered = 0
     this.alpha = 1
+    this.agc.reset()
     return encodePcm16(out)
   }
 }

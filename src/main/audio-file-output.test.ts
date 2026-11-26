@@ -137,6 +137,32 @@ describe('AudioFileOutput continuous 16kHz stereo WAV', () => {
     }
   })
 
+  it('boosts quiet system audio toward -18 dBFS without amplifying near-silence', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'seed-stereo-agc-'))
+    const pluginDir = join(root, 'plugin')
+    await mkdir(pluginDir)
+    try {
+      const out = await AudioFileOutput.prepare(root, 'plugin', 'mixed', { stereo: '000001-microphone.wav' })
+      // Feed 2s of quiet (-35 dBFS, amp=0.025) system audio and near-silent (-65 dBFS, amp=0.0008) mic floor
+      for (let i = 0; i < 100; i++) {
+        out.append('microphone', format48k, sineChunk48k(440, 20, i * 960, 0.0008))
+        out.append('system', format48k, sineChunk48k(880, 20, i * 960, 0.025))
+      }
+      const result = await out.finish()
+      expect(result.audio_save_failed).toBeUndefined()
+      const wav = await readFile(result.audio_files[0]!)
+      // After AGC settles (1.0s-1.8s), quiet system audio (input RMS ~0.0177) should be boosted toward ~0.125
+      const sysRms = channelRms(wav, 1, 1.0, 1.8)
+      const micRms = channelRms(wav, 0, 1.0, 1.8)
+      expect(sysRms).toBeGreaterThan(0.08)
+      expect(sysRms).toBeLessThan(0.2)
+      // Noise floor below -50 dBFS stays un-amplified
+      expect(micRms).toBeLessThan(0.002)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('rejects appending to a non-WAV or incompatible existing file', async () => {
     const root = await mkdtemp(join(tmpdir(), 'seed-stereo-invalid-'))
     const pluginDir = join(root, 'plugin')
